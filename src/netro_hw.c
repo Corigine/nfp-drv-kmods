@@ -123,7 +123,9 @@ int __netro_write_cmdif(struct netro_ibdev *ndev, u64 input_param,
 			&reg->cmd_status);
 
 	ndev->toggle = ndev->toggle ^ 1;
+#if (!(VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0)))
 	mmiowb();
+#endif
 	return 0;
 }
 
