@@ -349,9 +349,11 @@ static int netro_load_hca_attr(struct netro_ibdev *ndev)
 
 	ndev->cap.ib.max_ah = NETRO_IB_MAX_AH;
 
+#if (!(VER_NON_RHEL_GE(5,8) || VER_RHEL_GE(8,0)))
 	/* Don't support old style fast memory registration */
 	ndev->cap.ib.max_fmr = 0;
 	ndev->cap.ib.max_map_per_fmr = 0;
+#endif
 
 	ndev->cap.ib.max_srq = 1 << cap->max_srq_log2;
 	ndev->cap.ib.max_srq_wr = 1 << cap->max_srq_wr_log2;
