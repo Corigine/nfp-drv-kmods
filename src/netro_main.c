@@ -1060,8 +1060,12 @@ static struct netro_ibdev *netro_add_dev(struct nfp_roce_info *info)
 		return NULL;
 	}
 
+#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
+	ndev = ib_alloc_device(netro_ibdev, ibdev);
+#else
 	ndev = (struct netro_ibdev *) ib_alloc_device(
 				sizeof(struct netro_ibdev));
+#endif
 	if (!ndev) {
 		netro_err("IB device allocation failed\n");
 		return NULL;
