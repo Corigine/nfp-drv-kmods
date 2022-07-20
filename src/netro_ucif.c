@@ -2159,9 +2159,15 @@ int netro_init_mpt(struct netro_ibdev *ndev, struct netro_mr *nmr,
 		if (nmr->base_mtt < 0)
 			return -ENOMEM;
 
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+		ret = netro_mtt_write_sg(ndev, umem->sg_head.sgl, umem->nmap,
+				nmr->base_mtt, nmr->num_mtt, PAGE_SHIFT,
+				comp_pages, comp_order);
+#else
 		ret = netro_mtt_write_sg(ndev, umem->sg_head.sgl, umem->nmap,
 				nmr->base_mtt, nmr->num_mtt, umem->page_shift,
 				comp_pages, comp_order);
+#endif
 		if (ret) {
 			netro_err("Error writing MTT entries %d\n", ret);
 			goto free_mtt;
