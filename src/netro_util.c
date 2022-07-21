@@ -498,6 +498,9 @@ bool netro_remove_sgid(struct netro_port *port, union ib_gid *gid, u8 type)
 
 int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
 {
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	const struct in_ifaddr *ifa;
+#endif
 	struct in_device *in_dev;
 	struct net_device *netdev = ndev->port[port_num].netdev;
 	union ib_gid gid;
@@ -517,6 +520,16 @@ int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
 	/* Add IPv4 GIDS */
 	in_dev = in_dev_get(netdev);
 	if (in_dev) {
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+		rcu_read_lock();
+		in_dev_for_each_ifa_rcu(ifa, in_dev) {
+			ipv6_addr_set_v4mapped(ifa->ifa_address,
+					       (struct in6_addr *)&gid);
+			netro_add_sgid(&ndev->port[port_num],
+				       &gid, RDMA_ROCE_V2_GID_TYPE);
+		}
+		rcu_read_unlock();
+#else
 		for_ifa(in_dev) {
 			ipv6_addr_set_v4mapped(ifa->ifa_address,
 					(struct in6_addr *)&gid);
@@ -524,6 +537,7 @@ int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
 					&gid, RDMA_ROCE_V2_GID_TYPE);
 		}
 		endfor_ifa(in_dev);
+#endif
 		in_dev_put(in_dev);
 	}
 
