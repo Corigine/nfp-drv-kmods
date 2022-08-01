@@ -2519,8 +2519,16 @@ static struct ib_mr *netro_reg_user_mr(struct ib_pd *pd, u64 start,
 	}
 	netro_info("MPT Index %d\n", nmr->mpt_index);
 
+#if (VER_NON_RHEL_GE(5,6))
+	nmr->umem = ib_umem_get(pd->device, start, length, access_flags);
+#elif (VER_NON_RHEL_GE(5,5) || VER_RHEL_GE(8,0))
+	nmr->umem = ib_umem_get(udata, start, length, access_flags);
+#elif (VER_NON_RHEL_GE(5,1))
+	nmr->umem = ib_umem_get(udata, start, length, access_flags, 0);
+#else
 	nmr->umem = ib_umem_get(pd->uobject->context, start, length,
 			access_flags, 0);
+#endif
 	if (IS_ERR(nmr->umem)) {
 		err = PTR_ERR(nmr->umem);
 		netro_info("ib_umem_get() failed %d\n", err);
