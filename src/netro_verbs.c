@@ -1534,8 +1534,13 @@ static int netro_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 
 	/* State transition attribute/transport type validation */
 	ret = -EINVAL;
+#if (VER_NON_RHEL_GE(4,20) || VER_RHEL_GE(8,0))
+	if (!ib_modify_qp_is_ok(cur_state, new_state,
+			qp->qp_type, qp_attr_mask)) {
+#else
 	if (!ib_modify_qp_is_ok(cur_state, new_state,
 			qp->qp_type, qp_attr_mask, IB_LINK_LAYER_ETHERNET)) {
+#endif
 		netro_info("QPN %d, invalid attribute mask specified "
 				"for transition %d to %d. qp_type %d, "
 				"attr_mask 0x%08X\n",
