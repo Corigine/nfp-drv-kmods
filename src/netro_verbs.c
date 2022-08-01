@@ -2924,8 +2924,6 @@ static struct ib_mr *netro_reg_user_mr(struct ib_pd *pd, u64 start,
 		goto free_mpt;
 	}
 
-	netro_info("User Memory hugetlb %d\n", nmr->umem->hugetlb);
-
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
 	log2_page_sz = PAGE_SHIFT;
 #else
