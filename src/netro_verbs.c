@@ -199,7 +199,11 @@ static void netro_compound_order(struct ib_umem *umem, u64 start,
 	struct scatterlist *sg;
 	u64 pfn;
 	u64 base = 0;
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	unsigned long page_shift = PAGE_SHIFT;
+#else
 	unsigned long page_shift = umem->page_shift;
+#endif
 	unsigned long pfn_bits;
 	unsigned long order;
 	int entry;
@@ -2520,7 +2524,11 @@ static struct ib_mr *netro_reg_user_mr(struct ib_pd *pd, u64 start,
 
 	netro_info("User Memory hugetlb %d\n", nmr->umem->hugetlb);
 
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	log2_page_sz = PAGE_SHIFT;
+#else
 	log2_page_sz = nmr->umem->page_shift;
+#endif
 	netro_info("User Memory Page Size %d\n", log2_page_sz);
 	netro_info("User Memory Num Pages %d\n",
 				ib_umem_page_count(nmr->umem));
@@ -2549,7 +2557,11 @@ static struct ib_mr *netro_reg_user_mr(struct ib_pd *pd, u64 start,
 	nmr->io_vaddr = virt_addr;
 	nmr->len = length;
 	nmr->access = access_flags;
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	nmr->page_shift = PAGE_SHIFT;
+#else
 	nmr->page_shift = nmr->umem->page_shift;
+#endif
 	nmr->mpt_order = order;
 
 	nmr->key = nmr->mpt_index;
