@@ -41,6 +41,7 @@
 #include <rdma/ib_user_verbs.h>
 #include <rdma/ib_mad.h>
 #include <rdma/ib_addr.h>
+#include <rdma/uverbs_ioctl.h>
 
 #include "netro_ib.h"
 #include "netro_abi.h"
@@ -1727,8 +1728,7 @@ static int netro_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 			int qp_attr_mask, struct ib_udata *udata)
 {
 	struct netro_ibdev *ndev = to_netro_ibdev(qp->device);
-	struct netro_ucontext *netro_uctxt =
-				to_netro_uctxt(qp->uobject->context);
+	struct netro_ucontext *netro_uctxt;
 	struct netro_qp *nqp = to_netro_qp(qp);
 	enum ib_qp_state cur_state;
 	enum ib_qp_state new_state;
@@ -1807,9 +1807,19 @@ static int netro_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 		goto out;
 	}
 
+#if (VER_NON_RHEL_GE(5,6) || VER_RHEL_GE(8,0))
+	if (udata) {
+		netro_uctxt = rdma_udata_to_drv_context(
+				udata, struct netro_ucontext, ib_uctxt);
+		ret = netro_qp_modify_cmd(ndev, nqp, &netro_uctxt->uar,
+				qp_attr, qp_attr_mask, cur_state, new_state);
+	}
+#else
+	netro_uctxt = to_netro_uctxt(qp->uobject->context);
 	ret = netro_qp_modify_cmd(ndev, nqp, udata ?
 			&netro_uctxt->uar : &ndev->priv_uar,
 			qp_attr, qp_attr_mask, cur_state, new_state);
+#endif
 	if (ret) {
 		netro_info("Microcode QP_MODIFY error, %d\n", ret);
 		ret = -EINVAL;
