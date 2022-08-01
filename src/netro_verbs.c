@@ -2543,8 +2543,13 @@ static struct ib_mr *netro_reg_user_mr(struct ib_pd *pd, u64 start,
 	log2_page_sz = nmr->umem->page_shift;
 #endif
 	netro_info("User Memory Page Size %d\n", log2_page_sz);
+#if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))
+	netro_info("User Memory Num Pages %ld\n",
+				ib_umem_num_dma_blocks(nmr->umem, PAGE_SIZE));
+#else
 	netro_info("User Memory Num Pages %d\n",
 				ib_umem_page_count(nmr->umem));
+#endif
 	/*
 	 * Find the largest compound page size that can be used
 	 * for the physical page list, limiting to the supported
