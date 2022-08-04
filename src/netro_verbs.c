@@ -2729,7 +2729,11 @@ int netro_register_verbs(struct netro_ibdev *ndev)
 	ndev->ibdev.dev.parent          = &ndev->nfp_info->pdev->dev;
 
 	netro_dev_info(ndev, "ib_register_device begin\n");
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	ret = ib_register_device(&ndev->ibdev, "corigine_%d", NULL);
+#else
 	ret = ib_register_device(&ndev->ibdev, NULL);
+#endif
 	netro_dev_info(ndev, "ib_register_device: status: %d\n", ret);
 	return ret;
 }
