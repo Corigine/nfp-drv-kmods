@@ -37,6 +37,11 @@
 #include "netro_ib.h"
 
 /*
+ * This is a temporary value. We may change this later according
+ * to the value in rdma_driver_id.
+ */
+#define RDMA_DRIVER_CORIGINE       19
+/*
  * This is a temporary bit that allows an application to specifically
  * ask for internal loop-back. This is a debug helper using for using
  * a single card during development (without external loop-back).
