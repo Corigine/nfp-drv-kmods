@@ -1671,7 +1671,11 @@ static int netro_destroy_qp(struct ib_qp *qp)
 	spin_unlock_irq(&ndev->qp_lock);
 
 	/* Free resources specific to kernel based QP */
+#if (VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0))
+	if (!udata) {
+#else
 	if (!qp->uobject) {
+#endif
 		if (!nqp->rq.wrid_map)
 			netro_warn("RQ WRID map memory NULL\n");
 		else
