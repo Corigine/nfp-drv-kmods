@@ -568,16 +568,24 @@ free_eq:
 static ssize_t show_hca_type(struct device *device,
 		struct device_attribute *attr, char *buf)
 {
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
+	struct netro_ibdev *ndev = to_netro_ibdev(ibdev);
+#else
 	struct netro_ibdev *ndev = dev_get_drvdata(device);
-
+#endif
 	return scnprintf(buf, PAGE_SIZE, "0x%08X\n", ndev->nfp_info->model);
 }
 
 static ssize_t show_hw_rev(struct device *device,
 		struct device_attribute *attr, char *buf)
 {
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
+	struct netro_ibdev *ndev = to_netro_ibdev(ibdev);
+#else
 	struct netro_ibdev *ndev = dev_get_drvdata(device);
-
+#endif
 	return scnprintf(buf, PAGE_SIZE, "%d\n", ndev->nfp_info ?
                     ndev->nfp_info->model : 0);
 }
@@ -585,14 +593,24 @@ static ssize_t show_hw_rev(struct device *device,
 static ssize_t show_board(struct device *device, struct device_attribute *attr,
 			  char *buf)
 {
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
+	struct netro_ibdev *ndev = to_netro_ibdev(ibdev);
+#else
 	struct netro_ibdev *ndev = dev_get_drvdata(device);
+#endif
 	return scnprintf(buf, PAGE_SIZE, "%d\n", ndev->cap.board_id);
 }
 
 static ssize_t exec_command_db(struct device *device,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
+	struct netro_ibdev *ndev = to_netro_ibdev(ibdev);
+#else
 	struct netro_ibdev *ndev = dev_get_drvdata(device);
+#endif
 	corigine_set_cq_db(ndev, 0, false);
 	return count;
 }
@@ -600,12 +618,18 @@ static ssize_t exec_command_db(struct device *device,
 static ssize_t dump_uc_gid(struct device *device,
                 struct device_attribute *attr, char *buf)
 {
-	struct netro_ibdev *ndev = dev_get_drvdata(device);
 	struct netro_gid_entry *entries;
 	struct netro_gid_entry *entry;
 	size_t cnt = 0;
 	int i, j;
 	int err;
+
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
+	struct netro_ibdev *ndev = to_netro_ibdev(ibdev);
+#else
+	struct netro_ibdev *ndev = dev_get_drvdata(device);
+#endif
 
 	netro_info("Dump UCODE GID Entries (Table Size %d)\n",
 					ndev->port[0].gid_table_size);
@@ -645,7 +669,6 @@ out:
 static ssize_t exec_command(struct device *device,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
-	struct netro_ibdev *ndev = dev_get_drvdata(device);
 	struct netro_query_ucode_attr ucode_attr;
 	struct netro_dev_cap_param *cap;
 	int opcode;
@@ -653,6 +676,12 @@ static ssize_t exec_command(struct device *device,
 	int i;
 	uint32_t outparm;
 
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
+	struct netro_ibdev *ndev = to_netro_ibdev(ibdev);
+#else
+	struct netro_ibdev *ndev = dev_get_drvdata(device);
+#endif
 	netro_info("Issue hard-coded command %s\n", buf);
 	err = kstrtoint(buf, 0, &opcode);
 	if (err) {
@@ -1100,7 +1129,7 @@ static struct netro_ibdev *netro_add_dev(struct nfp_roce_info *info)
 		goto  err_free_idr;
 
 	ndev->ibdev.phys_port_cnt = ndev->cap.n_ports;
-	
+
 	if (netro_register_verbs(ndev))
 		goto err_cleanup_hca;
 

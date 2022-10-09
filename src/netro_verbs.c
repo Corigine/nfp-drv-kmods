@@ -697,8 +697,7 @@ static int netro_alloc_ucontext(struct ib_ucontext *ib_uctxt,
 				struct ib_udata *udata)
 {
 	struct ib_device *ibdev = ib_uctxt->device;
-	struct netro_ucontext *netro_uctxt =
-		container_of(ib_uctxt, struct netro_ucontext, ib_uctxt);
+	struct netro_ucontext *netro_uctxt;
 	struct netro_ibdev *ndev = to_netro_ibdev(ibdev);
 	struct netro_ib_alloc_ucontext_resp resp;
 	int err;
@@ -712,7 +711,11 @@ static int netro_alloc_ucontext(struct ib_ucontext *ib_uctxt,
 	resp.model = ndev->nfp_info->model;
 	resp.max_qp = ndev->cap.ib.max_qp - ndev->cap.rsvd_qp;
 
+#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
+	netro_uctxt = container_of(ib_uctxt, struct netro_ucontext, ib_uctxt);
+#else
 	netro_uctxt = kmalloc(sizeof(*netro_uctxt), GFP_KERNEL);
+#endif
 	if (!netro_uctxt)
 		return -ENOMEM;
 
@@ -739,6 +742,7 @@ free_uctxt:
 	kfree(netro_uctxt);
 	return err;
 }
+
 #else
 static struct ib_ucontext * netro_alloc_ucontext(struct ib_device *ibdev,
 				struct ib_udata *udata)
@@ -794,17 +798,20 @@ static int netro_dealloc_ucontext(struct ib_ucontext *ib_uctxt)
 {
 	struct netro_ibdev *ndev = to_netro_ibdev(ib_uctxt->device);
 	struct netro_ucontext *netro_uctxt = to_netro_uctxt(ib_uctxt);
-	struct netro_mmap_req *mm, *tmp;
+	struct netro_mmap_req *req, *tmp;
 
 	netro_info("netro_dealloc_ucontext\n");
 
 	netro_free_uar(ndev, &netro_uctxt->uar);
 
 	/* Release any pending mmap definitions */
-	list_for_each_entry_safe(mm, tmp, &netro_uctxt->mmap_pending, entry) {
-		list_del(&mm->entry);
-		kfree(mm);
+	mutex_lock(&netro_uctxt->mmap_pending_lock);
+	list_for_each_entry_safe(req, tmp, &netro_uctxt->mmap_pending, entry) {
+		list_del(&req->entry);
+		kfree(req);
 	}
+	mutex_unlock(&netro_uctxt->mmap_pending_lock);
+
 #if (!(VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0)))
 	kfree(netro_uctxt);
 	return 0;
@@ -946,7 +953,10 @@ static int netro_dealloc_pd(struct ib_pd *pd)
 
 	netro_info("netro_dealloc_pd, PD Index %d\n", npd->pd_index);
 	netro_free_bitmap_index(&ndev->pd_map, npd->pd_index);
+
+#if (!(VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0)))
 	kfree(pd);
+#endif
 	return 0;
 }
 
@@ -2700,7 +2710,9 @@ static int netro_destroy_cq(struct ib_cq *cq)
 			ncq->ci_mbox, ncq->ci_mbox_paddr);
 	netro_free_hw_queue(ndev, ncq->mem);
 	netro_free_bitmap_index(&ndev->cq_map, ncq->cqn);
+#if (!(VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0)))
 	kfree(ncq);
+#endif
 	netro_info("netro_destroy_cq done\n");
 	return 0;
 }
@@ -2838,9 +2850,10 @@ static struct ib_mr *netro_get_dma_mr(struct ib_pd *pd, int access_flags)
 	struct netro_mr *nmr;
 	int err;
 
+#if (!(VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0)))
 	netro_info("netro_get_dma_mr not surpported\n");
 	return ERR_PTR(-ENOMEM);
-
+#endif
 	netro_info("netro_get_dma_mr\n");
 
 	nmr = kmalloc(sizeof(*nmr), GFP_KERNEL);
@@ -3028,16 +3041,66 @@ static int netro_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 	return 0;
 }
 
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+static const struct ib_device_ops crdma_dev_ops = {
+    .owner = THIS_MODULE,
+    .driver_id = RDMA_DRIVER_CORIGINE,
+    .uverbs_abi_ver = NETRO_UVERBS_ABI_VERSION,
+
+    .query_device = netro_query_device,
+    .query_port = netro_query_port,
+    .get_link_layer = netro_get_link_layer,
+    .query_gid = netro_query_gid,
+    .query_pkey = netro_query_pkey,
+    .get_netdev = netro_get_netdev,
+    .modify_device = netro_modify_device,
+    .modify_port = netro_modify_port,
+    .alloc_ucontext = netro_alloc_ucontext,
+    .dealloc_ucontext = netro_dealloc_ucontext,
+    .mmap = netro_mmap,
+    .alloc_pd = netro_alloc_pd,
+    .dealloc_pd = netro_dealloc_pd,
+    .create_ah = netro_create_ah,
+    .query_ah = netro_query_ah,
+    .destroy_ah = netro_destroy_ah,
+    .create_srq = netro_create_srq,
+    .modify_srq = netro_modify_srq,
+    .query_srq = netro_query_srq,
+    .destroy_srq = netro_destroy_srq,
+    .post_srq_recv = netro_post_srq_recv,
+    .create_qp = netro_create_qp,
+    .modify_qp = netro_modify_qp,
+    .query_qp = netro_query_qp,
+    .destroy_qp = netro_destroy_qp,
+    .post_send = netro_post_send,
+    .post_recv = netro_post_recv,
+    .create_cq = netro_create_cq,
+    .modify_cq = netro_modify_cq,
+    .resize_cq = netro_resize_cq,
+    .destroy_cq = netro_destroy_cq,
+    .poll_cq = netro_poll_cq,
+    .req_notify_cq = netro_req_notify_cq,
+    .get_dma_mr = netro_get_dma_mr,
+    .reg_user_mr = netro_reg_user_mr,
+    .dereg_mr = netro_dereg_mr,
+    .attach_mcast = netro_attach_mcast,
+    .detach_mcast = netro_detach_mcast,
+    .alloc_mr = netro_alloc_mr,
+    .get_port_immutable = netro_get_port_immutable,
+    .get_dev_fw_str = netro_get_dev_fw_str,
+
+    INIT_RDMA_OBJ_SIZE(ib_pd, netro_pd, ib_pd),
+    INIT_RDMA_OBJ_SIZE(ib_cq, netro_cq, ib_cq),
+    INIT_RDMA_OBJ_SIZE(ib_ucontext, netro_ucontext, ib_uctxt),
+    INIT_RDMA_OBJ_SIZE(ib_ah, netro_ah, ib_ah),
+};
+#endif
+
 int netro_register_verbs(struct netro_ibdev *ndev)
 {
 	int ret;
 
-	strlcpy(ndev->ibdev.name, "corigine_%d", IB_DEVICE_NAME_MAX);
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
-	ndev->ibdev.ops.owner = THIS_MODULE;
-#else
-	ndev->ibdev.owner = THIS_MODULE;
-#endif
+	netro_dev_info(ndev, "ib_register_device begin\n");
 	ndev->ibdev.node_type = RDMA_NODE_IB_CA;
 	memcpy(ndev->ibdev.node_desc, NETRO_IB_NODE_DESC,
 			sizeof(NETRO_IB_NODE_DESC));
@@ -3052,13 +3115,8 @@ int netro_register_verbs(struct netro_ibdev *ndev)
 	/* Currently do not support local DMA key */
 	ndev->ibdev.local_dma_lkey = 0;
 
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
-	ndev->ibdev.ops.uverbs_abi_ver = NETRO_UVERBS_ABI_VERSION;
-#else
-	ndev->ibdev.uverbs_abi_ver = NETRO_UVERBS_ABI_VERSION;
-#endif
 	ndev->ibdev.uverbs_cmd_mask =
-		(1ull << IB_USER_VERBS_CMD_GET_CONTEXT)		|
+                (1ull << IB_USER_VERBS_CMD_GET_CONTEXT)         |
                 (1ull << IB_USER_VERBS_CMD_QUERY_DEVICE)        |
                 (1ull << IB_USER_VERBS_CMD_QUERY_PORT)          |
                 (1ull << IB_USER_VERBS_CMD_ALLOC_PD)            |
@@ -3082,52 +3140,16 @@ int netro_register_verbs(struct netro_ibdev *ndev)
                 (1ull << IB_USER_VERBS_CMD_QUERY_AH)            |
                 (1ull << IB_USER_VERBS_CMD_DESTROY_AH)          |
                 (1ull << IB_USER_VERBS_CMD_DESTROY_SRQ);
+	ndev->ibdev.dev.parent			= &ndev->nfp_info->pdev->dev;
 
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
-	ndev->ibdev.ops.query_device		= netro_query_device;
-	ndev->ibdev.ops.query_port		= netro_query_port;
-	ndev->ibdev.ops.get_link_layer		= netro_get_link_layer;
-	ndev->ibdev.ops.query_gid		= netro_query_gid;
-	ndev->ibdev.ops.query_pkey		= netro_query_pkey;
-	ndev->ibdev.ops.get_netdev		= netro_get_netdev;
-	ndev->ibdev.ops.modify_device		= netro_modify_device;
-	ndev->ibdev.ops.modify_port		= netro_modify_port;
-	ndev->ibdev.ops.alloc_ucontext		= netro_alloc_ucontext;
-	ndev->ibdev.ops.dealloc_ucontext	= netro_dealloc_ucontext;
-	ndev->ibdev.ops.mmap			= netro_mmap;
-	ndev->ibdev.ops.alloc_pd		= netro_alloc_pd;
-	ndev->ibdev.ops.dealloc_pd		= netro_dealloc_pd;
-	ndev->ibdev.ops.create_ah		= netro_create_ah;
-	ndev->ibdev.ops.query_ah		= netro_query_ah;
-	ndev->ibdev.ops.destroy_ah		= netro_destroy_ah;
-	ndev->ibdev.ops.create_srq		= netro_create_srq;
-	ndev->ibdev.ops.modify_srq		= netro_modify_srq;
-	ndev->ibdev.ops.query_srq		= netro_query_srq;
-	ndev->ibdev.ops.destroy_srq		= netro_destroy_srq;
-	ndev->ibdev.ops.post_srq_recv		= netro_post_srq_recv;
-	ndev->ibdev.ops.create_qp		= netro_create_qp;
-	ndev->ibdev.ops.modify_qp		= netro_modify_qp;
-	ndev->ibdev.ops.query_qp		= netro_query_qp;
-	ndev->ibdev.ops.destroy_qp		= netro_destroy_qp;
-	ndev->ibdev.ops.post_send		= netro_post_send;
-	ndev->ibdev.ops.post_recv		= netro_post_recv;
-	ndev->ibdev.ops.create_cq		= netro_create_cq;
-	ndev->ibdev.ops.modify_cq		= netro_modify_cq;
-	ndev->ibdev.ops.resize_cq		= netro_resize_cq;
-	ndev->ibdev.ops.destroy_cq		= netro_destroy_cq;
-	ndev->ibdev.ops.poll_cq			= netro_poll_cq;
-	ndev->ibdev.ops.req_notify_cq		= netro_req_notify_cq;
-	ndev->ibdev.ops.get_dma_mr		= netro_get_dma_mr;
-	ndev->ibdev.ops.reg_user_mr		= netro_reg_user_mr;
-	ndev->ibdev.ops.dereg_mr		= netro_dereg_mr;
-	ndev->ibdev.ops.attach_mcast		= netro_attach_mcast;
-	ndev->ibdev.ops.detach_mcast		= netro_detach_mcast;
-	ndev->ibdev.ops.alloc_mr		= netro_alloc_mr;
-	ndev->ibdev.ops.get_port_immutable	= netro_get_port_immutable;
-	ndev->ibdev.ops.get_dev_fw_str		= netro_get_dev_fw_str;
-	ndev->ibdev.ops.driver_id		= RDMA_DRIVER_CORIGINE;
-
+	ib_set_device_ops(&ndev->ibdev, &crdma_dev_ops);
+	ret = ib_register_device(&ndev->ibdev, "crdma%d", NULL);
 #else
+	ndev->ibdev.owner = THIS_MODULE;
+	ndev->ibdev.uverbs_abi_ver = NETRO_UVERBS_ABI_VERSION;
+	strlcpy(ndev->ibdev.name, "crdma%d", IB_DEVICE_NAME_MAX);
+
 	ndev->ibdev.query_device		= netro_query_device;
 	ndev->ibdev.query_port			= netro_query_port;
 	ndev->ibdev.get_link_layer		= netro_get_link_layer;
@@ -3170,13 +3192,6 @@ int netro_register_verbs(struct netro_ibdev *ndev)
 	ndev->ibdev.get_port_immutable		= netro_get_port_immutable;
 	ndev->ibdev.get_dev_fw_str		= netro_get_dev_fw_str;
 	ndev->ibdev.driver_id			= RDMA_DRIVER_CORIGINE;
-#endif
-	ndev->ibdev.dev.parent			= &ndev->nfp_info->pdev->dev;
-
-	netro_dev_info(ndev, "ib_register_device begin\n");
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
-	ret = ib_register_device(&ndev->ibdev, "corigine_%d", NULL);
-#else
 	ret = ib_register_device(&ndev->ibdev, NULL);
 #endif
 	netro_dev_info(ndev, "ib_register_device: status: %d\n", ret);
