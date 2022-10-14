@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, Netronome, Inc.  All rights reserved.
+ * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -30,11 +31,11 @@
  * SOFTWARE.
  */
 
-#ifndef NETRO_VERBS_H
-#define NETRO_VERBS_H
+#ifndef CRDMA_VERBS_H
+#define CRDMA_VERBS_H
 
 #include <linux/compiler.h>
-#include "netro_ib.h"
+#include "crdma_ib.h"
 
 /*
  * This is a temporary value. We may change this later according
@@ -47,21 +48,21 @@
  * a single card during development (without external loop-back).
  */
 enum {
-       NETRO_IB_SEND_LOOPBACK                  = 1 << 8
+       CRDMA_IB_SEND_LOOPBACK                  = 1 << 8
 };
 
 /**
  * Register IB device with the IB core.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  */
-int netro_register_verbs(struct netro_ibdev *ndev);
+int crdma_register_verbs(struct crdma_ibdev *dev);
 
 /**
  * Unregister IB device from the IB core.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  */
-void netro_unregister_verbs(struct netro_ibdev *ndev);
+void crdma_unregister_verbs(struct crdma_ibdev *dev);
 
-#endif /* NETRO_VERBS_H */
+#endif /* CRDMA_VERBS_H */

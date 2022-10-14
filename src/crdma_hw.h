@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, Netronome, Inc.  All rights reserved.
+ * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -30,13 +31,13 @@
  * SOFTWARE.
  */
 
-#ifndef NETRO_HW_H
-#define NETRO_HW_H
+#ifndef CRDMA_HW_H
+#define CRDMA_HW_H
 
 #include <linux/compiler.h>
-#include "netro_ib.h"
+#include "crdma_ib.h"
 /*
- * netro_hw.h - Encapsulates NFP BSP/platform provided functions and
+ * crdma_hw.h - Encapsulates NFP BSP/platform provided functions and
  * hardware specific operations that are based on ASIC family.
  */
 
@@ -53,14 +54,14 @@
  */
 enum {
 	/* Token word */
-	NETRO_CMDIF_TOKEN_SHIFT         = 16,
+	CRDMA_CMDIF_TOKEN_SHIFT         = 16,
 
 	/* Command status word */
-	NETRO_CMDIF_OPCODE_MOD_SHIFT    = 8,
-	NETRO_CMDIF_TOGGLE_BIT          = 21,
-	NETRO_CMDIF_EVENT_BIT           = 22,
-	NETRO_CMDIF_GO_BIT              = 23,
-	NETRO_CMDIF_STATUS_SHIFT        = 24,
+	CRDMA_CMDIF_OPCODE_MOD_SHIFT    = 8,
+	CRDMA_CMDIF_TOGGLE_BIT          = 21,
+	CRDMA_CMDIF_EVENT_BIT           = 22,
+	CRDMA_CMDIF_GO_BIT              = 23,
+	CRDMA_CMDIF_STATUS_SHIFT        = 24,
 };
 
 /*
@@ -78,13 +79,13 @@ struct cmdif_reg {
 	__le32	cmd_status;
 } __packed;
 
-void __netro_dump_cmdif(struct netro_ibdev *ndev);
+void __crdma_dump_cmdif(struct crdma_ibdev *dev);
 
 /**
  * Write a command to the micro-code command interface. The command
  * interface mutex should be held outside of the function.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @input_param: The input parameter value.
  * @output_param: The output parameter value.
  * @input_mod: The input modifier.
@@ -95,7 +96,7 @@ void __netro_dump_cmdif(struct netro_ibdev *ndev);
  *
  * Returns 0 on success; otherwise error code.
  */
-int __netro_write_cmdif(struct netro_ibdev *ndev, u64 input_param,
+int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 		u64 output_param, u32 input_mod, u8 opcode, u8 opcode_mod,
 		u16 token, bool event);
 
@@ -103,23 +104,23 @@ int __netro_write_cmdif(struct netro_ibdev *ndev, u64 input_param,
  * Read polled command status from the micro-code command interface. The
  * command interface mutex should be held outside of the function.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @output_param: Pointer to read output parameter into (set to NULL to ignore).
  * @status: Pointer to return command status (set to NULL to ignore).
  *
  * Returns 0 on success; otherwise error code.
  */
-int __netro_read_cmdif_results(struct netro_ibdev *ndev,
+int __crdma_read_cmdif_results(struct crdma_ibdev *dev,
 		u64 *output_param, u8 *status);
 
 /**
  * Report whether the command/status interface is in use.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  *
  * Return true if command interface is in use; otherwise false.
  */
-bool netro_cmdif_busy(struct netro_ibdev *ndev);
+bool crdma_cmdif_busy(struct crdma_ibdev *dev);
 
 /*
  * Microcode provides a User Access Region (UAR) in the PCI BAR space
@@ -127,12 +128,12 @@ bool netro_cmdif_busy(struct netro_ibdev *ndev);
  */
 enum {
 	/* EQ Access Region Register */
-	NETRO_UAR_EQ_PER_PAGE		= 8,
-	NETRO_UAR_EQ_ADDR_WA_BIT	= (1 << 11),
-	NETRO_UAR_EQ_CONSUMER_MASK	= 0x00FFFFFF,
-	NETRO_UAR_EQ_ARM_BIT		= (1 << 31),
-	NETRO_UAR_EQ_FIN_BIT		= (1 << 30),
-    CORIGINE_UAR_EQ_ADDR_INTERVAL_IN_PAGE  =  0x10,
+	CRDMA_UAR_EQ_PER_PAGE		    = 8,
+	CRDMA_UAR_EQ_ADDR_WA_BIT	    = (1 << 11),
+	CRDMA_UAR_EQ_CONSUMER_MASK	    = 0x00FFFFFF,
+	CRDMA_UAR_EQ_ARM_BIT		    = (1 << 31),
+	CRDMA_UAR_EQ_FIN_BIT		    = (1 << 30),
+	CRDMA_UAR_EQ_ADDR_INTERVAL_IN_PAGE  =  0x10,
 };
 
 /*
@@ -143,7 +144,7 @@ struct eq_uar {
 	struct {
 		__le32	eq;
 		__le32	rsvd;
-	} db[NETRO_UAR_EQ_PER_PAGE] __packed;
+	} db[CRDMA_UAR_EQ_PER_PAGE] __packed;
 } __packed;
 
 /*
@@ -152,85 +153,89 @@ struct eq_uar {
  */
 enum {
 	/* SQ Doorbell Register */
-	CORIGINE_DB_SQ_ADDR_OFFSET_3800 =  (0x200 * 4),
-	CORIGINE_DB_SQ_MASK	           	=  0x00FFFFFF,
+	CRDMA_DB_SQ_ADDR_OFFSET         =  (0x200 * 4),
+	CRDMA_DB_SQ_MASK                =  0x00FFFFFF,
 
 	/* CQ Doorbell Register */
-	CORIGINE_DB_CQ_ADDR_OFFSET_3800 =  (0x210 * 4),
-	CORIGINE_DB_CQ_SEQ_SHIFT        =  30,
-	CORIGINE_DB_CQN_MASK		=  0x00FFFFFF,
-	CORIGINE_DB_CQ_ARM_ANY_BIT      =  (1 << 24),
+	CRDMA_DB_CQ_ADDR_OFFSET         =  (0x210 * 4),
+	CRDMA_DB_CQ_SEQ_SHIFT           =  30,
+	CRDMA_DB_CQN_MASK               =  0x00FFFFFF,
+	CRDMA_DB_CQ_ARM_ANY_BIT         =  (1 << 24),
+	CRDMA_DB_CQCI_ADDR_OFFSET       =  0x24,
+	CRDMA_DB_WA_BIT                 =  1 << 11,
+	CRDMA_DB_CQ_CONS_MASK           =  0x00FFFFFF,
+	CRDMA_DB_FIN_BIT                =  1 << 30,
 };
 
 /**
  * Update an SQ doorbell with the qp number
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @qpn: The number of the QP.
  */
-void corigine_set_sq_db(struct netro_ibdev *ndev, u32 qpn);
+void crdma_set_sq_db(struct crdma_ibdev *dev, u32 qpn);
 
 /**
  * Update an CQ doorbell with the cp number
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @cqn: The number of the CP.
  * @solicited: If true, an event will be generated only for the next solicited CQ entry.
  *             If false, any CQ entry, solicited or not, will generate an event.
  */
-void corigine_set_cq_db(struct netro_ibdev *ndev, u32 cqn, bool solicited);
+void crdma_set_cq_db(struct crdma_ibdev *dev, u32 cqn, bool solicited);
 
 /**
  * Update an EQ doorbell with the consumer index and optionally enable
  * the EQ's interrupts.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @eqn: The number of the EQ.
  * @consumer_index: The value of the EQ consumer index to write.
  * @arm: If true, enable interrupts for the EQ when updating the index.
  */
-void corigine_set_eq_ci(struct netro_ibdev *ndev,  u32 eqn,
+void crdma_set_eq_ci(struct crdma_ibdev *dev,  u32 eqn,
 		u32 consumer_index, bool arm);
 
 /**
  * Acquire PCI BAR based resources assigned by NFP BSP.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  *
  * Return 0 on success; otherwise error code.
  */
-int netro_acquire_pci_resources(struct netro_ibdev *ndev);
+int crdma_acquire_pci_resources(struct crdma_ibdev *dev);
 
 /**
  * Free PCI BAR based resources previously acquired.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  */
-void netro_free_pci_resources(struct netro_ibdev *ndev);
+void crdma_free_pci_resources(struct crdma_ibdev *dev);
 
 /**
  * Hardware specific RoCE HCA initialization.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  *
  * Return 0 on success; otherwise error code.
  */
-int netro_init_hw(struct netro_ibdev *ndev);
+int crdma_init_hw(struct crdma_ibdev *dev);
 
 /**
  * Hardware specific RoCE HCA cleanup.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  */
-void netro_cleanup_hw(struct netro_ibdev *ndev);
+void crdma_cleanup_hw(struct crdma_ibdev *dev);
 
 /**
  * Initialize IB device values that are dependent on the specific
  * chipset model family associated with this device.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @model: The model family associated with this device.
  */
-int netro_set_chip_details(struct netro_ibdev *ndev, u32 model);
+int crdma_set_chip_details(struct crdma_ibdev *dev, u32 model);
 
-#endif /* NETRO_HW_H */
+#endif /* CRDMA_HW_H */

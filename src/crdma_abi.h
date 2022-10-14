@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, Netronome, Inc.  All rights reserved.
+ * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -31,32 +32,32 @@
  */
 
 /*
- * netro_abi.h - Provides Netro RoCEv2 kernel to provider message details.
+ * crdma_abi.h - Provides Corigine RoCEv2 kernel to provider message details.
  */
-#ifndef NETRO_ABI_H
-#define NETRO_ABI_H
+#ifndef CRDMA_ABI_H
+#define CRDMA_ABI_H
 
 #include <linux/compiler.h>
 
-/* Internal netro provider ABI between user library and kernel driver */
-#define NETRO_UVERBS_ABI_VERSION	1
+/* Internal crdma provider ABI between user library and kernel driver */
+#define CRDMA_UVERBS_ABI_VERSION	1
 
 /*
 * _resp structures indicate additional data beyond the uverbs default
-* passed from entro back to libnetro.
+* passed from entro back to libcrdma.
 */
-struct netro_ib_alloc_ucontext_resp {
+struct crdma_ib_alloc_ucontext_resp {
 	__u32	model;			/* Chipset family */
 	__u32	max_qp;			/* Max for the device */
 	__u32   num_cqe;		/* Actual size of CQ */
 } __packed;
 
-struct netro_ib_alloc_pd_resp {
+struct crdma_ib_alloc_pd_resp {
 	__u32	pd_index;		/* PD object index */
 	__u32	rsvd;
 } __packed;
 
-struct netro_ib_create_cq_resp {
+struct crdma_ib_create_cq_resp {
 	__u64	cq_base_addr;		/* Physical address to map */
 	__u64	ci_mbox_base_addr;	/* Physical mailbox address to map */
 	__u32	cq_size;		/* CQ size for mapping */
@@ -66,10 +67,10 @@ struct netro_ib_create_cq_resp {
 } __packed;
 
  enum {
-	NETRO_WQ_WQE_SPARES             = 8
+	CRDMA_WQ_WQE_SPARES             = 8
  };
 
-struct netro_ib_create_qp_resp {
+struct crdma_ib_create_qp_resp {
 	__u64	wq_base_addr;		/* Physical address to map */
 	__u32	wq_size;		/* Work queue size for mapping */
 	__u32	sq_offset;		/* Offset of SQ in  mapping */
@@ -83,13 +84,13 @@ struct netro_ib_create_qp_resp {
 };
 
 enum {
-	NETRO_AV_IBSR_IPD_SHIFT         = 24,
-	NETRO_AV_PD_MASK                = 0x00FFFFFF,
-	NETRO_AV_ROCE_V2_IPV4_GID_TYPE  = 1,
-	NETRO_AV_ROCE_V2_IPV6_GID_TYPE  = 2
+	CRDMA_AV_IBSR_IPD_SHIFT         = 24,
+	CRDMA_AV_PD_MASK                = 0x00FFFFFF,
+	CRDMA_AV_ROCE_V2_IPV4_GID_TYPE  = 1,
+	CRDMA_AV_ROCE_V2_IPV6_GID_TYPE  = 2
 };
 
-struct netro_av {
+struct crdma_av {
        /*
         * Destination MAC is stored in 32-bit word byte swapped
         * form so that this transformation is not done on each
@@ -124,18 +125,5 @@ struct netro_av {
        __le32  ib_sr_ipd;
 };
 
-enum {
-	NETRO_DB_SQ_ADDR_OFFSET         = 4,
-	NETRO_DB_CQ_ADDR_OFFSET         = 0x20,
-	NETRO_DB_CQCI_ADDR_OFFSET       = 0x24,
-	NETRO_DB_WA_BIT                 = 1 << 11,
 
-	NETRO_DB_SQ_MASK                = 0x00FFFFFF,
-	NETRO_DB_CQN_MASK               = 0x00FFFFFF,
-	NETRO_DB_CQ_CONS_MASK           = 0x00FFFFFF,
-	NETRO_DB_CQ_SEQ_SHIFT           = 30,
-	NETRO_DB_CQ_ARM_ANY_BIT         = 1 << 24,
-	NETRO_DB_FIN_BIT                = 1 << 30,
-};
-
-#endif /* NETRO_ABI_H */
+#endif /* CRDMA_ABI_H */

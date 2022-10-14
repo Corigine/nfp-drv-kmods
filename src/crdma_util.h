@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, Netronome, Inc.  All rights reserved.
+ * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -30,20 +31,20 @@
  * SOFTWARE.
  */
 
-#ifndef NETRO_UTIL_H
-#define NETRO_UTIL_H
+#ifndef CRDMA_UTIL_H
+#define CRDMA_UTIL_H
 
 #include <linux/compiler.h>
 
 /*
- * netro_util.h - General utility functions used throughout the driver.
+ * crdma_util.h - General utility functions used throughout the driver.
  */
 
 /*
  * Bit maps are used to maintain a table of allocated resource
  * identifiers.
  */
-struct netro_bitmap {
+struct crdma_bitmap {
 	spinlock_t	lock;
 	u32		min_index;
 	u32		max_index;
@@ -61,7 +62,7 @@ struct netro_bitmap {
  *
  * Returns 0 on success, otherwise -ENOMEM;
  */
-int netro_init_bitmap(struct netro_bitmap *bitmap, u32 min, u32 max);
+int crdma_init_bitmap(struct crdma_bitmap *bitmap, u32 min, u32 max);
 
 /**
  * Cleanup bitmap releasing bitmap memory.
@@ -70,7 +71,7 @@ int netro_init_bitmap(struct netro_bitmap *bitmap, u32 min, u32 max);
  *
  * Returns 0 on success, otherwise -ENOMEM;
  */
-void netro_cleanup_bitmap(struct netro_bitmap *bitmap);
+void crdma_cleanup_bitmap(struct crdma_bitmap *bitmap);
 
 /**
  * Allocate the next free index in a bitmap.
@@ -79,7 +80,7 @@ void netro_cleanup_bitmap(struct netro_bitmap *bitmap);
  *
  * Returns the bitmap index, or < 0 on error.
  */
-u32 netro_alloc_bitmap_index(struct netro_bitmap *bitmap);
+u32 crdma_alloc_bitmap_index(struct crdma_bitmap *bitmap);
 
 /**
  * Free an index in the specified bitmap.
@@ -87,7 +88,7 @@ u32 netro_alloc_bitmap_index(struct netro_bitmap *bitmap);
  * @bitmap: Pointer to the bitmap used for allocation.
  * @index: The index to free.
  */
-void netro_free_bitmap_index(struct netro_bitmap *bitmap, u32 index);
+void crdma_free_bitmap_index(struct crdma_bitmap *bitmap, u32 index);
 
 /**
  * Allocate a block of free indices in a bitmap.
@@ -97,7 +98,7 @@ void netro_free_bitmap_index(struct netro_bitmap *bitmap, u32 index);
  *
  * Returns the bitmap index of the first bit, or -1 on error.
  */
-u32 netro_alloc_bitmap_area(struct netro_bitmap *bitmap, u32 count);
+u32 crdma_alloc_bitmap_area(struct crdma_bitmap *bitmap, u32 count);
 
 /**
  *Free a contiguous block of previously allocated indices in a bitmap.
@@ -106,7 +107,7 @@ u32 netro_alloc_bitmap_area(struct netro_bitmap *bitmap, u32 count);
  * @index: The first bit in the contiguous block to free.
  * @count: The number of contiguous bits to free.
  */
-void netro_free_bitmap_area(struct netro_bitmap *bitmap, u32 index, u32 count);
+void crdma_free_bitmap_area(struct crdma_bitmap *bitmap, u32 index, u32 count);
 
 /*
  * Structure for DMA coherent/non-coherent memory allocation, the
@@ -120,11 +121,11 @@ void netro_free_bitmap_area(struct netro_bitmap *bitmap, u32 index, u32 count);
  * used (in multiples of host PAGE_SIZE).
  */
 enum {
-	NETRO_MEM_DEFAULT_ORDER		= HPAGE_PMD_ORDER,
-	NETRO_MEM_MAX_ALLOCS		= 512
+	CRDMA_MEM_DEFAULT_ORDER		= HPAGE_PMD_ORDER,
+	CRDMA_MEM_MAX_ALLOCS		= 512
 };
 
-struct netro_mem {
+struct crdma_mem {
 	bool		coherent;	/* If coherent requested */
 	int			num_allocs;	/* Number of blocks of pages */
 	int			max_order;	/* Largest block allocated */
@@ -133,10 +134,10 @@ struct netro_mem {
 	u32			base_mtt_ndx;	/* First MTT entry */
 	int			num_mtt;	/* Number of MTT entries */
 	int			num_sg;		/* Valid scatterlist entries */
-	struct scatterlist	alloc[NETRO_MEM_MAX_ALLOCS];
+	struct scatterlist	alloc[CRDMA_MEM_MAX_ALLOCS];
 };
 
-struct netro_ibdev;
+struct crdma_ibdev;
 
 /**
  * Allocate DMA cache non-coherent host memory for the HCA.
@@ -144,59 +145,59 @@ struct netro_ibdev;
  * Non-coherent DMA memory is largely intended to be used for HCA
  * microcode backing store memory.
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  * @coherent: If true DMA memory should be coherent.
  * @order: The desired order size for the memory (i.e. PAGE_SIZE multiple).
  * @size: The size of the memory requested.
  *
  * Returns a pointer to the memory structure or an error pointer.
  */
-struct netro_mem *netro_alloc_dma_mem(struct netro_ibdev *ndev,
+struct crdma_mem *crdma_alloc_dma_mem(struct crdma_ibdev *dev,
 		bool coherent, int order, int size);
 
 /**
  * Free DMA cache non-coherent host memory previously allocated for the HCA.
  *
- * @ndev: The RoCE IB device.
- * @mem: Pointer to the mem structure returned by netro_alloc_dma_mem.
+ * @dev: The RoCE IB device.
+ * @mem: Pointer to the mem structure returned by crdma_alloc_dma_mem.
  * This memory is freed as part of this call.
  */
-void netro_free_dma_mem(struct netro_ibdev *ndev, struct netro_mem *mem);
+void crdma_free_dma_mem(struct crdma_ibdev *dev, struct crdma_mem *mem);
 
 /**
  * Back a memory area page list with MTT entries.
  *
  */
-int netro_alloc_mtt_entries(struct netro_ibdev *ndev, struct netro_mem *mem);
+int crdma_alloc_mtt_entries(struct crdma_ibdev *dev, struct crdma_mem *mem);
 
-struct netro_uar;
+struct crdma_uar;
 
 /**
  * Allocate UAR page.
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  * @uar: Pointer to the UAR object to initialize;
  *
  * Returns 0 on success, otherwise error.
  */
-int netro_alloc_uar(struct netro_ibdev *ndev, struct netro_uar *uar);
+int crdma_alloc_uar(struct crdma_ibdev *dev, struct crdma_uar *uar);
 
 /**
  * Free UAR page.
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  * @uar: Pointer to the UAR object for which resources should be released.
  */
-void netro_free_uar(struct netro_ibdev *ndev, struct netro_uar *uar);
+void crdma_free_uar(struct crdma_ibdev *dev, struct crdma_uar *uar);
 
 /**
  * Return the Page Frame Number (PFN) associated with a UAR.
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  * @uar: Pointer to the UAR object.
  */
-u64  netro_uar_pfn(struct netro_ibdev *ndev,
-		struct netro_uar *uar);
+u64  crdma_uar_pfn(struct crdma_ibdev *dev,
+		struct crdma_uar *uar);
 
 /**
  * Convert a Ethernet MAC to GUID.
@@ -205,7 +206,7 @@ u64  netro_uar_pfn(struct netro_ibdev *ndev,
  * @vlan_id: A VLAN ID.
  * @guid: Pointer to the GUID to initialize.
  */
-void netro_mac_to_guid(u8 *mac, u16 vlan_id, u8 *guid);
+void crdma_mac_to_guid(u8 *mac, u16 vlan_id, u8 *guid);
 
 /**
  * Translate MAC adding/removing byte swap that occurs in DMA to/from
@@ -214,9 +215,9 @@ void netro_mac_to_guid(u8 *mac, u16 vlan_id, u8 *guid);
  * @out_mac: The output DMAC to be set.
  * @in_mac: The input DMAC to be swapped.
  */
-void netro_mac_swap(u8 *out_mac, u8 *in_mac);
+void crdma_mac_swap(u8 *out_mac, u8 *in_mac);
 
-struct netro_port;
+struct crdma_port;
 /**
  * Add a GID to the ports SGID table.
  *
@@ -227,7 +228,7 @@ struct netro_port;
  * Returns true if the GID is added to the ports SGID table. If the
  * GID already exists in the table then false is returned.
  */
-bool netro_add_sgid(struct netro_port *port, union ib_gid *gid, u8 gid_type);
+bool crdma_add_sgid(struct crdma_port *port, union ib_gid *gid, u8 gid_type);
 
 /**
  * Remove a GID from the ports SGID table.
@@ -239,17 +240,17 @@ bool netro_add_sgid(struct netro_port *port, union ib_gid *gid, u8 gid_type);
  * Returns true if the GID is deleted from the ports SGID table. If the
  * GID does not exists in the table then false is returned.
  */
-bool netro_remove_sgid(struct netro_port *port, union ib_gid *gid, u8 gid_type);
+bool crdma_remove_sgid(struct crdma_port *port, union ib_gid *gid, u8 gid_type);
 
 /**
  * Initialize a ports SGID table.
  *
- * @ndev: The IB RoCE device.
+ * @dev: The IB RoCE device.
  * @port_num: The port number to initialize [0 based].
  *
  * Returns 0 on success, otherwise an error code.
  */
-int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num);
+int crdma_init_sgid_table(struct crdma_ibdev *dev, int port_num);
 
 /**
  * Add a source MAC (or reference) to the ports source MAC table.
@@ -261,7 +262,7 @@ int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num);
  * source MAC table. If the source MAC already exists in the table
  * then false is returned.
  */
-bool netro_add_smac(struct netro_port *port, u8 *mac);
+bool crdma_add_smac(struct crdma_port *port, u8 *mac);
 
 /**
  * Remove a source MAC (or reference) from the ports source MAC table.
@@ -273,42 +274,42 @@ bool netro_add_smac(struct netro_port *port, u8 *mac);
  * source MAC table. If the source MAC still is referenced,
  * then false is returned.
  */
-bool netro_remove_smac(struct netro_port *port, u8 *mac);
+bool crdma_remove_smac(struct crdma_port *port, u8 *mac);
 
 /**
  * Initialize a ports source MAC table.
  *
- * @ndev: The IB RoCE device.
+ * @dev: The IB RoCE device.
  * @port_num: The port number to initialize [0 based].
  *
  * Returns 0 on success, otherwise an error code.
  */
-int netro_init_smac_table(struct netro_ibdev *ndev, int port_num);
+int crdma_init_smac_table(struct crdma_ibdev *dev, int port_num);
 
 /**
  * Initialize IB device net_device notifier call backs.
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  *
  * Returns 0 on success; otherwise an error.
  */
-int netro_init_net_notifiers(struct netro_ibdev *ndev);
+int crdma_init_net_notifiers(struct crdma_ibdev *dev);
 
 /**
  * Remove IB device net_device notifier call backs.
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  */
-void netro_cleanup_net_notifiers(struct netro_ibdev *ndev);
+void crdma_cleanup_net_notifiers(struct crdma_ibdev *dev);
 
 /**
  * Write a 64 bit doorbell using 64-bit write if possible.
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  * @val: Array of the two 32-bit values endian adjusted.
  * @uar_off: The UAR offset to write to.
  */
-void netro_write64_db(struct netro_ibdev *ndev,
+void crdma_write64_db(struct crdma_ibdev *dev,
 		u32 val[2], int uar_off);
 
-#endif /* NETRO_UTIL_H */
+#endif /* CRDMA_UTIL_H */

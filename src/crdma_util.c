@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, Netronome, Inc. All rights reserved.
+ * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -41,17 +42,17 @@
 #include <net/addrconf.h>
 #include <rdma/ib_addr.h>
 
-#include "netro_ib.h"
-#include "netro_util.h"
+#include "crdma_ib.h"
+#include "crdma_util.h"
 
-int netro_init_bitmap(struct netro_bitmap *bitmap, u32 min, u32 max)
+int crdma_init_bitmap(struct crdma_bitmap *bitmap, u32 min, u32 max)
 {
 	size_t	size;
 
 	size = BITS_TO_LONGS(max - min + 1) * sizeof(long);
 	bitmap->map = kmalloc(size, GFP_KERNEL);
 	if (!bitmap->map) {
-		netro_warn("Unable to allocate bitmap\n");
+		crdma_warn("Unable to allocate bitmap\n");
 		return -ENOMEM;
 	}
 
@@ -65,14 +66,14 @@ int netro_init_bitmap(struct netro_bitmap *bitmap, u32 min, u32 max)
 	return 0;
 }
 
-void netro_cleanup_bitmap(struct netro_bitmap *bitmap)
+void crdma_cleanup_bitmap(struct crdma_bitmap *bitmap)
 {
 	bitmap->num_bits = 0;
 	kfree(bitmap->map);
 	return;
 }
 
-u32 netro_alloc_bitmap_index(struct netro_bitmap *bitmap)
+u32 crdma_alloc_bitmap_index(struct crdma_bitmap *bitmap)
 {
 	u32 index;
 	u32 range;
@@ -97,9 +98,9 @@ full:
 	return -EAGAIN;
 }
 
-void netro_free_bitmap_index(struct netro_bitmap *bitmap, u32 index)
+void crdma_free_bitmap_index(struct crdma_bitmap *bitmap, u32 index)
 {
-	netro_info("free_bitmap_index %d\n", index);
+	crdma_info("free_bitmap_index %d\n", index);
 
 	spin_lock(&bitmap->lock);
 	clear_bit(index - bitmap->min_index, bitmap->map);
@@ -107,12 +108,12 @@ void netro_free_bitmap_index(struct netro_bitmap *bitmap, u32 index)
 	return;
 }
 
-u32 netro_alloc_bitmap_area(struct netro_bitmap *bitmap, u32 count)
+u32 crdma_alloc_bitmap_area(struct crdma_bitmap *bitmap, u32 count)
 {
 	u32 index;
 	u32 range;
 
-	netro_info("alloc_bitmap_area count %d\n", count);
+	crdma_info("alloc_bitmap_area count %d\n", count);
 
 	range = bitmap->max_index - bitmap->min_index + 1;
 	spin_lock(&bitmap->lock);
@@ -136,9 +137,9 @@ full:
 	return -EAGAIN;
 }
 
-void netro_free_bitmap_area(struct netro_bitmap *bitmap, u32 index, u32 count)
+void crdma_free_bitmap_area(struct crdma_bitmap *bitmap, u32 index, u32 count)
 {
-	netro_info("free_bitmap_area index %d count %d\n", index, count);
+	crdma_info("free_bitmap_area index %d count %d\n", index, count);
 
 	spin_lock(&bitmap->lock);
 	bitmap_clear(bitmap->map, index - bitmap->min_index, count);
@@ -146,12 +147,12 @@ void netro_free_bitmap_area(struct netro_bitmap *bitmap, u32 index, u32 count)
 	return;
 }
 
-static int __netro_alloc_mem_coherent(struct netro_ibdev *ndev,
-		struct netro_mem *mem, int num_pages)
+static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
+		struct crdma_mem *mem, int num_pages)
 {
 	void *buf;
 
-	pr_info("=== __netro_alloc_mem_coherent === \n");
+	pr_info("=== __crdma_alloc_mem_coherent === \n");
 	/*
 	 * Reduce translation page size to be the minimum size (order) that
 	 * covers the requested number of PAGE_SIZE pages.
@@ -165,7 +166,7 @@ static int __netro_alloc_mem_coherent(struct netro_ibdev *ndev,
 	 * In early driver development we require that a coherent memory
 	 * allocation be backed by a single block of coherent memory.
 	 */
-	buf = dma_alloc_coherent(&ndev->nfp_info->pdev->dev,
+	buf = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
 			PAGE_SIZE << mem->min_order,
 			&sg_dma_address(mem->alloc),
 			GFP_KERNEL | GFP_TRANSHUGE);
@@ -185,28 +186,28 @@ static int __netro_alloc_mem_coherent(struct netro_ibdev *ndev,
 	sg_dma_len(mem->alloc) = mem->tot_len;
 	mem->num_sg = 1;
 	mem->num_mtt = 1;
-	mem->base_mtt_ndx = netro_alloc_bitmap_index(&ndev->mtt_map);
+	mem->base_mtt_ndx = crdma_alloc_bitmap_index(&dev->mtt_map);
 	if (mem->base_mtt_ndx < 0)
 		goto alloc_err;
 
-	pr_info("=== __netro_alloc_mem_coherent done === \n");
+	pr_info("=== __crdma_alloc_mem_coherent done === \n");
 
 	return 0;
 
 alloc_err:
-	dma_free_coherent(&ndev->nfp_info->pdev->dev, sg_dma_len(mem->alloc),
+	dma_free_coherent(&dev->nfp_info->pdev->dev, sg_dma_len(mem->alloc),
 			sg_virt(mem->alloc), sg_dma_address(mem->alloc));
 	return -ENOMEM;
 }
 
-static int __netro_alloc_mem_pages(struct netro_ibdev *ndev,
-		struct netro_mem *mem, int num_pages)
+static int __crdma_alloc_mem_pages(struct crdma_ibdev *dev,
+		struct crdma_mem *mem, int num_pages)
 {
 	struct page *page;
 	int order = mem->min_order;
 	int i;
 
-	netro_warn("__netro_alloc_mem_pages page number: %d, order: %d\n",
+	crdma_warn("__crdma_alloc_mem_pages page number: %d, order: %d\n",
 		num_pages, order);
 
 	/*
@@ -215,7 +216,7 @@ static int __netro_alloc_mem_pages(struct netro_ibdev *ndev,
 	 * size for compound pages, but adjust the block size down to what
 	 * we can actually allocate.
 	 */
-	while (num_pages > 0 && mem->num_allocs < NETRO_MEM_MAX_ALLOCS) {
+	while (num_pages > 0 && mem->num_allocs < CRDMA_MEM_MAX_ALLOCS) {
 		page = alloc_pages(GFP_KERNEL | GFP_TRANSHUGE, order);
 		if (!page) {
 			if (order > 0) {
@@ -243,15 +244,15 @@ static int __netro_alloc_mem_pages(struct netro_ibdev *ndev,
 	 * number of 512 entry scatter lists together.
 	 */
 	if (num_pages > 0) {
-		netro_warn("netro_mem only %d blocks supported at this"
-				" point\n", NETRO_MEM_MAX_ALLOCS);
+		crdma_warn("crdma_mem only %d blocks supported at this"
+				" point\n", CRDMA_MEM_MAX_ALLOCS);
 		goto alloc_err;
 	}
 
-	mem->num_sg = pci_map_sg(ndev->nfp_info->pdev, mem->alloc,
+	mem->num_sg = pci_map_sg(dev->nfp_info->pdev, mem->alloc,
 				mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
 	mem->num_mtt = mem->tot_len >> (mem->min_order + PAGE_SHIFT);
-	mem->base_mtt_ndx = netro_alloc_bitmap_area(&ndev->mtt_map,
+	mem->base_mtt_ndx = crdma_alloc_bitmap_area(&dev->mtt_map,
 					mem->num_mtt);
 	if (mem->base_mtt_ndx < 0)
 		goto alloc_err;
@@ -259,17 +260,17 @@ static int __netro_alloc_mem_pages(struct netro_ibdev *ndev,
 	return 0;
 
 alloc_err:
-	netro_warn("Non-coherent DMA memory allocation failed\n");
+	crdma_warn("Non-coherent DMA memory allocation failed\n");
 	for (i = 0; i < mem->num_allocs; i++)
 		__free_pages(sg_page(&mem->alloc[i]),
 				get_order(mem->alloc[i].length));
 	return -ENOMEM;
 }
 
-struct netro_mem *netro_alloc_dma_mem(struct netro_ibdev *ndev,
+struct crdma_mem *crdma_alloc_dma_mem(struct crdma_ibdev *dev,
 		bool coherent, int order, int size)
 {
-	struct netro_mem *mem;
+	struct crdma_mem *mem;
 	int num_pages;
 	int err;
 
@@ -282,19 +283,19 @@ struct netro_mem *netro_alloc_dma_mem(struct netro_ibdev *ndev,
 	num_pages = (size + (PAGE_SIZE-1)) >> PAGE_SHIFT;
 
 	if (!coherent)
-		err = __netro_alloc_mem_pages(ndev, mem, num_pages);
+		err = __crdma_alloc_mem_pages(dev, mem, num_pages);
 	else
-		err = __netro_alloc_mem_coherent(ndev, mem, num_pages);
+		err = __crdma_alloc_mem_coherent(dev, mem, num_pages);
 
 	if (!err)
 		return mem;
 
-	netro_warn("Non-coherent DMA memory allocation failed\n");
+	crdma_warn("Non-coherent DMA memory allocation failed\n");
 	kfree(mem);
 	return ERR_PTR(-ENOMEM);
 }
 
-void netro_free_dma_mem(struct netro_ibdev *ndev, struct netro_mem *mem)
+void crdma_free_dma_mem(struct crdma_ibdev *dev, struct crdma_mem *mem)
 {
 	int i;
 
@@ -303,22 +304,22 @@ void netro_free_dma_mem(struct netro_ibdev *ndev, struct netro_mem *mem)
 
 	/* Release MTT entries backing this memory */
 	if (mem->num_mtt)
-		netro_free_bitmap_area(&ndev->mtt_map,
+		crdma_free_bitmap_area(&dev->mtt_map,
 				mem->base_mtt_ndx, mem->num_mtt);
 
 	if (mem->coherent) {
-		netro_info("free coherent memory\n");
-		dma_free_coherent(&ndev->nfp_info->pdev->dev,
+		crdma_info("free coherent memory\n");
+		dma_free_coherent(&dev->nfp_info->pdev->dev,
 				sg_dma_len(mem->alloc),
 				sg_virt(mem->alloc),
 				sg_dma_address(mem->alloc));
 	} else {
-		netro_info("unmap DMA memory\n");
+		crdma_info("unmap DMA memory\n");
 		if (mem->num_sg)
-			pci_unmap_sg(ndev->nfp_info->pdev, mem->alloc,
+			pci_unmap_sg(dev->nfp_info->pdev, mem->alloc,
 					mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
 
-		netro_info("free DMA memory (num allocs = %d)\n",
+		crdma_info("free DMA memory (num allocs = %d)\n",
 				mem->num_allocs);
 		for (i = 0; i < mem->num_allocs; i++)
 			__free_pages(sg_page(&mem->alloc[i]),
@@ -328,29 +329,29 @@ void netro_free_dma_mem(struct netro_ibdev *ndev, struct netro_mem *mem)
 	return;
 }
 
-int netro_alloc_uar(struct netro_ibdev *ndev, struct netro_uar *uar)
+int crdma_alloc_uar(struct crdma_ibdev *dev, struct crdma_uar *uar)
 {
-	uar->index = netro_alloc_bitmap_index(&ndev->uar_map);
+	uar->index = crdma_alloc_bitmap_index(&dev->uar_map);
 	if (uar->index < 0)
 		return -ENOMEM;
 	uar->map = NULL;
 	return 0;
 }
 
-void netro_free_uar(struct netro_ibdev *ndev, struct netro_uar *uar)
+void crdma_free_uar(struct crdma_ibdev *dev, struct crdma_uar *uar)
 {
 	if (uar->map != NULL) {
 		iounmap(uar->map);
 		uar->map = NULL;
 	}
-	netro_free_bitmap_index(&ndev->uar_map, uar->index);
+	crdma_free_bitmap_index(&dev->uar_map, uar->index);
 	return;
 }
 
-u64 netro_uar_pfn(struct netro_ibdev *ndev,
-		struct netro_uar *uar)
+u64 crdma_uar_pfn(struct crdma_ibdev *dev,
+		struct crdma_uar *uar)
 {
-	return (ndev->db_paddr + (uar->index * PAGE_SIZE)) >> PAGE_SHIFT;
+	return (dev->db_paddr + (uar->index * PAGE_SIZE)) >> PAGE_SHIFT;
 }
 
 /*
@@ -369,7 +370,7 @@ u64 netro_uar_pfn(struct netro_ibdev *ndev,
  * @vlan_id: The VLAN ID.
  * @guid: Pointer to GUID to initialize.
  */
-void netro_mac_to_guid(u8 *mac, u16 vlan_id, u8 *guid)
+void crdma_mac_to_guid(u8 *mac, u16 vlan_id, u8 *guid)
 {
 	memcpy(guid, mac, 3);
 	memcpy(guid + 5, mac + 3, 3);
@@ -387,20 +388,20 @@ void netro_mac_to_guid(u8 *mac, u16 vlan_id, u8 *guid)
 /**
  * Build a ports default GID
  *
- * @ndev: The IB RoCE device.
+ * @dev: The IB RoCE device.
  * @port: The physical port number [0 based].
  * @gid: Pointer to the GID to initialize.
  */
-static void netro_get_default_gid(struct netro_ibdev *ndev, int port,
+static void crdma_get_default_gid(struct crdma_ibdev *dev, int port,
 			union ib_gid *gid)
 {
 	gid->global.subnet_prefix = cpu_to_be64(0xfe80000000000000LL);
-	netro_debug("phys port %d\n", port);
-	netro_debug("net_device %p", ndev->port[port].netdev);
-	netro_debug("dev_addr %p",
-			ndev->port[port].netdev ?
-			ndev->port[port].netdev->dev_addr : 0);
-	netro_mac_to_guid(ndev->port[port].netdev->dev_addr,
+	crdma_debug("phys port %d\n", port);
+	crdma_debug("net_device %p", dev->port.netdev);
+	crdma_debug("dev_addr %p",
+			dev->port.netdev ?
+			dev->port.netdev->dev_addr : 0);
+	crdma_mac_to_guid(dev->port.netdev->dev_addr,
 			0xFFFF, &gid->raw[8]);
 }
 
@@ -415,10 +416,10 @@ static void netro_get_default_gid(struct netro_ibdev *ndev, int port,
  *
  * Returns true if the GID is in the port source GID table, otherwise false.
  */
-static bool __netro_find_gid(struct netro_port *port,
+static bool __crdma_find_gid(struct crdma_port *port,
 			union ib_gid *gid, u8 type)
 {
-	struct netro_gid_entry *entry = port->gid_table_entry;
+	struct crdma_gid_entry *entry = port->gid_table_entry;
 	int i;
 
 	for (i = 0; i < port->gid_table_size; i++, entry++) {
@@ -429,7 +430,7 @@ static bool __netro_find_gid(struct netro_port *port,
 	return false;
 }
 
-void netro_mac_swap(u8 *out_mac, u8 *in_mac)
+void crdma_mac_swap(u8 *out_mac, u8 *in_mac)
 {
 	/* byte swap within 32-bit words */
 	out_mac[0] = in_mac[3];
@@ -441,15 +442,15 @@ void netro_mac_swap(u8 *out_mac, u8 *in_mac)
 	return;
 }
 
-bool netro_add_sgid(struct netro_port *port, union ib_gid *gid, u8 type)
+bool crdma_add_sgid(struct crdma_port *port, union ib_gid *gid, u8 type)
 {
-	struct netro_gid_entry *entry;
+	struct crdma_gid_entry *entry;
 	unsigned long flags;
 	int i;
 
 	spin_lock_irqsave(&port->table_lock, flags);
-	if (__netro_find_gid(port, gid, type)) {
-		netro_info("SGID already in SGID table\n");
+	if (__crdma_find_gid(port, gid, type)) {
+		crdma_info("SGID already in SGID table\n");
 		goto no_update;
 	}
 
@@ -461,11 +462,11 @@ bool netro_add_sgid(struct netro_port *port, union ib_gid *gid, u8 type)
 			entry->valid = 1;
 			spin_unlock_irqrestore(&port->table_lock, flags);
 
-			netro_debug("SGID added to port SGID table\n");
+			crdma_debug("SGID added to port SGID table\n");
 			return true;
 		}
 	}
-	netro_info("SGID table full\n");
+	crdma_info("SGID table full\n");
 
 no_update:
 	spin_unlock_irqrestore(&port->table_lock, flags);
@@ -473,9 +474,9 @@ no_update:
 	return false;
 }
 
-bool netro_remove_sgid(struct netro_port *port, union ib_gid *gid, u8 type)
+bool crdma_remove_sgid(struct crdma_port *port, union ib_gid *gid, u8 type)
 {
-	struct netro_gid_entry *entry = port->gid_table_entry;
+	struct crdma_gid_entry *entry = port->gid_table_entry;
 	unsigned long flags;
 	int i;
 
@@ -490,19 +491,19 @@ bool netro_remove_sgid(struct netro_port *port, union ib_gid *gid, u8 type)
 			return true;
 		}
 	}
-	netro_info("SGID not found in port SGID table\n");
+	crdma_info("SGID not found in port SGID table\n");
 	spin_unlock_irqrestore(&port->table_lock, flags);
 
 	return false;
 }
 
-int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
+int crdma_init_sgid_table(struct crdma_ibdev *dev, int port_num)
 {
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
 	const struct in_ifaddr *ifa;
 #endif
 	struct in_device *in_dev;
-	struct net_device *netdev = ndev->port[port_num].netdev;
+	struct net_device *netdev = dev->port.netdev;
 	union ib_gid gid;
 #if IS_ENABLED(CONFIG_IPV6)
 	struct inet6_dev *in6_dev;
@@ -514,8 +515,8 @@ int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
 		netdev = rdma_vlan_dev_real_dev(netdev);
 
 	/* First entry is always the port's default GID */
-	netro_get_default_gid(ndev, port_num, &gid);
-	netro_add_sgid(&ndev->port[port_num], &gid, RDMA_ROCE_V2_GID_TYPE);
+	crdma_get_default_gid(dev, port_num, &gid);
+	crdma_add_sgid(&dev->port, &gid, RDMA_ROCE_V2_GID_TYPE);
 
 	/* Add IPv4 GIDS */
 	in_dev = in_dev_get(netdev);
@@ -525,7 +526,7 @@ int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
 		in_dev_for_each_ifa_rcu(ifa, in_dev) {
 			ipv6_addr_set_v4mapped(ifa->ifa_address,
 					       (struct in6_addr *)&gid);
-			netro_add_sgid(&ndev->port[port_num],
+			crdma_add_sgid(&dev->port,
 				       &gid, RDMA_ROCE_V2_GID_TYPE);
 		}
 		rcu_read_unlock();
@@ -533,7 +534,7 @@ int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
 		for_ifa(in_dev) {
 			ipv6_addr_set_v4mapped(ifa->ifa_address,
 					(struct in6_addr *)&gid);
-			netro_add_sgid(&ndev->port[port_num],
+			crdma_add_sgid(&dev->port,
 					&gid, RDMA_ROCE_V2_GID_TYPE);
 		}
 		endfor_ifa(in_dev);
@@ -548,7 +549,7 @@ int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
 		read_lock_bh(&in6_dev->lock);
 		list_for_each_entry(ifp, &in6_dev->addr_list, if_list) {
 			pgid = (union ib_gid *)&ifp->addr;
-			netro_add_sgid(&ndev->port[port_num], pgid,
+			crdma_add_sgid(&dev->port, pgid,
 					RDMA_ROCE_V2_GID_TYPE);
 		}
 		read_unlock_bh(&in6_dev->lock);
@@ -556,8 +557,8 @@ int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
 	}
 #endif
 	/* Push the source GID table to microcode */
-	return netro_write_sgid_table(ndev, port_num,
-			ndev->port[port_num].gid_table_size);
+	return crdma_write_sgid_table(dev, port_num,
+			dev->port.gid_table_size);
 }
 
 /**
@@ -570,7 +571,7 @@ int netro_init_sgid_table(struct netro_ibdev *ndev, int port_num)
  *
  * Returns NOTIFY_OK if address updated; otherwise NOTIFY_DONE.
  */
-static int netro_net_addr_event(struct netro_ibdev *ndev,
+static int crdma_net_addr_event(struct crdma_ibdev *dev,
 			struct net_device *netdev, union ib_gid *gid,
 			u8 type, unsigned long event)
 {
@@ -588,37 +589,37 @@ static int netro_net_addr_event(struct netro_ibdev *ndev,
 	 * associated with this callback (so we can extend support to more
 	 * than one port).
 	 */
-	if (real_netdev != ndev->port[0].netdev) {
-		netro_info("Event netdev %p, not for us %p\n",
-				real_netdev, ndev->port[0].netdev);
+	if (real_netdev != dev->port.netdev) {
+		crdma_info("Event netdev %p, not for us %p\n",
+				real_netdev, dev->port.netdev);
 		return NOTIFY_DONE;
 	}
 
-	netro_info("ib_gid = 0x%016llX:0x%016llX\n",
+	crdma_info("ib_gid = 0x%016llX:0x%016llX\n",
 			gid->global.subnet_prefix,
 			gid->global.interface_id);
 
 	switch (event) {
 	case NETDEV_UP:
-		netro_info("Adding SGID type %d\n", type);
-		updated = netro_add_sgid(&ndev->port[0], gid, type);
+		crdma_info("Adding SGID type %d\n", type);
+		updated = crdma_add_sgid(&dev->port, gid, type);
 		break;
 	case NETDEV_DOWN:
-		netro_info("Removing SGID type %d\n", type);
-		updated = netro_remove_sgid(&ndev->port[0], gid, type);
+		crdma_info("Removing SGID type %d\n", type);
+		updated = crdma_remove_sgid(&dev->port, gid, type);
 		break;
 	default:
-		netro_info("Ignoring Event %ld\n", event);
+		crdma_info("Ignoring Event %ld\n", event);
 		updated = false;
 		break;
 	}
 
 	if (updated) {
 		/* Push the updated GID table to microcode */
-		if (netro_write_sgid_table(ndev, 0,
-				ndev->port[0].gid_table_size))
-			netro_dev_info(ndev, "Unable to update GID table\n");
-		netro_info("IB GID change events not delivered yet.\n");
+		if (crdma_write_sgid_table(dev, 0,
+				dev->port.gid_table_size))
+			crdma_dev_info(dev, "Unable to update GID table\n");
+		crdma_info("IB GID change events not delivered yet.\n");
 
 		/* TODO: If GID was updated we need to propagate an IB EVENT */
 	}
@@ -635,23 +636,23 @@ static int netro_net_addr_event(struct netro_ibdev *ndev,
  *
  * Returns NOTIFY_DONE.
  */
-static int netro_inet_event(struct notifier_block *nb,
+static int crdma_inet_event(struct notifier_block *nb,
 			unsigned long event, void *ptr)
 {
 	struct in_ifaddr *ifaddr = ptr;
 	struct net_device *netdev = ifaddr->ifa_dev->dev;
-	struct netro_ibdev *ndev;
+	struct crdma_ibdev *dev;
 	union ib_gid gid;
 
-	pr_info("netro_inet_event()\n");
+	pr_info("crdma_inet_event()\n");
 	pr_info("  netdev: %p\n", netdev);
 	pr_info("   event: %ld\n", event);
 
-	ndev = container_of(nb, struct netro_ibdev, nb_inet);
-	pr_info("associated RoCE IB device %p\n", ndev);
+	dev = container_of(nb, struct crdma_ibdev, nb_inet);
+	pr_info("associated RoCE IB device %p\n", dev);
 
 	ipv6_addr_set_v4mapped(ifaddr->ifa_address, (struct in6_addr *)&gid);
-	netro_net_addr_event(ndev, netdev, &gid, RDMA_ROCE_V2_GID_TYPE, event);
+	crdma_net_addr_event(dev, netdev, &gid, RDMA_ROCE_V2_GID_TYPE, event);
 	return NOTIFY_DONE;
 }
 
@@ -665,46 +666,46 @@ static int netro_inet_event(struct notifier_block *nb,
  *
  * Returns NOTIFY_DONE.
  */
-static int netro_inet6_event(struct notifier_block *nb,
+static int crdma_inet6_event(struct notifier_block *nb,
 			unsigned long event, void *ptr)
 {
 	struct inet6_ifaddr *ifaddr = ptr;
 	struct net_device *netdev = ifaddr->idev->dev;
-	struct netro_ibdev *ndev;
+	struct crdma_ibdev *dev;
 	union ib_gid *gid = (union ib_gid *) &ifaddr->addr;
 
-	pr_info("netro_inet6_event()\n");
+	pr_info("crdma_inet6_event()\n");
 	pr_info("  netdev: %p\n", netdev);
 	pr_info("   event: %ld\n", event);
 
-	ndev = container_of(nb, struct netro_ibdev, nb_inet6);
-	pr_info("associated RoCE IB device %p\n", ndev);
+	dev = container_of(nb, struct crdma_ibdev, nb_inet6);
+	pr_info("associated RoCE IB device %p\n", dev);
 
-	netro_net_addr_event(ndev, netdev, gid, RDMA_ROCE_V2_GID_TYPE, event);
+	crdma_net_addr_event(dev, netdev, gid, RDMA_ROCE_V2_GID_TYPE, event);
 	return NOTIFY_DONE;
 }
 #endif
 
-int netro_init_net_notifiers(struct netro_ibdev *ndev)
+int crdma_init_net_notifiers(struct crdma_ibdev *dev)
 {
 	int err;
 
-	netro_debug("netro_init_net_notifier()\n");
+	crdma_debug("crdma_init_net_notifier()\n");
 
-	if (!ndev->nb_inet.notifier_call) {
-		ndev->nb_inet.notifier_call = netro_inet_event;
-		err = register_inetaddr_notifier(&ndev->nb_inet);
+	if (!dev->nb_inet.notifier_call) {
+		dev->nb_inet.notifier_call = crdma_inet_event;
+		err = register_inetaddr_notifier(&dev->nb_inet);
 		if (err) {
-			ndev->nb_inet.notifier_call = NULL;
+			dev->nb_inet.notifier_call = NULL;
 			goto out;
 		}
 	}
 #if IS_ENABLED(CONFIG_IPV6)
-	if (!ndev->nb_inet6.notifier_call) {
-		ndev->nb_inet6.notifier_call = netro_inet6_event;
-		err = register_inet6addr_notifier(&ndev->nb_inet6);
+	if (!dev->nb_inet6.notifier_call) {
+		dev->nb_inet6.notifier_call = crdma_inet6_event;
+		err = register_inet6addr_notifier(&dev->nb_inet6);
 		if (err) {
-			ndev->nb_inet6.notifier_call = NULL;
+			dev->nb_inet6.notifier_call = NULL;
 			goto cleanup_inet;
 		}
 	}
@@ -712,33 +713,33 @@ int netro_init_net_notifiers(struct netro_ibdev *ndev)
 	return 0;
 
 cleanup_inet:
-	unregister_inetaddr_notifier(&ndev->nb_inet);
-	ndev->nb_inet.notifier_call = NULL;
+	unregister_inetaddr_notifier(&dev->nb_inet);
+	dev->nb_inet.notifier_call = NULL;
 out:
 	return err;
 }
 
-void netro_cleanup_net_notifiers(struct netro_ibdev *ndev)
+void crdma_cleanup_net_notifiers(struct crdma_ibdev *dev)
 {
-	netro_debug("netro_cleanup_net_notifier()\n");
+	crdma_debug("crdma_cleanup_net_notifier()\n");
 
-	if (ndev->nb_inet.notifier_call) {
-		unregister_inetaddr_notifier(&ndev->nb_inet);
-		ndev->nb_inet.notifier_call = NULL;
+	if (dev->nb_inet.notifier_call) {
+		unregister_inetaddr_notifier(&dev->nb_inet);
+		dev->nb_inet.notifier_call = NULL;
 	}
 
 #if IS_ENABLED(CONFIG_IPV6)
-	if (ndev->nb_inet6.notifier_call) {
-		unregister_inet6addr_notifier(&ndev->nb_inet6);
-		ndev->nb_inet6.notifier_call = NULL;
+	if (dev->nb_inet6.notifier_call) {
+		unregister_inet6addr_notifier(&dev->nb_inet6);
+		dev->nb_inet6.notifier_call = NULL;
 	}
 #endif
 	return;
 }
 
-bool netro_add_smac(struct netro_port *port, u8 *mac)
+bool crdma_add_smac(struct crdma_port *port, u8 *mac)
 {
-	struct netro_mac_entry *entry = port->mac_table_entry;
+	struct crdma_mac_entry *entry = port->mac_table_entry;
 	unsigned long flags;
 	bool update = false;
 	int i;
@@ -761,16 +762,16 @@ bool netro_add_smac(struct netro_port *port, u8 *mac)
 			goto done;
 		}
 	}
-	netro_info("S_MAC table full\n");
+	crdma_info("S_MAC table full\n");
 done:
 	spin_unlock_irqrestore(&port->table_lock, flags);
 
 	return update;
 }
 
-bool netro_remove_smac(struct netro_port *port, u8 *mac)
+bool crdma_remove_smac(struct crdma_port *port, u8 *mac)
 {
-	struct netro_mac_entry *entry = port->mac_table_entry;
+	struct crdma_mac_entry *entry = port->mac_table_entry;
 	unsigned long flags;
 	bool update = false;
 	int i;
@@ -787,26 +788,26 @@ bool netro_remove_smac(struct netro_port *port, u8 *mac)
 	return update;
 }
 
-int netro_init_smac_table(struct netro_ibdev *ndev, int port_num)
+int crdma_init_smac_table(struct crdma_ibdev *dev, int port_num)
 {
 	/* Set the ports default MAC address */
-	if (netro_add_smac(&ndev->port[port_num],
-				ndev->port[port_num].mac)) {
-		netro_write_smac_table(ndev, port_num,
-				ndev->port[port_num].mac_table_size);
+	if (crdma_add_smac(&dev->port,
+				dev->port.mac)) {
+		crdma_write_smac_table(dev, port_num,
+				dev->port.mac_table_size);
 	}
 	return 0;
 }
 
 #if BITS_PER_LONG == 64
 #if defined(__LITTLE_ENDIAN)
-#define NETRO_WORDS_TO_LONG(va) ((u64)val[1] << 32 | val[0])
+#define CRDMA_WORDS_TO_LONG(va) ((u64)val[1] << 32 | val[0])
 #elif defined(__BIG_ENDIAN)
-#define NETRO_WORDS_TO_LONG(va) ((u64)val[0] << 32 | val[1])
+#define CRDMA_WORDS_TO_LONG(va) ((u64)val[0] << 32 | val[1])
 #else
 #error Host byte order not defined
 #endif
-void netro_write64_db(struct netro_ibdev *ndev,
+void crdma_write64_db(struct crdma_ibdev *dev,
 		u32 val[2], int uar_off)
 {
 	static int cnt = 0;
@@ -814,27 +815,27 @@ void netro_write64_db(struct netro_ibdev *ndev,
 	/* Log the first few doorbells as debug helper */
 	if (cnt < 4) {
 		pr_info("Writing 64-bit DB 0x%016llX to %p\n",
-			NETRO_WORDS_TO_LONG(val),
-			(uint64_t *)(ndev->priv_uar.map + uar_off));
+			CRDMA_WORDS_TO_LONG(val),
+			(uint64_t *)(dev->priv_uar.map + uar_off));
 		cnt++;
 	}
 
-	__raw_writeq(NETRO_WORDS_TO_LONG(val),
-			ndev->priv_uar.map + uar_off);
+	__raw_writeq(CRDMA_WORDS_TO_LONG(val),
+			dev->priv_uar.map + uar_off);
 	return;
 }
 #else
-void netro_write64_db(struct netro_ibdev *ndev,
+void crdma_write64_db(struct crdma_ibdev *dev,
 		u32 val[2], int uar_off)
 {
 	unsigned long flags;
 
-	spin_lock_irqsave(&ndev->priv_uar_lock, flags);
+	spin_lock_irqsave(&dev->priv_uar_lock, flags);
 	__raw_writel((__force u32) val[0],
-			ndev->priv_uar.map + uar_off - NETRO_DB_WA_BIT);
+			dev->priv_uar.map + uar_off - CRDMA_DB_WA_BIT);
 	__raw_writel((__force u32) val[1],
-			ndev->priv_uar.map + uar_off + 4);
-	spin_unlock_irqrestore(&ndev->priv_uar_lock, flags);
+			dev->priv_uar.map + uar_off + 4);
+	spin_unlock_irqrestore(&dev->priv_uar_lock, flags);
 
 	return;
 }

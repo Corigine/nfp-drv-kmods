@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, Netronome, Inc. All rights reserved.
+ * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -36,48 +37,46 @@
 
 #include "nfp.h"
 #include "nfp_roce.h"
-#include "netro_ib.h"
-#include "netro_hw.h"
-#include "nfp_cpp.h"
-#include "nfp_plat.h"
+#include "crdma_ib.h"
+#include "crdma_hw.h"
 
-int __netro_write_cmdif(struct netro_ibdev *ndev, u64 input_param,
+int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 		u64 output_param, u32 input_mod, u8 opcode, u8 opcode_mod,
 		u16 token, bool event)
 {
-	struct cmdif_reg __iomem *reg = ndev->cmdif;
+	struct cmdif_reg __iomem *reg = dev->cmdif;
 	unsigned long end_time;
 	uint32_t cmd_word;
 
 	if (!reg)
 		return -EIO;
 
-	if (pci_channel_offline(ndev->nfp_info->pdev))
+	if (pci_channel_offline(dev->nfp_info->pdev))
 		return -EIO;
 
 #if 0 /* XXX: Test only */
-	__netro_dump_cmdif(ndev);
+	__crdma_dump_cmdif(dev);
 #endif
 
 	/*
 	 * Make sure if the previous command was non-polled that the
 	 * command interface is ready to accept another command.
 	 */
-	end_time = jiffies + msecs_to_jiffies(NETRO_CMDIF_GO_TIMEOUT_MS);
+	end_time = jiffies + msecs_to_jiffies(CRDMA_CMDIF_GO_TIMEOUT_MS);
 
-	while (netro_cmdif_busy(ndev)) {
+	while (crdma_cmdif_busy(dev)) {
 		cond_resched();
 
-		if (pci_channel_offline(ndev->nfp_info->pdev))
+		if (pci_channel_offline(dev->nfp_info->pdev))
 			return -EIO;
 
 		if (time_after_eq(jiffies, end_time)) {
-			netro_dev_err(ndev, "Timeout:Command I/F not ready\n");
+			crdma_dev_err(dev, "Timeout:Command I/F not ready\n");
 			return -EAGAIN;
 		}
 	}
 
-#if NETRO_DETAIL_INFO_DEBUG_FLAG
+#if CRDMA_DETAIL_INFO_DEBUG_FLAG
 	pr_info("input_param: 0x%016llx\n", input_param);
 	pr_info("output_param: 0x%016llx\n", output_param);
 	pr_info("input_mod: 0x%08x\n", input_mod);
@@ -100,12 +99,12 @@ int __netro_write_cmdif(struct netro_ibdev *ndev, u64 input_param,
 	__raw_writel((__force u32) cpu_to_le32(output_param & 0xFFFFFFFFul),
 			&reg->output_param_low);
 	__raw_writel((__force u32) cpu_to_le32(((u32) token) <<
-				NETRO_CMDIF_TOKEN_SHIFT), &reg->token);
+				CRDMA_CMDIF_TOKEN_SHIFT), &reg->token);
 
-	cmd_word = (1 << NETRO_CMDIF_GO_BIT) |
-			(ndev->toggle << NETRO_CMDIF_TOGGLE_BIT) |
-			(event ? (1 << NETRO_CMDIF_EVENT_BIT) : 0) |
-			(opcode_mod << NETRO_CMDIF_OPCODE_MOD_SHIFT) |
+	cmd_word = (1 << CRDMA_CMDIF_GO_BIT) |
+			(dev->toggle << CRDMA_CMDIF_TOGGLE_BIT) |
+			(event ? (1 << CRDMA_CMDIF_EVENT_BIT) : 0) |
+			(opcode_mod << CRDMA_CMDIF_OPCODE_MOD_SHIFT) |
 			opcode;
 
 #if 0
@@ -114,7 +113,7 @@ int __netro_write_cmdif(struct netro_ibdev *ndev, u64 input_param,
 #endif
 	rmb();
 
-#if NETRO_DETAIL_INFO_DEBUG_FLAG
+#if CRDMA_DETAIL_INFO_DEBUG_FLAG
 	pr_info("Command word to post:0x%08X\n", cmd_word);
 #endif
 
@@ -122,16 +121,16 @@ int __netro_write_cmdif(struct netro_ibdev *ndev, u64 input_param,
 	__raw_writel((__force u32) cpu_to_le32(cmd_word),
 			&reg->cmd_status);
 
-	ndev->toggle = ndev->toggle ^ 1;
+	dev->toggle = dev->toggle ^ 1;
 #if (!(VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0)))
 	mmiowb();
 #endif
 	return 0;
 }
 
-void __netro_dump_cmdif(struct netro_ibdev *ndev)
+void __crdma_dump_cmdif(struct crdma_ibdev *dev)
 {
-	struct cmdif_reg __iomem *reg = ndev->cmdif;
+	struct cmdif_reg __iomem *reg = dev->cmdif;
 
 	/* For now we use "raw" to explicitly control endian conversion */
 	pr_info("Dump of command interface registers: %p\n", reg);
@@ -151,23 +150,23 @@ void __netro_dump_cmdif(struct netro_ibdev *ndev)
 			le32_to_cpu(__raw_readl(&reg->cmd_status)));
 }
 
-bool netro_cmdif_busy(struct netro_ibdev *ndev)
+bool crdma_cmdif_busy(struct crdma_ibdev *dev)
 {
-	struct cmdif_reg __iomem *reg = ndev->cmdif;
+	struct cmdif_reg __iomem *reg = dev->cmdif;
 	u32 status;
 
-	if (!reg || pci_channel_offline(ndev->nfp_info->pdev))
+	if (!reg || pci_channel_offline(dev->nfp_info->pdev))
 		return -EIO;
 
 	status = le32_to_cpu(__raw_readl(&reg->cmd_status));
-	return (status & (1 << NETRO_CMDIF_GO_BIT)) ||
-		(ndev->toggle != !!(status & (1 << NETRO_CMDIF_TOGGLE_BIT)));
+	return (status & (1 << CRDMA_CMDIF_GO_BIT)) ||
+		(dev->toggle != !!(status & (1 << CRDMA_CMDIF_TOGGLE_BIT)));
 }
 
-int __netro_read_cmdif_results(struct netro_ibdev *ndev,
+int __crdma_read_cmdif_results(struct crdma_ibdev *dev,
 		u64 *output_param, u8 *status)
 {
-	struct cmdif_reg __iomem *reg = ndev->cmdif;
+	struct cmdif_reg __iomem *reg = dev->cmdif;
 	u32 out_low;
 	u32 out_high;
 	u32 cmdsts;
@@ -175,7 +174,7 @@ int __netro_read_cmdif_results(struct netro_ibdev *ndev,
 	if (!reg)
 		return -EIO;
 
-	if (pci_channel_offline(ndev->nfp_info->pdev))
+	if (pci_channel_offline(dev->nfp_info->pdev))
 		return -EIO;
 
 	if (output_param) {
@@ -186,127 +185,99 @@ int __netro_read_cmdif_results(struct netro_ibdev *ndev,
 
 	if (status) {
 		cmdsts = le32_to_cpu(__raw_readl(&reg->cmd_status));
-		*status = (u8) (cmdsts >> NETRO_CMDIF_STATUS_SHIFT);
+		*status = (u8) (cmdsts >> CRDMA_CMDIF_STATUS_SHIFT);
 	}
 	return 0;
 }
 
-int netro_acquire_pci_resources(struct netro_ibdev *ndev)
+int crdma_acquire_pci_resources(struct crdma_ibdev *dev)
 {
-	ndev->cmdif = ndev->nfp_info->cmdif;
-	if (!ndev->cmdif) {
-		netro_info("Command interface iomem passed as NULL\n");
+	dev->cmdif = dev->nfp_info->cmdif;
+	if (!dev->cmdif) {
+		crdma_info("Command interface iomem passed as NULL\n");
 		return -EINVAL;
 	}
-	pr_info("cmdif_reg IOMEM address:%p\n", ndev->cmdif);
+	pr_info("cmdif_reg IOMEM address:%p\n", dev->cmdif);
 
-	ndev->db_paddr = ndev->nfp_info->db_base;
-	pr_info("DB pages bus/DMA address:0x%016llX\n", ndev->db_paddr);
+	dev->db_paddr = dev->nfp_info->db_base;
+	pr_info("DB pages bus/DMA address:0x%016llX\n", dev->db_paddr);
 	return 0;
 }
 
-void netro_free_pci_resources(struct netro_ibdev *ndev)
+void crdma_free_pci_resources(struct crdma_ibdev *dev)
 {
 	return;
 }
 
-void netro_cleanup_hw(struct netro_ibdev *ndev)
+void crdma_cleanup_hw(struct crdma_ibdev *dev)
 {
-	pr_info("Netro HW specific cleanup\n");
+	pr_info("CRDMA HW specific cleanup\n");
 	return;
 }
 
-void corigine_set_sq_db(struct netro_ibdev *ndev, u32 qpn)
-{
-	void __iomem *addr;
-	u32 db;
-
-	if (NFP_CPP_MODEL_IS_3800(ndev->nfp_info->model)) {
-		db = qpn & CORIGINE_DB_SQ_MASK;
-		addr = ndev->priv_uar.map + CORIGINE_DB_SQ_ADDR_OFFSET_3800;
-		pr_info("Write SQ_Doorbell %p with 0x%08X\n", addr, cpu_to_le32(db));
-		__raw_writel((__force u32) cpu_to_le32(db), addr);
-		mb();
-	}
-	//Todo model 6000
-	return;
-}
-
-void corigine_set_cq_db(struct netro_ibdev *ndev, u32 cqn, bool solicited)
+void crdma_set_sq_db(struct crdma_ibdev *dev, u32 qpn)
 {
 	void __iomem *addr;
 	u32 db;
-	struct netro_cq	*ncq = ndev->cq_table[cqn];
 
-	if (NFP_CPP_MODEL_IS_3800(ndev->nfp_info->model)) {
-		db = (ncq->arm_seqn << CORIGINE_DB_CQ_SEQ_SHIFT) |
-			 (solicited ? 0 : CORIGINE_DB_CQ_ARM_ANY_BIT) |
-			 (ncq->cqn & CORIGINE_DB_CQN_MASK);
-		addr = ndev->priv_eq_uar.map + CORIGINE_DB_CQ_ADDR_OFFSET_3800;
-		pr_info("Write CQ_Doorbell %p with 0x%08X\n", addr, cpu_to_le32(db));
-		__raw_writel((__force u32) cpu_to_le32(db), addr);
-		mb();
-	}
-	//Todo model 6000
+	db = qpn & CRDMA_DB_SQ_MASK;
+	addr = dev->priv_uar.map + CRDMA_DB_SQ_ADDR_OFFSET;
+	__raw_writel((__force u32) cpu_to_le32(db), addr);
+	mb();
+
+	crdma_dev_info(dev, "Write SQ_Doorbell %p with 0x%08X\n",
+		addr, cpu_to_le32(db));
+
 	return;
 }
 
-inline void corigine_set_eq_ci(struct netro_ibdev *ndev,  u32 eqn,
+void crdma_set_cq_db(struct crdma_ibdev *dev, u32 cqn, bool solicited)
+{
+	void __iomem *addr;
+	u32 db;
+	struct crdma_cq	*ncq;
+
+	if (cqn >= dev->cap.ib.max_cq) {
+		crdma_dev_warn(dev, "CQN (%u) is invalid.\n", cqn);
+		return;
+	}
+
+	ncq = dev->cq_table[cqn];
+
+	db = (ncq->arm_seqn << CRDMA_DB_CQ_SEQ_SHIFT) |
+		(solicited ? 0 : CRDMA_DB_CQ_ARM_ANY_BIT) |
+		(ncq->cqn & CRDMA_DB_CQN_MASK);
+	addr = dev->priv_eq_uar.map + CRDMA_DB_CQ_ADDR_OFFSET;
+	__raw_writel((__force u32) cpu_to_le32(db), addr);
+	mb();
+
+	crdma_dev_info(dev, "Write CQ_Doorbell %p with 0x%08X\n",
+		addr, cpu_to_le32(db));
+	return;
+}
+
+inline void crdma_set_eq_ci(struct crdma_ibdev *dev,  u32 eqn,
 		u32 consumer_index, bool arm)
 {
 	void __iomem *addr;
 	u32 ci;
 
-	pr_info("corigine_set_eq_ci, eqn %d, ci 0x%08X, arm interrupt %d\n",
-			eqn, consumer_index, arm);
-	if (NFP_CPP_MODEL_IS_3800(ndev->nfp_info->model)) {
-		ci = (arm ? NETRO_UAR_EQ_ARM_BIT : 0) |
-				(consumer_index & NETRO_UAR_EQ_CONSUMER_MASK);
-		addr = ndev->priv_eq_uar.map + (eqn * CORIGINE_UAR_EQ_ADDR_INTERVAL_IN_PAGE);
-	} else {
-		ci = (arm ? NETRO_UAR_EQ_ARM_BIT : 0) | NETRO_UAR_EQ_FIN_BIT |
-				(consumer_index & NETRO_UAR_EQ_CONSUMER_MASK);
-		addr = ndev->priv_eq_uar.map + NETRO_UAR_EQ_ADDR_WA_BIT + (eqn * sizeof(u32) * 2);
-	}
-
-
-	if (!NFP_CPP_MODEL_IS_3800(ndev->nfp_info->model)) {
-	/* Dump values for debug */
-#if 0
-	pr_info("EQ_Doorbell UAR w/WA address %p\n", addr);
-	pr_info("EQ_Doorbell UAR wo/WA address %p\n", addr -
-			NETRO_UAR_EQ_ADDR_WA_BIT);
-#endif
-
-	/*
-	 * NOTE that we ignore the EQ finish bit since each EQ
-	 * has it's own address (in 0x6000) and the latest
-	 * write is always what we want ultimately.
-	 */
-#if 0
-	pr_info("Current EQ doorbell value 0x%08X\n", le32_to_cpu(
-			__raw_readl(addr - NETRO_UAR_EQ_ADDR_WA_BIT)));
-	rmb();
-#endif
-	}
-
-	pr_info("Write EQ_Doorbell %p with 0x%08X\n", addr, cpu_to_le32(ci));
+	ci = (arm ? CRDMA_UAR_EQ_ARM_BIT : 0) |
+		(consumer_index & CRDMA_UAR_EQ_CONSUMER_MASK);
+	addr = dev->priv_eq_uar.map +
+		(eqn * CRDMA_UAR_EQ_ADDR_INTERVAL_IN_PAGE);
 	__raw_writel((__force u32) cpu_to_le32(ci), addr);
 	mb();
+
+	crdma_dev_info(dev, "Write EQ_Doorbell %p with 0x%08X\n",
+		addr, cpu_to_le32(ci));
+
 	return;
 }
 
 
-int netro_set_chip_details(struct netro_ibdev *ndev, u32 model)
+int crdma_set_chip_details(struct crdma_ibdev *dev, u32 model)
 {
-    #if 0
-	if (!NFP_CPP_MODEL_IS_6000(model)) {
-		netro_info("Chipset family 0x%08X not supported\n",
-				model);
-		return -EINVAL;
-	}
-	#endif
-
 	/*
 	 * Place holder for initializing device parameters that
 	 * are chipset family specific.

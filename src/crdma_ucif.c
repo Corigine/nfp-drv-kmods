@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, Netronome, Inc. All rights reserved.
+ * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -37,12 +38,12 @@
 #include <linux/interrupt.h>
 
 #include "nfp_roce.h"
-#include "netro_ib.h"
-#include "netro_hw.h"
-#include "netro_util.h"
-#include "netro_ucif.h"
+#include "crdma_ib.h"
+#include "crdma_hw.h"
+#include "crdma_util.h"
+#include "crdma_ucif.h"
 
-#define	NETRO_UNDEFINED		"Undefined"
+#define	CRDMA_UNDEFINED		"Undefined"
 
 /**
  * Map a IB Verbs QP transition to the QP_MODIFY command opcode modifier.
@@ -52,47 +53,47 @@
  *
  * Returns the command opcode modifier or -EINVAL.
  */
-static int netro_qp_modify_opcode_mod(enum ib_qp_state cur_state,
+static int crdma_qp_modify_opcode_mod(enum ib_qp_state cur_state,
 		enum ib_qp_state new_state)
 {
 	int modifier;
 	static const u16 opcode_mod[IB_QPS_ERR+1][IB_QPS_ERR+1] = {
 		[IB_QPS_RESET] = {
-			[IB_QPS_RESET]	= NETRO_QP_MODIFY_2RST,
-			[IB_QPS_INIT]	= NETRO_QP_MODIFY_RST2INIT,
-			[IB_QPS_ERR]	= NETRO_QP_MODIFY_2ERR,
+			[IB_QPS_RESET]	= CRDMA_QP_MODIFY_2RST,
+			[IB_QPS_INIT]	= CRDMA_QP_MODIFY_RST2INIT,
+			[IB_QPS_ERR]	= CRDMA_QP_MODIFY_2ERR,
 		},
 		[IB_QPS_INIT] = {
-			[IB_QPS_RESET]	= NETRO_QP_MODIFY_2RST,
-			[IB_QPS_INIT]	= NETRO_QP_MODIFY_INIT2INIT,
-			[IB_QPS_RTR]	= NETRO_QP_MODIFY_INIT2RTR,
-			[IB_QPS_ERR]	= NETRO_QP_MODIFY_2ERR,
+			[IB_QPS_RESET]	= CRDMA_QP_MODIFY_2RST,
+			[IB_QPS_INIT]	= CRDMA_QP_MODIFY_INIT2INIT,
+			[IB_QPS_RTR]	= CRDMA_QP_MODIFY_INIT2RTR,
+			[IB_QPS_ERR]	= CRDMA_QP_MODIFY_2ERR,
 		},
 		[IB_QPS_RTR] = {
-			[IB_QPS_RESET]	= NETRO_QP_MODIFY_2RST,
-			[IB_QPS_RTS]	= NETRO_QP_MODIFY_RTR2RTS,
-			[IB_QPS_ERR]	= NETRO_QP_MODIFY_2ERR,
+			[IB_QPS_RESET]	= CRDMA_QP_MODIFY_2RST,
+			[IB_QPS_RTS]	= CRDMA_QP_MODIFY_RTR2RTS,
+			[IB_QPS_ERR]	= CRDMA_QP_MODIFY_2ERR,
 		},
 		[IB_QPS_RTS] = {
-			[IB_QPS_RESET]	= NETRO_QP_MODIFY_2RST,
-			[IB_QPS_RTS]	= NETRO_QP_MODIFY_RTS2RTS,
-			[IB_QPS_SQD]	= NETRO_QP_MODIFY_RTS2SQD,
-			[IB_QPS_ERR]	= NETRO_QP_MODIFY_2ERR,
+			[IB_QPS_RESET]	= CRDMA_QP_MODIFY_2RST,
+			[IB_QPS_RTS]	= CRDMA_QP_MODIFY_RTS2RTS,
+			[IB_QPS_SQD]	= CRDMA_QP_MODIFY_RTS2SQD,
+			[IB_QPS_ERR]	= CRDMA_QP_MODIFY_2ERR,
 		},
 		[IB_QPS_SQD] = {
-			[IB_QPS_RESET]	= NETRO_QP_MODIFY_2RST,
-			[IB_QPS_RTS]	= NETRO_QP_MODIFY_SQD2RTS,
-			[IB_QPS_SQD]	= NETRO_QP_MODIFY_SQD2SQD,
-			[IB_QPS_ERR]	= NETRO_QP_MODIFY_2ERR,
+			[IB_QPS_RESET]	= CRDMA_QP_MODIFY_2RST,
+			[IB_QPS_RTS]	= CRDMA_QP_MODIFY_SQD2RTS,
+			[IB_QPS_SQD]	= CRDMA_QP_MODIFY_SQD2SQD,
+			[IB_QPS_ERR]	= CRDMA_QP_MODIFY_2ERR,
 		},
 		[IB_QPS_SQE] = {
-			[IB_QPS_RESET]	= NETRO_QP_MODIFY_2RST,
-			[IB_QPS_RTS]	= NETRO_QP_MODIFY_SQER2RTS,
-			[IB_QPS_ERR]	= NETRO_QP_MODIFY_2ERR,
+			[IB_QPS_RESET]	= CRDMA_QP_MODIFY_2RST,
+			[IB_QPS_RTS]	= CRDMA_QP_MODIFY_SQER2RTS,
+			[IB_QPS_ERR]	= CRDMA_QP_MODIFY_2ERR,
 		},
 		[IB_QPS_ERR] = {
-			[IB_QPS_RESET]	= NETRO_QP_MODIFY_2RST,
-			[IB_QPS_ERR]	= NETRO_QP_MODIFY_2ERR,
+			[IB_QPS_RESET]	= CRDMA_QP_MODIFY_2RST,
+			[IB_QPS_ERR]	= CRDMA_QP_MODIFY_2ERR,
 		}
 	};
 
@@ -112,60 +113,60 @@ static int netro_qp_modify_opcode_mod(enum ib_qp_state cur_state,
  *
  * Returns the associated string.
  */
-const char *netro_opcode_to_str(u8 opcode)
+const char *crdma_opcode_to_str(u8 opcode)
 {
 	static const char *cmd_to_str[] = {
-		[0]				= NETRO_UNDEFINED,
-		[NETRO_CMD_NO_OP]		= "NO-OP",
-		[NETRO_CMD_QUERY_DEV_CAP]	= "QUERY_DEV_CAP",
-		[NETRO_CMD_QUERY_UCODE]		= "QUERY_UCODE",
-		[NETRO_CMD_QUERY_NIC]		= "QUERY_NIC",
-		[NETRO_CMD_QUERY_HCA]		= NETRO_UNDEFINED,
-		[NETRO_CMD_QUERY_PORT]		= NETRO_UNDEFINED,
-		[NETRO_CMD_HCA_ENABLE]		= "HCA_ENABLE",
-		[NETRO_CMD_HCA_DISABLE]		= "HCA_DISABLE",
-		[NETRO_CMD_ROCE_PORT_ENABLE]	= "ROCE_PORT_ENABLE",
-		[NETRO_CMD_ROCE_PORT_DISABLE]	= "ROCE_PORT_DISABLE",
-		[NETRO_CMD_SET_BS_HOST_MEM_SIZE] = "SET_BS_HOST_MEM_SIZE",
-		[NETRO_CMD_MAP_BS_HOST_MEM]	= "MAP_BS_HOST_MEM",
-		[NETRO_CMD_UNMAP_BS_HOST_MEM]	= "UNMAP_BS_HOST_MEM",
-		[NETRO_CMD_MPT_CREATE]		= "MPT_CREATE",
-		[NETRO_CMD_MPT_DESTROY]		= "MPT_DESTROY",
-		[NETRO_CMD_MPT_QUERY]		= "MPT_QUERY",
-		[NETRO_CMD_MTT_WRITE]		= "MTT_WRITE",
-		[NETRO_CMD_MTT_READ]		= "MTT_READ",
-		[NETRO_CMD_MAPT_SYNC]		= "MAPT_SYNC",
-		[NETRO_CMD_SET_PORT_GID_TABLE]	= "SET_PORT_GID_TABLE",
-		[NETRO_CMD_GET_PORT_GID_TABLE]	= "GET_PORT_GID_TABLE",
-		[NETRO_CMD_SET_PORT_MAC_TABLE]	= "SET_PORT_MAC_TABLE",
-		[NETRO_CMD_GET_PORT_MAC_TABLE]	= "GET_PORT_MAC_TABLE",
-		[NETRO_CMD_SET_PORT_VLAN_TABLE]	= "SET_PORT_VLAN_TABLE",
-		[NETRO_CMD_GET_PORT_VLAN_TABLE]	= "GET_PORT_VLAN_TABLE",
-		[NETRO_CMD_EQ_CREATE]		= "EQ_CREATE",
-		[NETRO_CMD_EQ_DESTROY]		= "EQ_DESTROY",
-		[NETRO_CMD_EQ_MAP]		= "EQ_MAP",
-		[NETRO_CMD_QP_MODIFY]		= "QP_MODIFY",
-		[NETRO_CMD_QP_QUERY]		= "QP_QUERY",
-		[NETRO_CMD_QP_SUSPEND]		= "QP_SUSPEND",
-		[NETRO_CMD_QP_RESUME]		= "QP_RESUME",
-		[NETRO_CMD_CQ_CREATE]		= "CQ_CREATE",
-		[NETRO_CMD_CQ_DESTROY]		= "CQ_DESTROY",
-		[NETRO_CMD_CQ_MODIFY]		= "CQ_MODIFY",
-		[NETRO_CMD_CQ_RESIZE]		= "CQ_RESIZE",
-		[NETRO_CMD_CQ_RESIZE]           = "CQ_RESIZE",
-		[NETRO_CMD_SRQ_CREATE]          = "SRQ_CREATE",
-		[NETRO_CMD_SRQ_DESTROY]         = "SRQ_DESTROY",
-		[NETRO_CMD_SRQ_SET_ARM_LIMIT]   = "SRQ_SET_ARM_LIMIT",
-		[NETRO_CMD_MCG_CREATE]          = "MCG_CREATE",
-		[NETRO_CMD_MCG_DESTROY]         = "MCG_DESTROY",
-		[NETRO_CMD_MCG_ATTACH]          = "MCG_ATTACH",
-		[NETRO_CMD_MCG_DETACH]          = "MCG_DETACH"
+		[0]				= CRDMA_UNDEFINED,
+		[CRDMA_CMD_NO_OP]		= "NO-OP",
+		[CRDMA_CMD_QUERY_DEV_CAP]	= "QUERY_DEV_CAP",
+		[CRDMA_CMD_QUERY_UCODE]		= "QUERY_UCODE",
+		[CRDMA_CMD_QUERY_NIC]		= "QUERY_NIC",
+		[CRDMA_CMD_QUERY_HCA]		= CRDMA_UNDEFINED,
+		[CRDMA_CMD_QUERY_PORT]		= CRDMA_UNDEFINED,
+		[CRDMA_CMD_HCA_ENABLE]		= "HCA_ENABLE",
+		[CRDMA_CMD_HCA_DISABLE]		= "HCA_DISABLE",
+		[CRDMA_CMD_ROCE_PORT_ENABLE]	= "ROCE_PORT_ENABLE",
+		[CRDMA_CMD_ROCE_PORT_DISABLE]	= "ROCE_PORT_DISABLE",
+		[CRDMA_CMD_SET_BS_HOST_MEM_SIZE] = "SET_BS_HOST_MEM_SIZE",
+		[CRDMA_CMD_MAP_BS_HOST_MEM]	= "MAP_BS_HOST_MEM",
+		[CRDMA_CMD_UNMAP_BS_HOST_MEM]	= "UNMAP_BS_HOST_MEM",
+		[CRDMA_CMD_MPT_CREATE]		= "MPT_CREATE",
+		[CRDMA_CMD_MPT_DESTROY]		= "MPT_DESTROY",
+		[CRDMA_CMD_MPT_QUERY]		= "MPT_QUERY",
+		[CRDMA_CMD_MTT_WRITE]		= "MTT_WRITE",
+		[CRDMA_CMD_MTT_READ]		= "MTT_READ",
+		[CRDMA_CMD_MAPT_SYNC]		= "MAPT_SYNC",
+		[CRDMA_CMD_SET_PORT_GID_TABLE]	= "SET_PORT_GID_TABLE",
+		[CRDMA_CMD_GET_PORT_GID_TABLE]	= "GET_PORT_GID_TABLE",
+		[CRDMA_CMD_SET_PORT_MAC_TABLE]	= "SET_PORT_MAC_TABLE",
+		[CRDMA_CMD_GET_PORT_MAC_TABLE]	= "GET_PORT_MAC_TABLE",
+		[CRDMA_CMD_SET_PORT_VLAN_TABLE]	= "SET_PORT_VLAN_TABLE",
+		[CRDMA_CMD_GET_PORT_VLAN_TABLE]	= "GET_PORT_VLAN_TABLE",
+		[CRDMA_CMD_EQ_CREATE]		= "EQ_CREATE",
+		[CRDMA_CMD_EQ_DESTROY]		= "EQ_DESTROY",
+		[CRDMA_CMD_EQ_MAP]		= "EQ_MAP",
+		[CRDMA_CMD_QP_MODIFY]		= "QP_MODIFY",
+		[CRDMA_CMD_QP_QUERY]		= "QP_QUERY",
+		[CRDMA_CMD_QP_SUSPEND]		= "QP_SUSPEND",
+		[CRDMA_CMD_QP_RESUME]		= "QP_RESUME",
+		[CRDMA_CMD_CQ_CREATE]		= "CQ_CREATE",
+		[CRDMA_CMD_CQ_DESTROY]		= "CQ_DESTROY",
+		[CRDMA_CMD_CQ_MODIFY]		= "CQ_MODIFY",
+		[CRDMA_CMD_CQ_RESIZE]		= "CQ_RESIZE",
+		[CRDMA_CMD_CQ_RESIZE]           = "CQ_RESIZE",
+		[CRDMA_CMD_SRQ_CREATE]          = "SRQ_CREATE",
+		[CRDMA_CMD_SRQ_DESTROY]         = "SRQ_DESTROY",
+		[CRDMA_CMD_SRQ_SET_ARM_LIMIT]   = "SRQ_SET_ARM_LIMIT",
+		[CRDMA_CMD_MCG_CREATE]          = "MCG_CREATE",
+		[CRDMA_CMD_MCG_DESTROY]         = "MCG_DESTROY",
+		[CRDMA_CMD_MCG_ATTACH]          = "MCG_ATTACH",
+		[CRDMA_CMD_MCG_DETACH]          = "MCG_DETACH"
 	};
 
 	if (opcode < ARRAY_SIZE(cmd_to_str))
 		return cmd_to_str[opcode];
 	else
-		return NETRO_UNDEFINED;
+		return CRDMA_UNDEFINED;
 }
 
 /**
@@ -175,30 +176,30 @@ const char *netro_opcode_to_str(u8 opcode)
  *
  * Returns the associated string.
  */
-const char *netro_status_to_str(u8 status)
+const char *crdma_status_to_str(u8 status)
 {
 	static const char *status_to_str[] = {
-		[NETRO_STS_OK]			= "success",
-		[NETRO_STS_UCODE_CORRUPTED]	= "microcode corrupted",
-		[NETRO_STS_UCODE_INTERNAL_ERR]	= "microcode internal error",
-		[NETRO_STS_UNSUPPORTED_OPCODE]	= "opcode not supported",
-		[NETRO_STS_BAD_PARAMETER]	= "bad parameter",
-		[NETRO_STS_BAD_SYSTEM_STATE]	= "bad system state",
-		[NETRO_STS_BAD_CNTRL_OBJ_REF]	=
+		[CRDMA_STS_OK]			= "success",
+		[CRDMA_STS_UCODE_CORRUPTED]	= "microcode corrupted",
+		[CRDMA_STS_UCODE_INTERNAL_ERR]	= "microcode internal error",
+		[CRDMA_STS_UNSUPPORTED_OPCODE]	= "opcode not supported",
+		[CRDMA_STS_BAD_PARAMETER]	= "bad parameter",
+		[CRDMA_STS_BAD_SYSTEM_STATE]	= "bad system state",
+		[CRDMA_STS_BAD_CNTRL_OBJ_REF]	=
 					"bad control object reference",
-		[NETRO_STS_CNTRL_OBJ_BUSY]	= "control object in use",
-		[NETRO_STS_EXCEEDS_HCA_LIMITS]	= "exceeds device capabilities",
-		[NETRO_STS_BAD_CNTRL_OBJ_STATE]	= "bad control object state",
-		[NETRO_STS_INVALID_INDEX]	= "invalid index",
-		[NETRO_STS_BAD_QP_STATE]	= "bad QP state",
-		[NETRO_STS_BAD_SIZE]		= "bad size specified",
-		[NETRO_STS_INVALID_PORT]	= "bad size specified"
+		[CRDMA_STS_CNTRL_OBJ_BUSY]	= "control object in use",
+		[CRDMA_STS_EXCEEDS_HCA_LIMITS]	= "exceeds device capabilities",
+		[CRDMA_STS_BAD_CNTRL_OBJ_STATE]	= "bad control object state",
+		[CRDMA_STS_INVALID_INDEX]	= "invalid index",
+		[CRDMA_STS_BAD_QP_STATE]	= "bad QP state",
+		[CRDMA_STS_BAD_SIZE]		= "bad size specified",
+		[CRDMA_STS_INVALID_PORT]	= "bad size specified"
 	};
 
 	if (status < ARRAY_SIZE(status_to_str))
 		return status_to_str[status];
 	else
-		return NETRO_UNDEFINED;
+		return CRDMA_UNDEFINED;
 }
 
 /**
@@ -208,37 +209,37 @@ const char *netro_status_to_str(u8 status)
  *
  * Returns the associated string.
  */
-const char *netro_event_to_str(u8 event_type)
+const char *crdma_event_to_str(u8 event_type)
 {
 	static const char *event_to_str[] = {
-		[0]				= NETRO_UNDEFINED,
-		[NETRO_EQ_CQ_COMPLETION_NOTIFY]	= "CQ completion",
-		[NETRO_EQ_CQ_ERROR]		= "CQ error",
+		[0]				= CRDMA_UNDEFINED,
+		[CRDMA_EQ_CQ_COMPLETION_NOTIFY]	= "CQ completion",
+		[CRDMA_EQ_CQ_ERROR]		= "CQ error",
 
-		[NETRO_EQ_QP_COMM_ESTABLISHED]	=
+		[CRDMA_EQ_QP_COMM_ESTABLISHED]	=
 					"QP communication established",
-		[NETRO_EQ_QP_SQ_DRAINED]	= "QP SQ drained",
-		[NETRO_EQ_QP_SQ_LAST_WQE]	= "QP SQ last WQE",
-		[NETRO_EQ_QP_CATASTROPHIC_ERROR] = "QP catastrophic error",
-		[NETRO_EQ_QP_INVALID_REQUEST]	= "QP invalid request",
-		[NETRO_EQ_QP_ACCESS_ERROR]	= "QP access error",
+		[CRDMA_EQ_QP_SQ_DRAINED]	= "QP SQ drained",
+		[CRDMA_EQ_QP_SQ_LAST_WQE]	= "QP SQ last WQE",
+		[CRDMA_EQ_QP_CATASTROPHIC_ERROR] = "QP catastrophic error",
+		[CRDMA_EQ_QP_INVALID_REQUEST]	= "QP invalid request",
+		[CRDMA_EQ_QP_ACCESS_ERROR]	= "QP access error",
 
-		[NETRO_EQ_SRQ_LIMIT_REACHED]	= "SRQ limit reached",
-		[NETRO_EQ_SRQ_CATASTROPHIC_ERROR] = "SRQ catastrophic error",
+		[CRDMA_EQ_SRQ_LIMIT_REACHED]	= "SRQ limit reached",
+		[CRDMA_EQ_SRQ_CATASTROPHIC_ERROR] = "SRQ catastrophic error",
 
-		[NETRO_EQ_EQ_OVERRUN_ERROR]	= "EQ overrun",
-		[NETRO_EQ_CMDIF_COMPLETE]	= "Command complete",
-		[NETRO_EQ_LOCAL_CATASTROPHIC_ERROR] =
+		[CRDMA_EQ_EQ_OVERRUN_ERROR]	= "EQ overrun",
+		[CRDMA_EQ_CMDIF_COMPLETE]	= "Command complete",
+		[CRDMA_EQ_LOCAL_CATASTROPHIC_ERROR] =
 					"Local catastrophic error",
-		[NETRO_EQ_PORT_CHANGE]		= "Port change",
-		[NETRO_EQ_MGMT_PORT_CHANGE]	= "Management port change",
-		[NETRO_EQ_MICROCODE_WARNING]	= "Microcode warning"
+		[CRDMA_EQ_PORT_CHANGE]		= "Port change",
+		[CRDMA_EQ_MGMT_PORT_CHANGE]	= "Management port change",
+		[CRDMA_EQ_MICROCODE_WARNING]	= "Microcode warning"
 	};
 
 	if (event_type < ARRAY_SIZE(event_to_str))
 		return event_to_str[event_type];
 	else
-		return NETRO_UNDEFINED;
+		return CRDMA_UNDEFINED;
 }
 
 /**
@@ -247,63 +248,63 @@ const char *netro_event_to_str(u8 event_type)
  * reserved for driver initialization before the event delivery infrastructure
  * has been initialized.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @cmd: The microcode interface command parameters.
  * 
  * Returns 0 if command completed; otherwise error code.
  */
-static int netro_polled_cmd(struct netro_ibdev *ndev, struct netro_cmd *cmd)
+static int crdma_polled_cmd(struct crdma_ibdev *dev, struct crdma_cmd *cmd)
 {
 	unsigned long max_time;
 	u64 output_param;
 	int ret;
 
-	down(&ndev->poll_sem);
-	mutex_lock(&ndev->cmdif_mutex);
+	down(&dev->poll_sem);
+	mutex_lock(&dev->cmdif_mutex);
 
 	/* Issue command to microcode */
-	ret = __netro_write_cmdif(ndev, cmd->input_param, cmd->output_param,
+	ret = __crdma_write_cmdif(dev, cmd->input_param, cmd->output_param,
 			cmd->input_mod, cmd->opcode, cmd->opcode_mod,
-			NETRO_CMDIF_POLL_TOKEN, false);
+			CRDMA_CMDIF_POLL_TOKEN, false);
 
 	/* Poll for completion */
 	max_time = msecs_to_jiffies(cmd->timeout) + jiffies;
-	while (netro_cmdif_busy(ndev)) {
+	while (crdma_cmdif_busy(dev)) {
 		if (time_after_eq(jiffies, max_time)) {
-			netro_info("UCODE %s cmd timed out\n",
-					netro_opcode_to_str(cmd->opcode));
+			crdma_info("UCODE %s cmd timed out\n",
+					crdma_opcode_to_str(cmd->opcode));
 			ret = -EIO;
 			goto done;
 		}
 		cond_resched();
-		if (pci_channel_offline(ndev->nfp_info->pdev)) {
+		if (pci_channel_offline(dev->nfp_info->pdev)) {
 			ret = -EIO;
 			goto done;
 		}
 	}
 
-	netro_info("==== UCODE %s cmd done\n",
-			netro_opcode_to_str(cmd->opcode));
+	crdma_info("==== UCODE %s cmd done\n",
+			crdma_opcode_to_str(cmd->opcode));
 
 	/* Get polled results */
-	if (__netro_read_cmdif_results(ndev, &output_param, &cmd->status)) {
+	if (__crdma_read_cmdif_results(dev, &output_param, &cmd->status)) {
 		ret = -EIO;
 		goto done;
 	}
 
-	netro_info("==== UCODE Status: %s\n", netro_status_to_str(cmd->status));
+	crdma_info("==== UCODE Status: %s\n", crdma_status_to_str(cmd->status));
 
 	if (cmd->output_imm)
 		cmd->output_param = output_param;
 
 done:
-	mutex_unlock(&ndev->cmdif_mutex);
-	up(&ndev->poll_sem);
+	mutex_unlock(&dev->cmdif_mutex);
+	up(&dev->poll_sem);
 	return ret;
 }
 
-static struct netro_eqe *netro_next_eqe(struct netro_eq *eq);
-static irqreturn_t netro_interrupt(int irq, void *eq_ptr);
+static struct crdma_eqe *crdma_next_eqe(struct crdma_eq *eq);
+static irqreturn_t crdma_interrupt(int irq, void *eq_ptr);
 
 /**
  * Issue a micro-code command in an event driven mode. Command status/results
@@ -311,89 +312,89 @@ static irqreturn_t netro_interrupt(int irq, void *eq_ptr);
  * the number of concurrent event driven commands to the maximum supported
  * by micro-code.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @cmd: The microcode interface command parameters.
  *
  * Returns 0 if command completed; otherwise error code.
  */
-static int netro_waited_cmd(struct netro_ibdev *ndev, struct netro_cmd *cmd)
+static int crdma_waited_cmd(struct crdma_ibdev *dev, struct crdma_cmd *cmd)
 {
-	struct netro_event_cmd *cmd_state;
+	struct crdma_event_cmd *cmd_state;
 	int ret;
 
 	/* Wait for command state availability */
-	down(&ndev->event_sem);
-	spin_lock(&ndev->cmd_q_lock);
-	cmd_state = & ndev->cmd_q[ndev->cmd_q_free];
-	cmd_state->token += ndev->max_cmds_out;
-	ndev->cmd_q_free = cmd_state->next;
+	down(&dev->event_sem);
+	spin_lock(&dev->cmd_q_lock);
+	cmd_state = & dev->cmd_q[dev->cmd_q_free];
+	cmd_state->token += dev->max_cmds_out;
+	dev->cmd_q_free = cmd_state->next;
 	init_completion(&cmd_state->comp);
-	spin_unlock(&ndev->cmd_q_lock);
+	spin_unlock(&dev->cmd_q_lock);
 
-	netro_info("==== netro_waited_cmd UCODE %s \n", netro_opcode_to_str(cmd->opcode));
+	crdma_info("==== crdma_waited_cmd UCODE %s \n", crdma_opcode_to_str(cmd->opcode));
 
 	/* Issue command to microcode */
-	mutex_lock(&ndev->cmdif_mutex);
-	ret = __netro_write_cmdif(ndev, cmd->input_param, cmd->output_param,
+	mutex_lock(&dev->cmdif_mutex);
+	ret = __crdma_write_cmdif(dev, cmd->input_param, cmd->output_param,
 			cmd->input_mod, cmd->opcode, cmd->opcode_mod,
 			cmd_state->token, true);
 	if (ret) {
-		mutex_unlock(&ndev->cmdif_mutex);
-		netro_dev_warn(ndev, "Command initiation failure %d\n", ret);
+		mutex_unlock(&dev->cmdif_mutex);
+		crdma_dev_warn(dev, "Command initiation failure %d\n", ret);
 		goto done;
 	}
 
-	mutex_unlock(&ndev->cmdif_mutex);
+	mutex_unlock(&dev->cmdif_mutex);
 
 	if (!wait_for_completion_timeout(&cmd_state->comp,
 				msecs_to_jiffies(cmd->timeout))) {
-		netro_dev_warn(ndev, "Command timeout failure\n");
+		crdma_dev_warn(dev, "Command timeout failure\n");
 
-		netro_info("==== UCODE %s cmd timeout\n",
-				netro_opcode_to_str(cmd->opcode));
+		crdma_info("==== UCODE %s cmd timeout\n",
+				crdma_opcode_to_str(cmd->opcode));
 		ret = -EBUSY;
 		goto done;
 	}
 
-	netro_info("==== UCODE %s cmd done\n",
-			netro_opcode_to_str(cmd->opcode));
+	crdma_info("==== UCODE %s cmd done\n",
+			crdma_opcode_to_str(cmd->opcode));
 	cmd->status = cmd_state->status;
-	netro_info("==== UCODE Status: %s\n",
-			netro_status_to_str(cmd->status));
+	crdma_info("==== UCODE Status: %s\n",
+			crdma_status_to_str(cmd->status));
 
 	if (cmd->output_imm)
 		cmd->output_param = cmd_state->output_param;
 done:
 	/* Indicate state entry is available for new command */
-	spin_lock(&ndev->cmd_q_lock);
-	cmd_state->next = ndev->cmd_q_free;
-	ndev->cmd_q_free = cmd_state - ndev->cmd_q;
-	spin_unlock(&ndev->cmd_q_lock);
+	spin_lock(&dev->cmd_q_lock);
+	cmd_state->next = dev->cmd_q_free;
+	dev->cmd_q_free = cmd_state - dev->cmd_q;
+	spin_unlock(&dev->cmd_q_lock);
 
-	up(&ndev->event_sem);
+	up(&dev->event_sem);
 	return ret;
 }
 
 /**
  * Process waited command completion.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @token: The token associated with the completion.
  * @param_h: Upper 32 bits of output parameter (or DMA address).
  * @param_l: lower 32 bits of output parameter (or DMA address).
  * @status: Command status.
  */
-static void netro_cmd_complete(struct netro_ibdev *ndev, u16 token,
+static void crdma_cmd_complete(struct crdma_ibdev *dev, u16 token,
 		u32 param_h, u32 param_l, u8 status)
 {
-	struct netro_event_cmd *cmd_state;
+	struct crdma_event_cmd *cmd_state;
 
-	cmd_state = &ndev->cmd_q[token & (ndev->max_cmds_out - 1)];
-	netro_info("Cmd comp. token 0x%04X\n", token);
-	netro_info("    State token 0x%08X\n", cmd_state->token);
+	cmd_state = &dev->cmd_q[token & (dev->max_cmds_out - 1)];
+	crdma_info("Cmd comp. token 0x%04X\n", token);
+	crdma_info("    State token 0x%08X\n", cmd_state->token);
 
 	if (cmd_state->token != token) {
-		netro_warn("Command completed with stale token\n");
+		crdma_warn("Command completed with stale token\n");
 		return;
 	}
 
@@ -409,39 +410,39 @@ static void netro_cmd_complete(struct netro_ibdev *ndev, u16 token,
 /**
  * Initiate a command in either polled or event driven mode.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @cmd: The microcode interface command parameters.
  *
  * Returns command status on success, otherwise < 0 if command
  * processing did not complete.
  */
-static int netro_cmd(struct netro_ibdev *ndev, struct netro_cmd *cmd)
+static int crdma_cmd(struct crdma_ibdev *dev, struct crdma_cmd *cmd)
 {
 	int err;
 
-	netro_dev_warn(ndev, "\n==== UCODE %s Command\n",
-		netro_opcode_to_str(cmd->opcode));
+	crdma_dev_warn(dev, "\n==== UCODE %s Command\n",
+		crdma_opcode_to_str(cmd->opcode));
 
 	/*
 	 * Verify device is on-line then issue command based
 	 * on current command mode.
 	 */
-	if (pci_channel_offline(ndev->nfp_info->pdev))
+	if (pci_channel_offline(dev->nfp_info->pdev))
 		return -EIO;
 
-	if (ndev->use_event_cmds)
-		err = netro_waited_cmd(ndev, cmd);
+	if (dev->use_event_cmds)
+		err = crdma_waited_cmd(dev, cmd);
 	else
-		err = netro_polled_cmd(ndev, cmd);
+		err = crdma_polled_cmd(dev, cmd);
 
 	if (!err && cmd->status)
-		netro_dev_warn(ndev, "\n==== UCODE cmd %s failed, status: %s\n",
-				netro_opcode_to_str(cmd->opcode),
-				netro_status_to_str(cmd->status));
+		crdma_dev_warn(dev, "\n==== UCODE cmd %s failed, status: %s\n",
+				crdma_opcode_to_str(cmd->opcode),
+				crdma_status_to_str(cmd->status));
 	else
-		netro_dev_warn(ndev, "\n==== UCODE cmd %s success, status: %s\n",
-				netro_opcode_to_str(cmd->opcode),
-				netro_status_to_str(cmd->status));
+		crdma_dev_warn(dev, "\n==== UCODE cmd %s success, status: %s\n",
+				crdma_opcode_to_str(cmd->opcode),
+				crdma_status_to_str(cmd->status));
 
 	return err ? err : cmd->status;
 }
@@ -449,37 +450,37 @@ static int netro_cmd(struct netro_ibdev *ndev, struct netro_cmd *cmd)
 /**
  * Acquire a command input/output DMA buffer for a mailbox.
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  * @mbox: The mail box to assign the DMA buffer too.
  *
  * 0 on success, otherwise -ENOMEM.
  */
-static int netro_init_mailbox(struct netro_ibdev *ndev,
-		struct netro_cmd_mbox *mbox)
+static int crdma_init_mailbox(struct crdma_ibdev *dev,
+		struct crdma_cmd_mbox *mbox)
 {
-	mbox->buf = dma_pool_alloc(ndev->mbox_pool, GFP_KERNEL,
+	mbox->buf = dma_pool_alloc(dev->mbox_pool, GFP_KERNEL,
 			&mbox->dma_addr);
 	if (!mbox->buf) {
-		netro_dev_warn(ndev, "Command mailbox allocation failure\n");
+		crdma_dev_warn(dev, "Command mailbox allocation failure\n");
 		return -ENOMEM;
 	}
-	memset(mbox->buf, 0, NETRO_CMDIF_MBOX_SIZE);
+	memset(mbox->buf, 0, CRDMA_CMDIF_MBOX_SIZE);
 	return 0;
 }
 
 /**
- * Release mailbox DMA buffer previously acquired with netro_init_mailbox().
+ * Release mailbox DMA buffer previously acquired with crdma_init_mailbox().
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  * @mbox: The mail box for which the DMA buffer resources are to be released.
  */
-static void netro_cleanup_mailbox(struct netro_ibdev *ndev,
-		struct netro_cmd_mbox *mbox)
+static void crdma_cleanup_mailbox(struct crdma_ibdev *dev,
+		struct crdma_cmd_mbox *mbox)
 {
 	if (!mbox->buf)
 		return;
 
-	dma_pool_free(ndev->mbox_pool, mbox->buf, mbox->dma_addr);
+	dma_pool_free(dev->mbox_pool, mbox->buf, mbox->dma_addr);
 }
 
 /**
@@ -489,9 +490,9 @@ static void netro_cleanup_mailbox(struct netro_ibdev *ndev,
  *
  * Return a pointer to the next EQE, or NULL.
  */
-static struct netro_eqe *netro_next_eqe(struct netro_eq *eq)
+static struct crdma_eqe *crdma_next_eqe(struct crdma_eq *eq)
 {
-	struct netro_eqe *eqe;
+	struct crdma_eqe *eqe;
 
 	eqe = &eq->eqe[eq->consumer_cnt & eq->consumer_mask];
 
@@ -500,7 +501,7 @@ static struct netro_eqe *netro_next_eqe(struct netro_eq *eq)
 	 * every pass through the EQ, starting with writing a 1 on the
 	 * first pass, followed by a 0 on the second, ....
 	 */
-	if (!!(eqe->rsvd_owner & NETRO_EQ_OWNER_BIT) ==
+	if (!!(eqe->rsvd_owner & CRDMA_EQ_OWNER_BIT) ==
 			!!(eq->consumer_cnt & (1 << eq->num_eqe_log2)))
 		return NULL;
 
@@ -515,27 +516,27 @@ static struct netro_eqe *netro_next_eqe(struct netro_eq *eq)
 /**
  * Process a QP affiliated asynchronous event notification.
  *
- * @ndev: The Netro RoCE device associated with the event.
+ * @dev: The CRDMA RoCE device associated with the event.
  * @eqe: The event queue entry for the event.
  */
-static void netro_qp_async_event(struct netro_ibdev *ndev,
-				struct netro_eqe *eqe)
+static void crdma_qp_async_event(struct crdma_ibdev *dev,
+				struct crdma_eqe *eqe)
 {
-	struct netro_qp *nqp;
+	struct crdma_qp *nqp;
 	uint32_t qpn;
 	struct ib_event event;
 
-	qpn = le32_to_cpu(eqe->affiliated.obj_num & (ndev->cap.ib.max_qp - 1));
-	netro_info("QPN %d, %s\n", qpn, netro_event_to_str(eqe->type));
+	qpn = le32_to_cpu(eqe->affiliated.obj_num & (dev->cap.ib.max_qp - 1));
+	crdma_info("QPN %d, %s\n", qpn, crdma_event_to_str(eqe->type));
 
-	spin_lock(&ndev->qp_lock);
-	nqp = radix_tree_lookup(&ndev->qp_tree, qpn);
+	spin_lock(&dev->qp_lock);
+	nqp = radix_tree_lookup(&dev->qp_tree, qpn);
 	if (nqp)
 		atomic_inc(&nqp->ref_cnt);
-	spin_unlock(&ndev->qp_lock);
+	spin_unlock(&dev->qp_lock);
 
 	if (!nqp) {
-		netro_warn("QPN %d not found\n", qpn);
+		crdma_warn("QPN %d not found\n", qpn);
 		return;
 	}
 
@@ -544,32 +545,32 @@ static void netro_qp_async_event(struct netro_ibdev *ndev,
 		event.element.qp = &nqp->ib_qp;
 
 		switch(eqe->type) {
-		case NETRO_EQ_QP_COMM_ESTABLISHED:
+		case CRDMA_EQ_QP_COMM_ESTABLISHED:
 			event.event = IB_EVENT_COMM_EST;
 			break;
 
-		case NETRO_EQ_QP_SQ_DRAINED:
+		case CRDMA_EQ_QP_SQ_DRAINED:
 			event.event = IB_EVENT_SQ_DRAINED;
 			break;
 
-		case NETRO_EQ_QP_SQ_LAST_WQE:
+		case CRDMA_EQ_QP_SQ_LAST_WQE:
 			event.event = IB_EVENT_QP_LAST_WQE_REACHED;
 			break;
 
-		case NETRO_EQ_QP_CATASTROPHIC_ERROR:
+		case CRDMA_EQ_QP_CATASTROPHIC_ERROR:
 			event.event = IB_EVENT_QP_FATAL;
 			break;
 
-		case NETRO_EQ_QP_INVALID_REQUEST:
+		case CRDMA_EQ_QP_INVALID_REQUEST:
 			event.event = IB_EVENT_QP_REQ_ERR;
 			break;
 
-		case NETRO_EQ_QP_ACCESS_ERROR:
+		case CRDMA_EQ_QP_ACCESS_ERROR:
 			event.event = IB_EVENT_QP_ACCESS_ERR;
 			break;
 
 		default:
-			netro_warn("Async QP event not handled, QPN "
+			crdma_warn("Async QP event not handled, QPN "
 					"%d, event %d\n", qpn, eqe->type);
 			return;
 		}
@@ -591,36 +592,36 @@ static void netro_qp_async_event(struct netro_ibdev *ndev,
  *
  * Returns IRQ_HANDLED.
  */
-static irqreturn_t netro_interrupt(int irq, void *eq_ptr)
+static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 {
-	struct netro_eq *eq = eq_ptr;
-	struct netro_ibdev *ndev = eq->ndev;
-	struct netro_cq *ncq;
-	struct netro_eqe *eqe;
+	struct crdma_eq *eq = eq_ptr;
+	struct crdma_ibdev *dev = eq->dev;
+	struct crdma_cq *ncq;
+	struct crdma_eqe *eqe;
 	struct ib_event event;
 	uint32_t cqn;
 	int eqe_cnt = 0;
 
 	/* Get the next available EQE and process */
-	while ((eqe  = netro_next_eqe(eq))) {
+	while ((eqe  = crdma_next_eqe(eq))) {
 
 #if 1 /* Early debug */
-		netro_info("eq->eqe %p, type %d, sub_type %d\n", eq->eqe,
+		crdma_info("eq->eqe %p, type %d, sub_type %d\n", eq->eqe,
 				eqe->type, eqe->sub_type);
 #endif
 
 		switch (eqe->type) {
-		case NETRO_EQ_CQ_COMPLETION_NOTIFY:
+		case CRDMA_EQ_CQ_COMPLETION_NOTIFY:
 			cqn = le32_to_cpu(eqe->affiliated.obj_num);
-			if (cqn >= ndev->cap.ib.max_cq) {
-				netro_dev_warn(ndev, "Bad CQN %d\n", cqn);
+			if (cqn >= dev->cap.ib.max_cq) {
+				crdma_dev_warn(dev, "Bad CQN %d\n", cqn);
 				break;
 			}
-			ncq = ndev->cq_table[cqn];
+			ncq = dev->cq_table[cqn];
 #if 1
 			/* XXX: Just for debug, will remove */
 			if (!ncq->ib_cq.comp_handler) {
-				netro_dev_warn(ndev, "No CQ handler CQN %d\n",
+				crdma_dev_warn(dev, "No CQ handler CQN %d\n",
 						cqn);
 				break;
 			}
@@ -628,8 +629,8 @@ static irqreturn_t netro_interrupt(int irq, void *eq_ptr)
 			ncq->arm_seqn++;
 			atomic_inc(&ncq->ref_cnt);
 
-			netro_info("CQN %d, %s\n", cqn,
-					netro_event_to_str(eqe->type));
+			crdma_info("CQN %d, %s\n", cqn,
+					crdma_event_to_str(eqe->type));
 			/*
 			 * Call back into the Verbs core to dispatch
 			 * the completion notification.
@@ -641,17 +642,17 @@ static irqreturn_t netro_interrupt(int irq, void *eq_ptr)
 				complete(&ncq->free);
 			break;
 
-		case NETRO_EQ_CQ_ERROR:
+		case CRDMA_EQ_CQ_ERROR:
 			cqn = le32_to_cpu(eqe->affiliated.obj_num);
-			if (cqn >= ndev->cap.ib.max_cq) {
-				netro_dev_warn(ndev, "Bad CQN %d\n", cqn);
+			if (cqn >= dev->cap.ib.max_cq) {
+				crdma_dev_warn(dev, "Bad CQN %d\n", cqn);
 				break;
 			}
-			ncq = ndev->cq_table[cqn];
+			ncq = dev->cq_table[cqn];
 			atomic_inc(&ncq->ref_cnt);
 
-			netro_info("CQN %d, %s\n", cqn,
-					netro_event_to_str(eqe->type));
+			crdma_info("CQN %d, %s\n", cqn,
+					crdma_event_to_str(eqe->type));
 
 			/*
 			 * Call back into the Verbs core to dispatch
@@ -669,56 +670,56 @@ static irqreturn_t netro_interrupt(int irq, void *eq_ptr)
 				complete(&ncq->free);
 			break;
 
-		case NETRO_EQ_CMDIF_COMPLETE:
-			netro_cmd_complete(ndev, le16_to_cpu(eqe->cmdif.token),
+		case CRDMA_EQ_CMDIF_COMPLETE:
+			crdma_cmd_complete(dev, le16_to_cpu(eqe->cmdif.token),
 				le32_to_cpu(eqe->cmdif.output_param_h),
 				le32_to_cpu(eqe->cmdif.output_param_l),
 				eqe->cmdif.status);
 			break;
 
-		case NETRO_EQ_QP_COMM_ESTABLISHED:
-		case NETRO_EQ_QP_SQ_DRAINED:
-		case NETRO_EQ_QP_SQ_LAST_WQE:
-		case NETRO_EQ_QP_CATASTROPHIC_ERROR:
-		case NETRO_EQ_QP_INVALID_REQUEST:
-		case NETRO_EQ_QP_ACCESS_ERROR:
-			netro_qp_async_event(ndev, eqe);
+		case CRDMA_EQ_QP_COMM_ESTABLISHED:
+		case CRDMA_EQ_QP_SQ_DRAINED:
+		case CRDMA_EQ_QP_SQ_LAST_WQE:
+		case CRDMA_EQ_QP_CATASTROPHIC_ERROR:
+		case CRDMA_EQ_QP_INVALID_REQUEST:
+		case CRDMA_EQ_QP_ACCESS_ERROR:
+			crdma_qp_async_event(dev, eqe);
 			break;
 
-		case NETRO_EQ_SRQ_LIMIT_REACHED:
-		case NETRO_EQ_SRQ_CATASTROPHIC_ERROR:
-			netro_dev_info(ndev, "SRQ event %s not implemented\n",
-					netro_event_to_str(eqe->type));
+		case CRDMA_EQ_SRQ_LIMIT_REACHED:
+		case CRDMA_EQ_SRQ_CATASTROPHIC_ERROR:
+			crdma_dev_info(dev, "SRQ event %s not implemented\n",
+					crdma_event_to_str(eqe->type));
 			break;
 
-		case NETRO_EQ_EQ_OVERRUN_ERROR:
-			netro_dev_warn(ndev, "EQ%d, %s EQN%d\n",
+		case CRDMA_EQ_EQ_OVERRUN_ERROR:
+			crdma_dev_warn(dev, "EQ%d, %s EQN%d\n",
 					eq->eq_num,
-					netro_event_to_str(eqe->type),
+					crdma_event_to_str(eqe->type),
 					le32_to_cpu(eqe->affiliated.obj_num));
 			break;
 
-		case NETRO_EQ_MICROCODE_WARNING:
-			netro_dev_warn(ndev, "EQ%d, microcode warning %d\n",
+		case CRDMA_EQ_MICROCODE_WARNING:
+			crdma_dev_warn(dev, "EQ%d, microcode warning %d\n",
 					eq->eq_num, eqe->sub_type);
 			break;
 
-		case NETRO_EQ_LOCAL_CATASTROPHIC_ERROR:
-			netro_dev_warn(ndev, "EQ%d, HCA catastrophic error\n",
+		case CRDMA_EQ_LOCAL_CATASTROPHIC_ERROR:
+			crdma_dev_warn(dev, "EQ%d, HCA catastrophic error\n",
 					eq->eq_num);
 			break;
 
-		case NETRO_EQ_PORT_CHANGE:
-			netro_dev_info(ndev, "unaffiliated event %s "
+		case CRDMA_EQ_PORT_CHANGE:
+			crdma_dev_info(dev, "unaffiliated event %s "
 				       "not implemented\n",
-					netro_event_to_str(eqe->type));
+					crdma_event_to_str(eqe->type));
 			break;
 
-		case NETRO_EQ_MGMT_PORT_CHANGE:
+		case CRDMA_EQ_MGMT_PORT_CHANGE:
 		default:
-			netro_dev_info(ndev, "unaffiliated event %s "
+			crdma_dev_info(dev, "unaffiliated event %s "
 				       "not implemented\n",
-					netro_event_to_str(eqe->type));
+					crdma_event_to_str(eqe->type));
 			break;
 		}
 		eq->consumer_cnt++;
@@ -729,40 +730,40 @@ static irqreturn_t netro_interrupt(int irq, void *eq_ptr)
 		 * without requesting another interrupt.
 		 */
 		if (eqe_cnt > (1 << (eq->num_eqe_log2 - 1)))
-			corigine_set_eq_ci(ndev, eq->eq_num,
+			crdma_set_eq_ci(dev, eq->eq_num,
 				eq->consumer_cnt, false);
 	}
 
 	/* Update doorbell and request interrupts */
-	corigine_set_eq_ci(ndev, eq->eq_num,
+	crdma_set_eq_ci(dev, eq->eq_num,
 			eq->consumer_cnt,
-			ndev->have_interrupts ? true : false);
+			dev->have_interrupts ? true : false);
 
 	return IRQ_HANDLED;
 }
 
-int netro_init_eq(struct netro_ibdev *ndev, int index, int entries_log2,
+int crdma_init_eq(struct crdma_ibdev *dev, int index, int entries_log2,
 		u16 intr, u32 vector, u32 events)
 {
-	struct netro_eq *eq = &ndev->eq_table.eq[index];
+	struct crdma_eq *eq = &dev->eq_table.eq[index];
 	int mem_size;
 	int ret;
 
-	if ((1 << entries_log2) > ndev->cap.max_eqe) {
-		netro_warn("EQ size too large for microcode %d\n",
+	if ((1 << entries_log2) > dev->cap.max_eqe) {
+		crdma_warn("EQ size too large for microcode %d\n",
 				1 << entries_log2);
 		return -EINVAL;
 	}
-	netro_dev_info(ndev, "=== netro_init_eq === \n");
+	crdma_dev_info(dev, "=== crdma_init_eq === \n");
 
-	mem_size = ndev->cap.eqe_size  * (1 << entries_log2);
+	mem_size = dev->cap.eqe_size  * (1 << entries_log2);
 
-	pr_info(" netro_alloc_dma_mem \n");
+	pr_info(" crdma_alloc_dma_mem \n");
 	/* Coherent memory for sharing with microcode */
-	eq->mem = netro_alloc_dma_mem(ndev, true,
-			NETRO_MEM_DEFAULT_ORDER, mem_size);
+	eq->mem = crdma_alloc_dma_mem(dev, true,
+			CRDMA_MEM_DEFAULT_ORDER, mem_size);
 	if (IS_ERR(eq->mem)) {
-		netro_dev_err(ndev, "Unable to allocate EQ memory\n");
+		crdma_dev_err(dev, "Unable to allocate EQ memory\n");
 		return -ENOMEM;
 	}
 
@@ -776,13 +777,13 @@ int netro_init_eq(struct netro_ibdev *ndev, int index, int entries_log2,
 	pr_info("  EQ num SG      %d\n", eq->mem->num_sg);
 	pr_info("  EQ needs       %d MTT entry(s)\n", eq->mem->num_mtt);
 
-	pr_info(" netro_mtt_write_sg \n");
-	ret = netro_mtt_write_sg(ndev, eq->mem->alloc, eq->mem->num_sg,
+	pr_info(" crdma_mtt_write_sg \n");
+	ret = crdma_mtt_write_sg(dev, eq->mem->alloc, eq->mem->num_sg,
 			eq->mem->base_mtt_ndx, eq->mem->num_mtt,
 			eq->mem->min_order + PAGE_SHIFT,
 			eq->mem->num_sg, 0);
 	if (ret) {
-		netro_info("netro_mtt_write_sg returned %d\n", ret);
+		crdma_info("crdma_mtt_write_sg returned %d\n", ret);
 		goto free_mem;
 	}
 
@@ -793,7 +794,7 @@ int netro_init_eq(struct netro_ibdev *ndev, int index, int entries_log2,
 	eq->eqe = sg_virt(eq->mem->alloc);
 	memset(eq->eqe, 0, eq->mem->tot_len);
 
-	eq->ndev = ndev;
+	eq->dev = dev;
 	eq->eq_num = index;
 	eq->consumer_cnt = 0;
 	eq->consumer_mask = (1 << entries_log2) - 1;
@@ -801,68 +802,68 @@ int netro_init_eq(struct netro_ibdev *ndev, int index, int entries_log2,
 	eq->intr = intr;
 	eq->vector = vector;
 
-	scnprintf(eq->irq_name, 32, "netro_%d-%d", ndev->id, index);
+	scnprintf(eq->irq_name, 32, "crdma_%d-%d", dev->id, index);
 	eq->event_map = events;
 	eq->cq_cnt = 0;
 
-	pr_info(" netro_eq_create_cmd \n");
+	pr_info(" crdma_eq_create_cmd \n");
 	/* CREAE EQ and MAP requested events */
-	ret = netro_eq_create_cmd(ndev, eq);
+	ret = crdma_eq_create_cmd(dev, eq);
 	if (ret) {
-		netro_info("netro_eq_create_cmd faild, returned %d\n", ret);
+		crdma_info("crdma_eq_create_cmd faild, returned %d\n", ret);
 		goto free_mem;
 	}
 
-	pr_info(" netro_eq_map_cmd \n");
-	ret = netro_eq_map_cmd(ndev, eq->eq_num, eq->event_map);
+	pr_info(" crdma_eq_map_cmd \n");
+	ret = crdma_eq_map_cmd(dev, eq->eq_num, eq->event_map);
 	if (ret) {
-		netro_info("netro_eq_map_cmd faild, returned %d\n", ret);
+		crdma_info("crdma_eq_map_cmd faild, returned %d\n", ret);
 		goto destroy_eq;
 	}
 
-	if (ndev->have_interrupts) {
-		netro_dev_info(ndev, "Request IRQ %d\n", eq->vector);
-		ret = request_irq(eq->vector, netro_interrupt, 0,
+	if (dev->have_interrupts) {
+		crdma_dev_info(dev, "Request IRQ %d\n", eq->vector);
+		ret = request_irq(eq->vector, crdma_interrupt, 0,
 				eq->irq_name, eq);
 		if (ret) {
-			netro_info("request_irq error %d\n", ret);
+			crdma_info("request_irq error %d\n", ret);
 			goto destroy_eq;
 		}
 	}
 
 	/* Set EQ initial consumer index and ARM EQ */
-	corigine_set_eq_ci(ndev, eq->eq_num, 0,
-			ndev->have_interrupts ? true : false);
+	crdma_set_eq_ci(dev, eq->eq_num, 0,
+			dev->have_interrupts ? true : false);
 
-	netro_dev_info(ndev, "=== netro_init_eq done === \n");
+	crdma_dev_info(dev, "=== crdma_init_eq done === \n");
 	return 0;
 
 destroy_eq:
-	netro_eq_destroy_cmd(ndev, eq);
+	crdma_eq_destroy_cmd(dev, eq);
 free_mem:
-	netro_free_dma_mem(ndev, eq->mem);
+	crdma_free_dma_mem(dev, eq->mem);
 	eq->mem = NULL;
 	return ret;
 }
 
-void netro_cleanup_eq(struct netro_ibdev *ndev, int eqn)
+void crdma_cleanup_eq(struct crdma_ibdev *dev, int eqn)
 {
-	struct netro_eq *eq = &ndev->eq_table.eq[eqn];
+	struct crdma_eq *eq = &dev->eq_table.eq[eqn];
 
 	/* Make sure interrupt is disabled at EQ */
-	corigine_set_eq_ci(ndev, eq->eq_num,
+	crdma_set_eq_ci(dev, eq->eq_num,
 			eq->consumer_cnt & eq->consumer_mask, false);
 
-	if (ndev->have_interrupts) {
-		netro_dev_info(ndev, "Free EQ %d IRQ %d\n",
+	if (dev->have_interrupts) {
+		crdma_dev_info(dev, "Free EQ %d IRQ %d\n",
 				eq->eq_num, eq->vector);
 		free_irq(eq->vector, eq);
 	}
 
-	if (netro_eq_destroy_cmd(ndev, eq))
-		netro_warn("Destroy of ucode EQ %d failed\n", eq->eq_num);
+	if (crdma_eq_destroy_cmd(dev, eq))
+		crdma_warn("Destroy of ucode EQ %d failed\n", eq->eq_num);
 
-	netro_free_dma_mem(ndev, eq->mem);
+	crdma_free_dma_mem(dev, eq->mem);
 	eq->mem = NULL;
 	return;
 }
@@ -870,7 +871,7 @@ void netro_cleanup_eq(struct netro_ibdev *ndev, int eqn)
 /**
  * Generic no parameter microcode command initiation.
  *
- * @ndev: RoCE IB device.
+ * @dev: RoCE IB device.
  * @opcode: Command opcode.
  * @opcode_mod: Command opcode modifier.
  * @input_mod: Command input modifier.
@@ -878,10 +879,10 @@ void netro_cleanup_eq(struct netro_ibdev *ndev, int eqn)
  *
  * Returns 0 on success, otherwise error code.
  */
-static int __netro_no_param_cmd(struct netro_ibdev *ndev, u8 opcode,
+static int __crdma_no_param_cmd(struct crdma_ibdev *dev, u8 opcode,
 		u8 opcode_mod, u32 input_mod, u32 timeout_ms)
 {
-	struct netro_cmd cmd;
+	struct crdma_cmd cmd;
 	int status;
 
 	memset(&cmd, 0, sizeof(cmd));
@@ -889,15 +890,15 @@ static int __netro_no_param_cmd(struct netro_ibdev *ndev, u8 opcode,
 	cmd.opcode_mod = opcode_mod;
 	cmd.input_mod = input_mod;
 	cmd.timeout = timeout_ms;
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
 	return status;
 }
 
-int netro_noop(struct netro_ibdev *ndev)
+int crdma_noop(struct crdma_ibdev *dev)
 {
-	return __netro_no_param_cmd(ndev, NETRO_CMD_NO_OP, 0, 0,
-			NETRO_CMDIF_GEN_TIMEOUT_MS);
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_NO_OP, 0, 0,
+			CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
 /**
@@ -905,9 +906,9 @@ int netro_noop(struct netro_ibdev *ndev)
  *
  * @attr: Structure that has been initialized with microcode attributes.
  */
-static void netro_dump_query_ucode(struct netro_query_ucode_attr *attr)
+static void crdma_dump_query_ucode(struct crdma_query_ucode_attr *attr)
 {
-	netro_info("Dump of query ucode results in default order\n");
+	crdma_info("Dump of query ucode results in default order\n");
 
 	pr_info("UC maj_rev:       0x%04X\n", le16_to_cpu(attr->maj_rev));
 	pr_info("UC min_rev:       0x%04X\n", le16_to_cpu(attr->min_rev));
@@ -921,36 +922,36 @@ static void netro_dump_query_ucode(struct netro_query_ucode_attr *attr)
 	return;
 }
 
-int netro_query_ucode(struct netro_ibdev *ndev,
-		struct netro_query_ucode_attr *attr)
+int crdma_query_ucode(struct crdma_ibdev *dev,
+		struct crdma_query_ucode_attr *attr)
 {
-	struct netro_cmd_mbox out_mbox;
-	struct netro_cmd cmd;
+	struct crdma_cmd_mbox out_mbox;
+	struct crdma_cmd cmd;
 	int status;
 
 	memset(&cmd, 0, sizeof(cmd));
-	if (netro_init_mailbox(ndev, &out_mbox))
+	if (crdma_init_mailbox(dev, &out_mbox))
 		return -1;
 
-	cmd.opcode = NETRO_CMD_QUERY_UCODE;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_QUERY_UCODE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.output_param = out_mbox.dma_addr;
 
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 	if (status)
 		goto free_mbox;
 
 	memcpy(attr, out_mbox.buf, sizeof(*attr));
 
-#if NETRO_DETAIL_INFO_DEBUG_FLAG
-	netro_info("QP_QUERY Output Mailbox\n");
+#if CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_info("QP_QUERY Output Mailbox\n");
 	print_hex_dump(KERN_DEBUG, "OUT:", DUMP_PREFIX_OFFSET, 8, 1,
 			out_mbox.buf, sizeof(*attr), 0);
 #endif
 
-	netro_dump_query_ucode(attr);
+	crdma_dump_query_ucode(attr);
 free_mbox:
-	netro_cleanup_mailbox(ndev, &out_mbox);
+	crdma_cleanup_mailbox(dev, &out_mbox);
 	return status;
 }
 
@@ -959,9 +960,9 @@ free_mbox:
  *
  * @caps: Initialized capabilities structure to dump.
  */
-static void netro_dump_query_dev_cap(struct netro_dev_cap_param *cap)
+static void crdma_dump_query_dev_cap(struct crdma_dev_cap_param *cap)
 {
-	netro_info("Dump of query_dev_cap results in default order\n");
+	crdma_info("Dump of query_dev_cap results in default order\n");
 
 	pr_info("flags:                      0x%02X\n", cap->flags);
 	pr_info("ports_rsvd:                 0x%02X\n", cap->ports_rsvd);
@@ -1001,193 +1002,193 @@ static void netro_dump_query_dev_cap(struct netro_dev_cap_param *cap)
 	return;
 }
 
-int netro_query_dev_cap(struct netro_ibdev *ndev,
-		struct netro_dev_cap_param *cap)
+int crdma_query_dev_cap(struct crdma_ibdev *dev,
+		struct crdma_dev_cap_param *cap)
 {
-	struct netro_cmd_mbox out_mbox;
-	struct netro_cmd cmd;
+	struct crdma_cmd_mbox out_mbox;
+	struct crdma_cmd cmd;
 	int status;
 
 	memset(&cmd, 0, sizeof(cmd));
-	if (netro_init_mailbox(ndev, &out_mbox))
+	if (crdma_init_mailbox(dev, &out_mbox))
 		return -1;
 
-	cmd.opcode = NETRO_CMD_QUERY_DEV_CAP;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_QUERY_DEV_CAP;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.output_param = out_mbox.dma_addr;
 
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 	if (status)
 		goto free_mbox;
 
 	memcpy(cap, out_mbox.buf, sizeof(*cap));
 
-#if NETRO_DETAIL_INFO_DEBUG_FLAG
-	netro_info("QUERY_DEV_CAP Output MBox\n");
+#if CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_info("QUERY_DEV_CAP Output MBox\n");
 	print_hex_dump(KERN_DEBUG, "OUT:", DUMP_PREFIX_OFFSET, 8, 1,
 			out_mbox.buf, sizeof(query_dev_cap_out), 0);
 #endif
 
-	netro_dump_query_dev_cap(cap);
+	crdma_dump_query_dev_cap(cap);
 free_mbox:
-	netro_cleanup_mailbox(ndev, &out_mbox);
+	crdma_cleanup_mailbox(dev, &out_mbox);
 	return status;
 }
 
-int netro_query_nic(struct netro_ibdev *ndev, uint32_t *boardid)
+int crdma_query_nic(struct crdma_ibdev *dev, uint32_t *boardid)
 {
-	struct netro_cmd cmd;
+	struct crdma_cmd cmd;
 	int status;
 
 	memset(&cmd, 0, sizeof(cmd));
 
-	cmd.opcode = NETRO_CMD_QUERY_NIC;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_QUERY_NIC;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.output_imm = true;
 
-	status = netro_cmd(ndev, &cmd);
-	if (status == NETRO_STS_OK) {
-        netro_dev_info(ndev, "cmd.output_param 0%016llx\n",
-                        cmd.output_param);
-        *boardid = cmd.output_param & 0x0FFFFFFFFull;
-        netro_dev_info(ndev, "board_id 0%08x\n", *boardid);
+	status = crdma_cmd(dev, &cmd);
+	if (status == CRDMA_STS_OK) {
+		crdma_dev_info(dev, "cmd.output_param 0%016llx\n",
+			cmd.output_param);
+		*boardid = cmd.output_param & 0x0FFFFFFFFull;
+		crdma_dev_info(dev, "board_id 0%08x\n", *boardid);
 	}
 
 	return status;
 }
 
-int netro_set_bs_mem_size(struct netro_ibdev *ndev, int num_mtt,
+int crdma_set_bs_mem_size(struct crdma_ibdev *dev, int num_mtt,
 		int order, int size_mb)
 {
-	struct netro_cmd cmd;
+	struct crdma_cmd cmd;
 	int status;
 	int page_sz_log2;
 
 	if (order <= 0) {
-		netro_err("Bad order specified %d\n", order);
+		crdma_err("Bad order specified %d\n", order);
 		return -EINVAL;
 	}
 
-	if (num_mtt & ~NETRO_SET_BS_NUM_MTT_MASK) {
-		netro_err("MTT count to large %d\n", num_mtt);
+	if (num_mtt & ~CRDMA_SET_BS_NUM_MTT_MASK) {
+		crdma_err("MTT count to large %d\n", num_mtt);
 		return -EINVAL;
 	}
 
 	/* order represents the multiple of PAGE_SIZE */
 	page_sz_log2 = order + PAGE_SHIFT;
-	if (page_sz_log2 > NETRO_MTT_MAX_PAGESIZE_LOG2) {
-		netro_err("Order specified to large %d\n", order);
+	if (page_sz_log2 > CRDMA_MTT_MAX_PAGESIZE_LOG2) {
+		crdma_err("Order specified to large %d\n", order);
 		return -EINVAL;
 	}
 
-	netro_info("Dump of netro_set_bs_mem_size para\n");
+	crdma_info("Dump of crdma_set_bs_mem_size para\n");
 	pr_info("order:                      %d\n", order);
 	pr_info("page_sz_log2:               %d\n", page_sz_log2);
 	pr_info("size_mb:                    %d\n", size_mb);
 	pr_info("num_mtt:                    %d\n", num_mtt);
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_SET_BS_HOST_MEM_SIZE;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
-	cmd.input_param = ((u64)(page_sz_log2 << NETRO_SET_BS_PAGE_SHIFT |
+	cmd.opcode = CRDMA_CMD_SET_BS_HOST_MEM_SIZE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
+	cmd.input_param = ((u64)(page_sz_log2 << CRDMA_SET_BS_PAGE_SHIFT |
 				num_mtt)) << 32 |
-				(size_mb & NETRO_SET_BS_SIZE_MASK);
-	netro_info("SET_BS input_param host order 0x%016llx\n",
+				(size_mb & CRDMA_SET_BS_SIZE_MASK);
+	crdma_info("SET_BS input_param host order 0x%016llx\n",
 			cmd.input_param);
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 	return status;
 }
 
-int netro_bs_map_mem(struct netro_ibdev *ndev, u64 vaddr, int size_mb,
+int crdma_bs_map_mem(struct crdma_ibdev *dev, u64 vaddr, int size_mb,
 		int num_mtt, int order)
 {
-	struct netro_bs_map_mem *map;
-	struct netro_cmd_mbox in_mbox;
-	struct netro_cmd cmd;
+	struct crdma_bs_map_mem *map;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
 	int status;
 	int page_sz_log2;
 
 	if (order <= 0) {
-		netro_err("Bad order specified %d\n", order);
+		crdma_err("Bad order specified %d\n", order);
 		return -EINVAL;
 	}
 
-	if (num_mtt & ~NETRO_SET_BS_NUM_MTT_MASK) {
-		netro_err("MTT count to large %d\n", num_mtt);
+	if (num_mtt & ~CRDMA_SET_BS_NUM_MTT_MASK) {
+		crdma_err("MTT count to large %d\n", num_mtt);
 		return -EINVAL;
 	}
 
 	/* order represents the multiple of PAGE_SIZE */
 	page_sz_log2 = order + PAGE_SHIFT;
-	if (page_sz_log2 > NETRO_MTT_MAX_PAGESIZE_LOG2) {
-		netro_err("Order specified to large %d\n", order);
+	if (page_sz_log2 > CRDMA_MTT_MAX_PAGESIZE_LOG2) {
+		crdma_err("Order specified to large %d\n", order);
 		return -EINVAL;
 	}
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -1;
 
 	map = in_mbox.buf;
 	map->vaddr_h	= cpu_to_le32(vaddr >> 32);
 	map->vaddr_l	= cpu_to_le32(vaddr & 0x0FFFFFFFFull);
 	map->rsvd	= 0;
-	map->bs_mb_size = cpu_to_le16(size_mb & NETRO_SET_BS_SIZE_MASK);
-	map->pg_sz_mtts = cpu_to_le32(page_sz_log2 << NETRO_SET_BS_PAGE_SHIFT |
+	map->bs_mb_size = cpu_to_le16(size_mb & CRDMA_SET_BS_SIZE_MASK);
+	map->pg_sz_mtts = cpu_to_le32(page_sz_log2 << CRDMA_SET_BS_PAGE_SHIFT |
 				num_mtt);
-	netro_info("Map BS Memory (LE)\n");
+	crdma_info("Map BS Memory (LE)\n");
 	pr_info("  vaddr_h 0x%08X, vaddr_l 0x%08X\n",
 			map->vaddr_h, map->vaddr_l);
 	pr_info("  Size MB %d, pg_sz_mtts 0x%08X\n",
 			map->bs_mb_size, map->pg_sz_mtts);
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_MAP_BS_HOST_MEM;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_MAP_BS_HOST_MEM;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
-	netro_cleanup_mailbox(ndev, &in_mbox);
+	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
 
-int netro_bs_unmap_mem(struct netro_ibdev *ndev)
+int crdma_bs_unmap_mem(struct crdma_ibdev *dev)
 {
-	return __netro_no_param_cmd(ndev, NETRO_CMD_UNMAP_BS_HOST_MEM, 0, 0,
-			NETRO_CMDIF_GEN_TIMEOUT_MS);
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_UNMAP_BS_HOST_MEM, 0, 0,
+			CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
-int netro_hca_enable(struct netro_ibdev *ndev)
+int crdma_hca_enable(struct crdma_ibdev *dev)
 {
 	int status;
 
-	status = __netro_no_param_cmd(ndev, NETRO_CMD_HCA_ENABLE, 0, 0,
-							NETRO_CMDIF_GEN_TIMEOUT_MS);
+	status = __crdma_no_param_cmd(dev, CRDMA_CMD_HCA_ENABLE, 0, 0,
+							CRDMA_CMDIF_GEN_TIMEOUT_MS);
 	/*
 	* Microcode currently does not support HCA Enable command, so
 	* we over-ride the status if error is unsupported.
 	*/
-	if (status == NETRO_STS_UNSUPPORTED_OPCODE) {
-		netro_warn("Microcode returned unsupported opcode, "
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+		crdma_warn("Microcode returned unsupported opcode, "
 						"ignoring\n");
-		status = NETRO_STS_OK;
+		status = CRDMA_STS_OK;
 	}
 	return status;
 }
 
-int netro_hca_disable(struct netro_ibdev *ndev)
+int crdma_hca_disable(struct crdma_ibdev *dev)
 {
 	int status;
 
-	status = __netro_no_param_cmd(ndev, NETRO_CMD_HCA_DISABLE, 0, 0,
-							NETRO_CMDIF_GEN_TIMEOUT_MS);
+	status = __crdma_no_param_cmd(dev, CRDMA_CMD_HCA_DISABLE, 0, 0,
+							CRDMA_CMDIF_GEN_TIMEOUT_MS);
 	/*
 	* Microcode currently does not support HCA Disable command, so
 	* we over-ride the status if error is unsupported.
 	*/
-	if (status == NETRO_STS_UNSUPPORTED_OPCODE) {
-		netro_warn("Microcode returned unsupported opcode, "
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+		crdma_warn("Microcode returned unsupported opcode, "
 						"ignoring\n");
-		status = NETRO_STS_OK;
+		status = CRDMA_STS_OK;
 	}
 	return status;
 }
@@ -1196,31 +1197,31 @@ int netro_hca_disable(struct netro_ibdev *ndev)
  * Issues an MTT_WRITE to set a block of HCA MTT values. The MTT values to be
  * written should have been initialized in the input mailbox.
  *
- * @ndev: The RoCE IB device.
+ * @dev: The RoCE IB device.
  * @base_mtt: The base MTT index for the first MTT entry in the block.
  * @num_mtt: The number of consecutive MTT entries to write.
  * @in_mbox: Input mailbox initialized with MTT entry values.
  *
  * Returns 0 on success, otherwise an error.
  */
-static int __netro_mtt_write(struct netro_ibdev *ndev, u32 base_mtt,
-		u32 num_mtt, struct netro_cmd_mbox *in_mbox)
+static int __crdma_mtt_write(struct crdma_ibdev *dev, u32 base_mtt,
+		u32 num_mtt, struct crdma_cmd_mbox *in_mbox)
 {
-	struct netro_mtt_write_param *mtt_param = in_mbox->buf;
-	struct netro_cmd cmd;
+	struct crdma_mtt_write_param *mtt_param = in_mbox->buf;
+	struct crdma_cmd cmd;
 	int status;
 	int i;
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_MTT_WRITE;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_MTT_WRITE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_mod = num_mtt;
 	cmd.input_param = in_mbox->dma_addr;
 
 	mtt_param->rsvd = 0;
 	mtt_param->base_mtt_ndx = cpu_to_le32(base_mtt);
 
-	pr_info("\n=== __netro_mtt_write ===\n");
+	pr_info("\n=== __crdma_mtt_write ===\n");
 	pr_info("  base MTT: 0x%08X\n", mtt_param->base_mtt_ndx);
 	pr_info("  MTT num:  %d\n", num_mtt);
 	for (i = 0; i < num_mtt; i++)
@@ -1228,26 +1229,26 @@ static int __netro_mtt_write(struct netro_ibdev *ndev, u32 base_mtt,
 				mtt_param->entry[i].paddr_h,
 				mtt_param->entry[i].paddr_l);
 
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-code response */
-	if (status == NETRO_STS_UNSUPPORTED_OPCODE) {
-		netro_info("Using hard coded WRITE_MTT results\n");
-		status = NETRO_STS_OK;
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+		crdma_info("Using hard coded WRITE_MTT results\n");
+		status = CRDMA_STS_OK;
 	}
 
-	pr_info("\n=== __netro_mtt_write done %d ===\n", status);
+	pr_info("\n=== __crdma_mtt_write done %d ===\n", status);
 	return status;
 }
 
-int netro_mtt_write_sg(struct netro_ibdev *ndev,
+int crdma_mtt_write_sg(struct crdma_ibdev *dev,
 			struct scatterlist *sg_list, int num_sg, u32 base_mtt,
 			u32 num_mtt, unsigned long page_shift,
 			int comp_pages, int comp_order)
 {
 	struct scatterlist *sg;
-	struct netro_mtt_write_param *mtt_param;
-	struct netro_cmd_mbox in_mbox;
+	struct crdma_mtt_write_param *mtt_param;
+	struct crdma_cmd_mbox in_mbox;
 	u64 base_addr;
 	unsigned long page_size = (1 << page_shift);
 	unsigned long comp_mask = (1 << (comp_order + page_shift)) - 1;
@@ -1257,17 +1258,17 @@ int netro_mtt_write_sg(struct netro_ibdev *ndev,
 	int mtt_cnt;
 
 	if (comp_order < 0) {
-		netro_err("Bad compound page order: %d\n", comp_order);
+		crdma_err("Bad compound page order: %d\n", comp_order);
 		return -EINVAL;
 	}
 
-	if (comp_order + page_shift > NETRO_MTT_MAX_PAGESIZE_LOG2) {
-		netro_err("Compound order too large: %d, page size %ld\n",
+	if (comp_order + page_shift > CRDMA_MTT_MAX_PAGESIZE_LOG2) {
+		crdma_err("Compound order too large: %d, page size %ld\n",
 				comp_order, page_size);
 		return -EINVAL;
 	}
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -ENOMEM;
 
 	/*
@@ -1281,12 +1282,12 @@ int netro_mtt_write_sg(struct netro_ibdev *ndev,
 		base_addr = sg_dma_address(sg);
 		length = sg_dma_len(sg);
 
-#if NETRO_DETAIL_INFO_DEBUG_FLAG
-		netro_debug("New  SG 0x%016llx, len: %ld\n", base_addr, length);
+#if CRDMA_DETAIL_INFO_DEBUG_FLAG
+		crdma_debug("New  SG 0x%016llx, len: %ld\n", base_addr, length);
 #endif
 		while (length && mtt_cnt < num_mtt) {
 			if (!(base_addr & comp_mask)) {
-				netro_debug("MTT Comp_Page  Addr 0x%016llx\n",
+				crdma_debug("MTT Comp_Page  Addr 0x%016llx\n",
 						base_addr);
 				mtt_param->entry[mtt_cnt].paddr_h =
 					cpu_to_le32(base_addr >> 32);
@@ -1295,12 +1296,12 @@ int netro_mtt_write_sg(struct netro_ibdev *ndev,
 				mtt_cnt++;
 
 				/* As required write MTT entries */
-				if (mtt_cnt >= NETRO_MTT_PER_WRITE_CMD) {
-					status = __netro_mtt_write(ndev,
+				if (mtt_cnt >= CRDMA_MTT_PER_WRITE_CMD) {
+					status = __crdma_mtt_write(dev,
 							base_mtt, mtt_cnt,
 							&in_mbox);
 					if (status) {
-						netro_warn("MTT_WRITE failed "
+						crdma_warn("MTT_WRITE failed "
 								"%d\n", status);
 						return status;
 					}
@@ -1316,46 +1317,46 @@ int netro_mtt_write_sg(struct netro_ibdev *ndev,
 
 	/* Write any remaining MTT entries */
 	if (mtt_cnt) {
-		status = __netro_mtt_write(ndev, base_mtt,
+		status = __crdma_mtt_write(dev, base_mtt,
 					mtt_cnt, &in_mbox);
 		if (status)
-			netro_warn("MTT_WRITE failed %d\n", status);
+			crdma_warn("MTT_WRITE failed %d\n", status);
 	}
-	netro_debug("MTT_WRITE %d MTT entries written\n", mtt_cnt);
-	netro_cleanup_mailbox(ndev, &in_mbox);
+	crdma_debug("MTT_WRITE %d MTT entries written\n", mtt_cnt);
+	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
 
-int netro_eq_create_cmd(struct netro_ibdev *ndev, struct netro_eq *eq)
+int crdma_eq_create_cmd(struct crdma_ibdev *dev, struct crdma_eq *eq)
 {
-	struct netro_eq_params *param;
-	struct netro_cmd_mbox in_mbox;
-	struct netro_cmd cmd;
+	struct crdma_eq_params *param;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
 	u32 page_info;
 	int status;
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -1;
 
 	param		= in_mbox.buf;
-	param->eqn	= eq->eq_num & NETRO_EQ_CREATE_EQN_MASK;
+	param->eqn	= eq->eq_num & CRDMA_EQ_CREATE_EQN_MASK;
 	param->eqe_log2	= eq->num_eqe_log2;
 	param->intr	= cpu_to_le16(eq->intr);
 
 	page_info = (eq->mem->min_order + PAGE_SHIFT) <<
-				NETRO_EQ_CREATE_LOG2_PAGE_SZ_SHIFT;
+				CRDMA_EQ_CREATE_LOG2_PAGE_SZ_SHIFT;
 
 	/* Set PHYS flag if single block and device supports it */
 	if (eq->mem->num_mtt == 1 &&
-			(ndev->cap.opt_flags & NETRO_DEV_CAP_FLAG_PHYS))
-		page_info |= 1 << NETRO_EQ_CREATE_PHYS_BIT_SHIFT;
+			(dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_PHYS))
+		page_info |= 1 << CRDMA_EQ_CREATE_PHYS_BIT_SHIFT;
 
 	param->page_info = cpu_to_le32(page_info);
 	param->mtt_index = cpu_to_le32(eq->mem->base_mtt_ndx);
 	param->time_mod  = 0;
 	param->event_mod = 0;
 
-	netro_info("EQ_CREATE input values (LE)\n");
+	crdma_info("EQ_CREATE input values (LE)\n");
 	pr_info("  EQN:              %d\n", param->eqn);
 	pr_info("  Num EQE Log2:     %d", param->eqe_log2);
 	pr_info("  Device Interrupt: %d\n", param->intr);
@@ -1364,65 +1365,65 @@ int netro_eq_create_cmd(struct netro_ibdev *ndev, struct netro_eq *eq)
 	pr_info("  Time:             0x%04X, Event: 0x%04X\n",
 			param->time_mod, param->event_mod);
 
-	netro_info("EQ_CREATE Input Mailbox\n");
+	crdma_info("EQ_CREATE Input Mailbox\n");
 
-#if NETRO_DETAIL_INFO_DEBUG_FLAG
+#if CRDMA_DETAIL_INFO_DEBUG_FLAG
 	print_hex_dump(KERN_DEBUG, "IN:",
 			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf, 16, 0);
 #endif
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_EQ_CREATE;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_EQ_CREATE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
 	cmd.input_mod = eq->eq_num;
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-code response */
-	if (status == NETRO_STS_UNSUPPORTED_OPCODE) {
-		netro_info("Using hard coded EQ_CREATE results\n");
-		status = NETRO_STS_OK;
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+		crdma_info("Using hard coded EQ_CREATE results\n");
+		status = CRDMA_STS_OK;
 	}
 
-	netro_cleanup_mailbox(ndev, &in_mbox);
+	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
 
-int netro_eq_destroy_cmd(struct netro_ibdev *ndev, struct netro_eq *eq)
+int crdma_eq_destroy_cmd(struct crdma_ibdev *dev, struct crdma_eq *eq)
 {
-	return __netro_no_param_cmd(ndev, NETRO_CMD_EQ_DESTROY, 0,
-			eq->eq_num, NETRO_CMDIF_GEN_TIMEOUT_MS);
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_EQ_DESTROY, 0,
+			eq->eq_num, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
-int netro_eq_map_cmd(struct netro_ibdev *ndev, u32 eqn, u32 events)
+int crdma_eq_map_cmd(struct crdma_ibdev *dev, u32 eqn, u32 events)
 {
-	struct netro_cmd cmd;
+	struct crdma_cmd cmd;
 	int status;
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode	= NETRO_CMD_EQ_MAP;
+	cmd.opcode	= CRDMA_CMD_EQ_MAP;
 	cmd.input_mod	= eqn;
-	cmd.timeout	= NETRO_CMDIF_GEN_TIMEOUT_MS;
-	cmd.input_param = events & NETRO_EQ_EVENT_MASK;
+	cmd.timeout	= CRDMA_CMDIF_GEN_TIMEOUT_MS;
+	cmd.input_param = events & CRDMA_EQ_EVENT_MASK;
 
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-code response */
-	if (status == NETRO_STS_UNSUPPORTED_OPCODE) {
-		netro_info("Using hard coded EQ_MAP results\n");
-		status = NETRO_STS_OK;
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+		crdma_info("Using hard coded EQ_MAP results\n");
+		status = CRDMA_STS_OK;
 	}
 	return status;
 }
 
-int netro_init_event_cmdif(struct netro_ibdev *ndev)
+int crdma_init_event_cmdif(struct crdma_ibdev *dev)
 {
 	int i;
 
-	netro_info("netro_init_event_cmdif\n");
+	crdma_info("crdma_init_event_cmdif\n");
 
-	if (!ndev->have_interrupts) {
-		netro_info("No interrupt support, continue polled mode\n");
+	if (!dev->have_interrupts) {
+		crdma_info("No interrupt support, continue polled mode\n");
 		return 0;
 	}
 
@@ -1431,91 +1432,91 @@ int netro_init_event_cmdif(struct netro_ibdev *ndev)
 	 * outstanding command limit to control the number of
 	 * outstanding event driven commands we allow.
 	 */
-	ndev->max_cmds_log2 = 0;
-	while ((1 << (ndev->max_cmds_log2 + 1)) <= ndev->cap.max_cmds_out)
-		ndev->max_cmds_log2++;
-	ndev->max_cmds_out = 1 << ndev->max_cmds_log2;
+	dev->max_cmds_log2 = 0;
+	while ((1 << (dev->max_cmds_log2 + 1)) <= dev->cap.max_cmds_out)
+		dev->max_cmds_log2++;
+	dev->max_cmds_out = 1 << dev->max_cmds_log2;
 
-	netro_dev_info(ndev, "Max of %d concurrent commands\n",
-			ndev->max_cmds_out);
-	netro_dev_info(ndev, "Command token mask 0x%04X\n",
-			ndev->max_cmds_out - 1);
+	crdma_dev_info(dev, "Max of %d concurrent commands\n",
+			dev->max_cmds_out);
+	crdma_dev_info(dev, "Command token mask 0x%04X\n",
+			dev->max_cmds_out - 1);
 
 	/*
 	 * Allocate and initialize command queue used to maintain
 	 * state for microcode commands in progress.
 	 */
-	ndev->cmd_q = kcalloc(ndev->max_cmds_out,
-				sizeof(struct netro_event_cmd), GFP_KERNEL);
-	if (!ndev->cmd_q) {
-		netro_dev_info(ndev, "Unable to alloc cmd event queue\n");
+	dev->cmd_q = kcalloc(dev->max_cmds_out,
+				sizeof(struct crdma_event_cmd), GFP_KERNEL);
+	if (!dev->cmd_q) {
+		crdma_dev_info(dev, "Unable to alloc cmd event queue\n");
 		return -ENOMEM;
 	}
-	spin_lock_init(&ndev->cmd_q_lock);
-	for (i = 0; i < ndev->max_cmds_out; i++) {
-		ndev->cmd_q[i].token = i;
-		ndev->cmd_q[i].next = i + 1;
+	spin_lock_init(&dev->cmd_q_lock);
+	for (i = 0; i < dev->max_cmds_out; i++) {
+		dev->cmd_q[i].token = i;
+		dev->cmd_q[i].next = i + 1;
 	}
-	ndev->cmd_q[ndev->max_cmds_out-1].next = -1;
-	ndev->cmd_q_free = 0;
+	dev->cmd_q[dev->max_cmds_out-1].next = -1;
+	dev->cmd_q_free = 0;
 
-	sema_init(&ndev->event_sem, ndev->max_cmds_out);
-	ndev->use_event_cmds = true;
+	sema_init(&dev->event_sem, dev->max_cmds_out);
+	dev->use_event_cmds = true;
 	return 0;
 }
 
-void netro_cleanup_event_cmdif(struct netro_ibdev *ndev)
+void crdma_cleanup_event_cmdif(struct crdma_ibdev *dev)
 {
 	int i;
 
-	netro_info("netro_cleanup_event_cmdif\n");
+	crdma_info("crdma_cleanup_event_cmdif\n");
 
 	/* No working interrupts, so really never entered event mode */
-	if (!ndev->have_interrupts)
+	if (!dev->have_interrupts)
 		return;
 
 	/*
 	 * Ensure that a polled command does not begin execution before
 	 * all outstanding event driven commands complete processing.
 	 */
-	down(&ndev->poll_sem);
-	ndev->use_event_cmds = false;
-	for (i = 0; i < ndev->max_cmds_out; i++)
-		down(&ndev->event_sem);
-	up(&ndev->poll_sem);
+	down(&dev->poll_sem);
+	dev->use_event_cmds = false;
+	for (i = 0; i < dev->max_cmds_out; i++)
+		down(&dev->event_sem);
+	up(&dev->poll_sem);
 
-	ndev->cmd_q_free = -1;
-	kfree(ndev->cmd_q);
+	dev->cmd_q_free = -1;
+	kfree(dev->cmd_q);
 	return;
 }
 
-int netro_cq_create_cmd(struct netro_ibdev *ndev, struct netro_cq *cq,
-		struct netro_uar *uar)
+int crdma_cq_create_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq,
+		struct crdma_uar *uar)
 {
-	struct netro_cq_params *param;
-	struct netro_cmd_mbox in_mbox;
-	struct netro_cmd cmd;
+	struct crdma_cq_params *param;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
 	u64 pfn;
 	u32 page_info;
 	int status;
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -1;
 
 	param		= in_mbox.buf;
-	param->rsvd_cqn = cpu_to_le32(cq->cqn & NETRO_CQ_CREATE_CQN_MASK);
-	param->eqn	= cq->eq_num & NETRO_EQ_CREATE_EQN_MASK;
+	param->rsvd_cqn = cpu_to_le32(cq->cqn & CRDMA_CQ_CREATE_CQN_MASK);
+	param->eqn	= cq->eq_num & CRDMA_EQ_CREATE_EQN_MASK;
 	param->cqe_log2 = 0;
 	while ((1 << param->cqe_log2) < cq->num_cqe)
 		param->cqe_log2++;
 
 	page_info = (cq->mem->min_order + PAGE_SHIFT) <<
-				NETRO_CQ_CREATE_LOG2_PAGE_SZ_SHIFT;
+				CRDMA_CQ_CREATE_LOG2_PAGE_SZ_SHIFT;
 
 	/* Set PHYS flag if single block and device supports it */
 	if (cq->mem->num_mtt == 1 &&
-			(ndev->cap.opt_flags & NETRO_DEV_CAP_FLAG_PHYS))
-		page_info |= 1 << NETRO_CQ_CREATE_PHYS_BIT_SHIFT;
+			(dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_PHYS))
+		page_info |= 1 << CRDMA_CQ_CREATE_PHYS_BIT_SHIFT;
 
 	param->page_info = cpu_to_le32(page_info);
 	param->mtt_index = cpu_to_le32(cq->mem->base_mtt_ndx);
@@ -1525,11 +1526,11 @@ int netro_cq_create_cmd(struct netro_ibdev *ndev, struct netro_cq *cq,
 	param->ci_addr_high = cpu_to_le32(cq->ci_mbox_paddr >> 32);
 	param->ci_addr_low = cpu_to_le32(cq->ci_mbox_paddr & 0x0FFFFFFFFull);
 
-	pfn = netro_uar_pfn(ndev, uar);
+	pfn = crdma_uar_pfn(dev, uar);
 	param->uar_pfn_high = cpu_to_le32(pfn >> 32);
 	param->uar_pfn_low = cpu_to_le32((pfn & 0x0FFFFFFFFull) << PAGE_SHIFT);
 
-	netro_info("CQ create values (LE)\n");
+	crdma_info("CQ create values (LE)\n");
 	pr_info("  CQN:          %d\n", param->rsvd_cqn);
 	pr_info("  EQN:          %d\n", param->eqn);
 	pr_info("  Num CQE Log2: %d", param->cqe_log2);
@@ -1542,78 +1543,78 @@ int netro_cq_create_cmd(struct netro_ibdev *ndev, struct netro_cq *cq,
 	pr_info("  UAR PFN high: 0x%08X\n", param->uar_pfn_high);
 	pr_info("  UAR PFN low:  0x%08X\n", param->uar_pfn_low);
 
-#if NETRO_DETAIL_INFO_DEBUG_FLAG
+#if CRDMA_DETAIL_INFO_DEBUG_FLAG
 	print_hex_dump(KERN_DEBUG, "IN:",
 			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf, 16, 0);
 #endif
 
-	netro_info("Send CQ_CREATE to Firmware\n");
+	crdma_info("Send CQ_CREATE to Firmware\n");
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_CQ_CREATE;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_CQ_CREATE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
 	cmd.input_mod = cq->cqn;
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-coded response */
-	if (status == NETRO_STS_UNSUPPORTED_OPCODE) {
-		netro_info("Using hard coded CQ_CREATE results\n");
-		status = NETRO_STS_OK;
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+		crdma_info("Using hard coded CQ_CREATE results\n");
+		status = CRDMA_STS_OK;
 	}
-	netro_info("Get status [%d] from Firmware\n", status);
+	crdma_info("Get status [%d] from Firmware\n", status);
 
-	netro_cleanup_mailbox(ndev, &in_mbox);
+	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
 
-int netro_cq_destroy_cmd(struct netro_ibdev *ndev, struct netro_cq *cq)
+int crdma_cq_destroy_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq)
 {
-	return __netro_no_param_cmd(ndev, NETRO_CMD_CQ_DESTROY, 0,
-			cq->cqn, NETRO_CMDIF_GEN_TIMEOUT_MS);
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_CQ_DESTROY, 0,
+			cq->cqn, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
 /**
  * Build QP control object parameters used to initialize QP state.
  *
- * @ndev: The netro IB RoCE device.
- * @qp: The netro QP state used to initialize parameters.
+ * @dev: The crdma IB RoCE device.
+ * @qp: The crdma QP state used to initialize parameters.
  * @uar: The user access region used for QP doorbell access.
  * @ctrl: Returns the initialized QP control object parameters.
  */
-static void netro_set_qp_ctrl(struct netro_ibdev *ndev,
-		struct netro_qp *qp, struct netro_uar *uar,
-		struct netro_qp_ctrl_params *ctrl)
+static void crdma_set_qp_ctrl(struct crdma_ibdev *dev,
+		struct crdma_qp *qp, struct crdma_uar *uar,
+		struct crdma_qp_ctrl_params *ctrl)
 {
 	u64 pfn;
 	u32 word = 0;
 
-	if (qp->mem->num_mtt == 1 && (ndev->cap.opt_flags &
-			NETRO_DEV_CAP_FLAG_PHYS))
-		word = 1 << NETRO_QP_CTRL_PHYS_BIT_SHIFT;
+	if (qp->mem->num_mtt == 1 && (dev->cap.opt_flags &
+			CRDMA_DEV_CAP_FLAG_PHYS))
+		word = 1 << CRDMA_QP_CTRL_PHYS_BIT_SHIFT;
 	if (qp->sq_sig_type == IB_SIGNAL_ALL_WR)
-		word |= 1 << NETRO_QP_CTRL_SIGALL_BIT_SHIFT;
+		word |= 1 << CRDMA_QP_CTRL_SIGALL_BIT_SHIFT;
 
 	/* Special QP are a anomaly, set QP1 and add GSI flag */
 	if (unlikely(qp->ib_qp.qp_type == IB_QPT_GSI))
-		word |= (1 << NETRO_QP_CTRL_GSI_BIT_SHIFT) | 1;
+		word |= (1 << CRDMA_QP_CTRL_GSI_BIT_SHIFT) | 1;
 	else
-		word |= qp->qp_index & NETRO_QP_CTRL_QPN_MASK;
+		word |= qp->qp_index & CRDMA_QP_CTRL_QPN_MASK;
 
 	ctrl->flags_qpn = cpu_to_le32(word);
 
-	word = (ilog2(qp->sq.wqe_size) & NETRO_QP_CTRL_SWQE_LOG2_MASK) <<
-			NETRO_QP_CTRL_SWQE_LOG2_SHIFT;
-	word |= (ilog2(qp->rq.wqe_size) & NETRO_QP_CTRL_RWQE_LOG2_MASK) <<
-			NETRO_QP_CTRL_RWQE_LOG2_SHIFT;
-	word |= qp->pdn & NETRO_QP_CTRL_PD_MASK;
+	word = (ilog2(qp->sq.wqe_size) & CRDMA_QP_CTRL_SWQE_LOG2_MASK) <<
+			CRDMA_QP_CTRL_SWQE_LOG2_SHIFT;
+	word |= (ilog2(qp->rq.wqe_size) & CRDMA_QP_CTRL_RWQE_LOG2_MASK) <<
+			CRDMA_QP_CTRL_RWQE_LOG2_SHIFT;
+	word |= qp->pdn & CRDMA_QP_CTRL_PD_MASK;
 	ctrl->wqe_pd = cpu_to_le32(word);
 
 	word = qp->ib_qp.qp_type == IB_QPT_RC ?
-				1 << NETRO_QP_CTRL_QPTYPE_SHIFT : 0;
-	word |= qp->send_cqn & NETRO_QP_CTRL_SCQN_MASK;
+				1 << CRDMA_QP_CTRL_QPTYPE_SHIFT : 0;
+	word |= qp->send_cqn & CRDMA_QP_CTRL_SCQN_MASK;
 	ctrl->type_send_cqn = cpu_to_le32(word);
 
-	ctrl->recv_cqn = cpu_to_le32(qp->recv_cqn & NETRO_QP_CTRL_RCQN_MASK);
+	ctrl->recv_cqn = cpu_to_le32(qp->recv_cqn & CRDMA_QP_CTRL_RCQN_MASK);
 	ctrl->max_recv_wr = cpu_to_le16(qp->rq.wqe_cnt);
 	ctrl->max_send_wr = cpu_to_le16(qp->sq.wqe_cnt);
 	ctrl->max_inline_data = cpu_to_le16(qp->max_inline);
@@ -1621,20 +1622,20 @@ static void netro_set_qp_ctrl(struct netro_ibdev *ndev,
 	ctrl->max_send_sge = qp->sq.max_sg;
 
 	word = (qp->mem->min_order + PAGE_SHIFT) <<
-				NETRO_QP_CTRL_LOG2_PAGE_SZ_SHIFT;
+				CRDMA_QP_CTRL_LOG2_PAGE_SZ_SHIFT;
 	ctrl->page_info = cpu_to_le32(word);
 
 	ctrl->mtt_index = cpu_to_le32(qp->mem->base_mtt_ndx);
 	ctrl->sq_base_off = cpu_to_le32(qp->sq_offset);
 	ctrl->rq_base_off = cpu_to_le32(qp->rq_offset);
-	ctrl->srqn = cpu_to_le32(qp->srqn & NETRO_QP_CTRL_SRQN_MASK);
+	ctrl->srqn = cpu_to_le32(qp->srqn & CRDMA_QP_CTRL_SRQN_MASK);
 
-	pfn = netro_uar_pfn(ndev, uar);
+	pfn = crdma_uar_pfn(dev, uar);
 	ctrl->uar_pfn_high = cpu_to_le32(pfn >> 32);
 	ctrl->uar_pfn_low = cpu_to_le32((pfn & 0x0FFFFFFFFull) <<
 					PAGE_SHIFT);
 
-	netro_info("QP MODIFY control object values (LE)\n");
+	crdma_info("QP MODIFY control object values (LE)\n");
 	if (unlikely(qp->ib_qp.qp_type == IB_QPT_GSI))
 		pr_debug("       GSI QP: physical port %d, control object %d\n",
 					qp->qp1_port, qp->qp1_port);
@@ -1662,8 +1663,8 @@ static void netro_set_qp_ctrl(struct netro_ibdev *ndev,
 /**
  * Build QP modify attribute parameters used to set/update QP state.
  *
- * @ndev: The netro IB RoCE device.
- * @qp: The netro QP state used to initialize parameters.
+ * @dev: The crdma IB RoCE device.
+ * @qp: The crdma QP state used to initialize parameters.
  * @ib_attr: The requested IB verbs attributes.
  * @ib_attr_mask: The requested IB verbs attributes mask.
  * @attr: Returns the initialized QP modify attributes parameters.
@@ -1671,9 +1672,9 @@ static void netro_set_qp_ctrl(struct netro_ibdev *ndev,
  *
  * Returns 0 on success, otherwise error code.
  */
-static int netro_set_qp_attr(struct netro_ibdev *ndev,
-		struct netro_qp *qp, struct ib_qp_attr *ib_attr,
-		int ib_attr_mask, struct netro_qp_attr_params *attr,
+static int crdma_set_qp_attr(struct crdma_ibdev *dev,
+		struct crdma_qp *qp, struct ib_qp_attr *ib_attr,
+		int ib_attr_mask, struct crdma_qp_attr_params *attr,
 		u32 *attr_mask)
 {
 	if (ib_attr_mask & IB_QP_STATE)
@@ -1700,7 +1701,7 @@ static int netro_set_qp_attr(struct netro_ibdev *ndev,
 		//attr->av.vlan = cpu_to_le16(ib_attr->ah_attr.vlan_id);
 		attr->av.port = ib_attr->ah_attr.port_num - 1;
 		/* TODO: Can't set correctly yet, use IPv4 */
-		attr->av.gid_type = NETRO_ROCE_V2_IPV4_GID_TYPE;
+		attr->av.gid_type = CRDMA_ROCE_V2_IPV4_GID_TYPE;
 		/* TODO: Can't set correclty yet, use 0 */
 		attr->av.s_mac_ndx = 0;
 		/* TODO: Can't set correctly yet */
@@ -1720,14 +1721,14 @@ static int netro_set_qp_attr(struct netro_ibdev *ndev,
 
 		/* XXX: For now we only allow maximum rate, no IPD */
 		attr->av.ib_sr_ipd =
-			cpu_to_le32((0 << NETRO_AV_IBSR_IPD_SHIFT) |
-					(to_netro_pd(qp->ib_qp.pd)->pd_index &
-					NETRO_AV_PD_MASK));
+			cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
+					(to_crdma_pd(qp->ib_qp.pd)->pd_index &
+					CRDMA_AV_PD_MASK));
 	}	
 
 	if (ib_attr_mask & IB_QP_PATH_MTU)
 		attr->mtu_access |= (ib_attr->path_mtu + 7) <<
-					NETRO_QP_ATTR_MTU_SHIFT;
+					CRDMA_QP_ATTR_MTU_SHIFT;
 
 	if (ib_attr_mask & IB_QP_TIMEOUT)
 		attr->timeout = ib_attr->timeout;
@@ -1764,9 +1765,9 @@ static int netro_set_qp_attr(struct netro_ibdev *ndev,
 
 	if (ib_attr_mask & IB_QP_DEST_QPN)
 		attr->dest_qpn = cpu_to_le32(ib_attr->dest_qp_num &
-					NETRO_QP_ATTR_QPN_MASK);
+					CRDMA_QP_ATTR_QPN_MASK);
 
-	netro_debug("QP MODIFY attribute values (LE)\n");
+	crdma_debug("QP MODIFY attribute values (LE)\n");
 	if (ib_attr_mask & IB_QP_STATE)
 		pr_debug("        state: %d\n", attr->qp_state);
 	if (ib_attr_mask & IB_QP_EN_SQD_ASYNC_NOTIFY)
@@ -1828,25 +1829,25 @@ static int netro_set_qp_attr(struct netro_ibdev *ndev,
 	return 0;
 }
 
-int netro_qp_modify_cmd(struct netro_ibdev *ndev, struct netro_qp *qp,
-		struct netro_uar *uar, struct ib_qp_attr *qp_attr,
+int crdma_qp_modify_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
+		struct crdma_uar *uar, struct ib_qp_attr *qp_attr,
 		int qp_attr_mask, enum ib_qp_state cur_state,
 		enum ib_qp_state new_state)
 {
-	struct netro_qp_params *param;
-	struct netro_cmd_mbox in_mbox;
-	struct netro_cmd cmd;
+	struct crdma_qp_params *param;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
 	int status;
 	int modifier;
 
-	modifier = netro_qp_modify_opcode_mod(cur_state, new_state);
+	modifier = crdma_qp_modify_opcode_mod(cur_state, new_state);
 	if (modifier < 0) {
-		netro_info("Illegal state transition\n");
+		crdma_info("Illegal state transition\n");
 		return -EINVAL;
 	}
-	netro_info("QP transition: %d\n", modifier);
+	crdma_info("QP transition: %d\n", modifier);
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -1;
 
 	param		= in_mbox.buf;
@@ -1856,28 +1857,28 @@ int netro_qp_modify_cmd(struct netro_ibdev *ndev, struct netro_qp *qp,
 	 * we need to provide microcode the QP control object parameters.
 	 */
 	if (cur_state == IB_QPS_RESET && new_state == IB_QPS_INIT)
-		netro_set_qp_ctrl(ndev, qp, uar, &param->ctrl);
+		crdma_set_qp_ctrl(dev, qp, uar, &param->ctrl);
 
 	/*
 	 * Initialize QP attribute mask and values based on parameters
 	 * indicated (both required and optional attributes for the
 	 * QP transition were previously verified in the attribute mask.
 	 */
-	if (netro_set_qp_attr(ndev, qp, qp_attr, qp_attr_mask,
+	if (crdma_set_qp_attr(dev, qp, qp_attr, qp_attr_mask,
 			&param->attr, &param->attr_mask)) {
-		netro_info("Illegal QP attribute detected\n");
+		crdma_info("Illegal QP attribute detected\n");
 		status = -EINVAL;
 		goto out;
 	}
 
-	netro_info("QP_MODIFY Input Mailbox\n");
+	crdma_info("QP_MODIFY Input Mailbox\n");
 	print_hex_dump(KERN_DEBUG, "IN:", DUMP_PREFIX_OFFSET, 8, 1,
 			in_mbox.buf, sizeof(*param), 0);
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_QP_MODIFY;
+	cmd.opcode = CRDMA_CMD_QP_MODIFY;
 	cmd.opcode_mod = modifier;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
 	/*
 	* Special QP1 use the dedicated port number control object, all
@@ -1885,44 +1886,44 @@ int netro_qp_modify_cmd(struct netro_ibdev *ndev, struct netro_qp *qp,
 	*/
 	cmd.input_mod = qp->ib_qp.qp_type == IB_QPT_GSI ?
 								qp->qp1_port : qp->qp_index;
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-coded response */
-	if (status == NETRO_STS_UNSUPPORTED_OPCODE) {
-		netro_info("Using hard coded QP_MODIFY results\n");
-		status = NETRO_STS_OK;
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+		crdma_info("Using hard coded QP_MODIFY results\n");
+		status = CRDMA_STS_OK;
 	}
 
 	/* Save new state in QP */
-	if (status == NETRO_STS_OK)
+	if (status == CRDMA_STS_OK)
 		qp->qp_state = new_state;
 out:
-	netro_cleanup_mailbox(ndev, &in_mbox);
+	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
 
-int netro_qp_query_cmd(struct netro_ibdev *ndev, struct netro_qp *qp,
+int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 		struct ib_qp_attr *qp_attr, int qp_attr_mask)
 {
-	struct netro_qp_attr_params *param;
-	struct netro_cmd_mbox out_mbox;
-	struct netro_cmd cmd;
+	struct crdma_qp_attr_params *param;
+	struct crdma_cmd_mbox out_mbox;
+	struct crdma_cmd cmd;
 	union ib_gid *dgid;
 	int status;
 
-	if (netro_init_mailbox(ndev, &out_mbox))
+	if (crdma_init_mailbox(dev, &out_mbox))
 		return -1;
 
 	param		= out_mbox.buf;
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_QP_QUERY;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_QP_QUERY;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.output_param = out_mbox.dma_addr;
 	cmd.input_mod = qp->qp_index;
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
-	if (status != NETRO_STS_OK)
+	if (status != CRDMA_STS_OK)
 		goto free_mbox;
 
 	qp_attr->qp_state = param->qp_state;
@@ -1936,15 +1937,15 @@ int netro_qp_query_cmd(struct netro_ibdev *ndev, struct netro_qp *qp,
 	qp_attr->retry_cnt = param->retry_count;
 	qp_attr->timeout = param->timeout;
 	qp_attr->dest_qp_num = le32_to_cpu(param->dest_qpn) &
-							NETRO_QP_ATTR_QPN_MASK;
+							CRDMA_QP_ATTR_QPN_MASK;
 	qp_attr->max_rd_atomic = param->rdma_init_depth;
 	qp_attr->max_dest_rd_atomic = param->rdma_rsp_res;
 	qp_attr->qp_access_flags = param->mtu_access &
-							NETRO_QP_ATTR_ACCESS_MASK;
+							CRDMA_QP_ATTR_ACCESS_MASK;
 	qp_attr->path_mtu = (param->mtu_access >>
-									NETRO_QP_ATTR_MTU_SHIFT) - 7;
+									CRDMA_QP_ATTR_MTU_SHIFT) - 7;
 
-	netro_debug("QP query attribute values\n");
+	crdma_debug("QP query attribute values\n");
 	pr_debug("        state: %d\n", qp_attr->qp_state);
 	pr_debug("         port: %d\n", qp_attr->port_num);
 	pr_debug("   pkey_index: %d\n", qp_attr->pkey_index);
@@ -2024,18 +2025,18 @@ int netro_qp_query_cmd(struct netro_ibdev *ndev, struct netro_qp *qp,
 	}
 
 free_mbox:
-        netro_cleanup_mailbox(ndev, &out_mbox);
+        crdma_cleanup_mailbox(dev, &out_mbox);
         return status;
 }
 
-int netro_qp_destroy_cmd(struct netro_ibdev *ndev, struct netro_qp *qp)
+int crdma_qp_destroy_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp)
 {
-	struct netro_qp_params *param;
-	struct netro_cmd_mbox in_mbox;
-	struct netro_cmd cmd;
+	struct crdma_qp_params *param;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
 	int status;
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -1;
 
 	param	= in_mbox.buf;
@@ -2043,69 +2044,69 @@ int netro_qp_destroy_cmd(struct netro_ibdev *ndev, struct netro_qp *qp)
 	param->attr.qp_state = IB_QPS_RESET;
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_QP_MODIFY;
-	cmd.opcode_mod = NETRO_QP_MODIFY_2RST;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_QP_MODIFY;
+	cmd.opcode_mod = CRDMA_QP_MODIFY_2RST;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
 	cmd.input_mod = qp->ib_qp.qp_type == IB_QPT_GSI ?
 		qp->qp1_port : qp->qp_index;
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
 	/* Save new state in QP */
-	if (status == NETRO_STS_OK)
+	if (status == CRDMA_STS_OK)
 		qp->qp_state = IB_QPS_RESET;
-	netro_cleanup_mailbox(ndev, &in_mbox);
+	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
 
-int netro_port_enable_cmd(struct netro_ibdev *ndev, u8 port)
+int crdma_port_enable_cmd(struct crdma_ibdev *dev, u8 port)
 {
-	return __netro_no_param_cmd(ndev, NETRO_CMD_ROCE_PORT_ENABLE, 0,
-			port, NETRO_CMDIF_GEN_TIMEOUT_MS);
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_ROCE_PORT_ENABLE, 0,
+			port, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
-int netro_port_disable_cmd(struct netro_ibdev *ndev, u8 port)
+int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port)
 {
-	return __netro_no_param_cmd(ndev, NETRO_CMD_ROCE_PORT_DISABLE, 0,
-			port, NETRO_CMDIF_GEN_TIMEOUT_MS);
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_ROCE_PORT_DISABLE, 0,
+			port, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
 /**
  * Issue microcode MPT create command.
  *
- * @ndev: The IB RoCE device.
+ * @dev: The IB RoCE device.
  * @mr: The memory region associated with the MPT.
  *
  * Returns 0 on success, otherwise an error.
  */
-static int netro_mpt_create_cmd(struct netro_ibdev *ndev, struct netro_mr *nmr)
+static int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *nmr)
 {
-	struct netro_mpt_params *param;
-	struct netro_cmd_mbox in_mbox;
-	struct netro_cmd cmd;
+	struct crdma_mpt_params *param;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
 	u32 page_info;
 	u32 flags_pdn;
 	int status;
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -1;
 
 	param		= in_mbox.buf;
 	param->key	= cpu_to_le32(nmr->key);
 
-	flags_pdn	= nmr->pdn & NETRO_MPT_CREATE_PD_MASK;
+	flags_pdn	= nmr->pdn & CRDMA_MPT_CREATE_PD_MASK;
 	flags_pdn	|= ((nmr->access & IB_ACCESS_LOCAL_WRITE) ?
-				NETRO_MPT_LOCAL_WRITE_ENABLE : 0) |
+				CRDMA_MPT_LOCAL_WRITE_ENABLE : 0) |
 			((nmr->access & IB_ACCESS_REMOTE_WRITE) ?
-				NETRO_MPT_REMOTE_WRITE_ENABLE : 0) |
+				CRDMA_MPT_REMOTE_WRITE_ENABLE : 0) |
 			((nmr->access & IB_ACCESS_REMOTE_READ) ?
-				NETRO_MPT_REMOTE_READ_ENABLE : 0) |
-			(nmr->umem ? 0 : NETRO_MPT_DMA);
+				CRDMA_MPT_REMOTE_READ_ENABLE : 0) |
+			(nmr->umem ? 0 : CRDMA_MPT_DMA);
 
 	/* Set PHYS flag if only a single MTT entry and it is supported */
-	if (nmr->num_mtt == 1 && (ndev->cap.opt_flags &
-			NETRO_DEV_CAP_FLAG_PHYS))
-		flags_pdn |= NETRO_MPT_PHYS;
+	if (nmr->num_mtt == 1 && (dev->cap.opt_flags &
+			CRDMA_DEV_CAP_FLAG_PHYS))
+		flags_pdn |= CRDMA_MPT_PHYS;
 	param->flags_pd	= cpu_to_le32(flags_pdn);
 
 	param->io_addr_h = cpu_to_le32(nmr->io_vaddr >> 32);
@@ -2114,12 +2115,12 @@ static int netro_mpt_create_cmd(struct netro_ibdev *ndev, struct netro_mr *nmr)
 	param->mtt_index= cpu_to_le32(nmr->base_mtt);
 
 	page_info = (nmr->mpt_order + nmr->page_shift) <<
-				NETRO_MPT_LOG2_PAGE_SZ_SHIFT;
+				CRDMA_MPT_LOG2_PAGE_SZ_SHIFT;
 	param->page_info = cpu_to_le32(page_info);
 	param->mtt_index = cpu_to_le32(nmr->base_mtt);
 	param->frmr_entries = 0;
 
-	netro_debug("MPT_CREATE input values (LE)\n");
+	crdma_debug("MPT_CREATE input values (LE)\n");
 	pr_debug("         Key: 0x%08X\n", param->key);
 	pr_debug("   Flags/PDN: 0x%08X\n", param->flags_pd);
 	pr_debug("   IO Addr_h: 0x%08X\n", param->io_addr_h);
@@ -2129,47 +2130,47 @@ static int netro_mpt_create_cmd(struct netro_ibdev *ndev, struct netro_mr *nmr)
 	pr_debug("   MTT Index: 0x%08X\n", param->mtt_index);
 	pr_debug("FRMR Entries: 0x%08X\n", param->frmr_entries);
 
-	netro_info("MPT_CREATE Input Mailbox\n");
+	crdma_info("MPT_CREATE Input Mailbox\n");
 	print_hex_dump(KERN_DEBUG, "IN:",
 			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf, 32, 0);
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_MPT_CREATE;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_MPT_CREATE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
 	cmd.input_mod = nmr->mpt_index;
-	status = netro_cmd(ndev, &cmd);
-	netro_cleanup_mailbox(ndev, &in_mbox);
+	status = crdma_cmd(dev, &cmd);
+	crdma_cleanup_mailbox(dev, &in_mbox);
 
 	return status;
 }
 
-int netro_init_mpt(struct netro_ibdev *ndev, struct netro_mr *nmr,
+int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *nmr,
 		int comp_pages, int comp_order)
 {
 	struct ib_umem *umem = nmr->umem;
 	int ret;
 
-	netro_info("netro_init_mpt \n");
+	crdma_info("crdma_init_mpt \n");
 
 	if (umem) {
 		nmr->num_mtt = comp_pages;
-		nmr->base_mtt = netro_alloc_bitmap_area(&ndev->mtt_map,
+		nmr->base_mtt = crdma_alloc_bitmap_area(&dev->mtt_map,
 						nmr->num_mtt);
 		if (nmr->base_mtt < 0)
 			return -ENOMEM;
 
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
-		ret = netro_mtt_write_sg(ndev, umem->sg_head.sgl, umem->nmap,
+		ret = crdma_mtt_write_sg(dev, umem->sg_head.sgl, umem->nmap,
 				nmr->base_mtt, nmr->num_mtt, PAGE_SHIFT,
 				comp_pages, comp_order);
 #else
-		ret = netro_mtt_write_sg(ndev, umem->sg_head.sgl, umem->nmap,
+		ret = crdma_mtt_write_sg(dev, umem->sg_head.sgl, umem->nmap,
 				nmr->base_mtt, nmr->num_mtt, umem->page_shift,
 				comp_pages, comp_order);
 #endif
 		if (ret) {
-			netro_err("Error writing MTT entries %d\n", ret);
+			crdma_err("Error writing MTT entries %d\n", ret);
 			goto free_mtt;
 		}
 	} else {
@@ -2179,9 +2180,9 @@ int netro_init_mpt(struct netro_ibdev *ndev, struct netro_mr *nmr,
 	}
 
 	/* Issue MPT Create Command */
-	ret = netro_mpt_create_cmd(ndev, nmr);
+	ret = crdma_mpt_create_cmd(dev, nmr);
 	if (ret) {
-		netro_dev_info(ndev, "netro_mpt_create_cmd failed, "
+		crdma_dev_info(dev, "crdma_mpt_create_cmd failed, "
 				"returned %d\n", ret);
 		goto free_mtt;
 	}
@@ -2189,39 +2190,39 @@ int netro_init_mpt(struct netro_ibdev *ndev, struct netro_mr *nmr,
 
 free_mtt:
 	if (umem)
-		netro_free_bitmap_area(&ndev->mtt_map, nmr->base_mtt,
+		crdma_free_bitmap_area(&dev->mtt_map, nmr->base_mtt,
 					nmr->num_mtt);
 	return -ENOMEM;
 }
 
-void netro_cleanup_mpt(struct netro_ibdev *ndev, struct netro_mr *nmr)
+void crdma_cleanup_mpt(struct crdma_ibdev *dev, struct crdma_mr *nmr)
 {
-	__netro_no_param_cmd(ndev, NETRO_CMD_MPT_DESTROY, 0,
-			nmr->mpt_index, NETRO_CMDIF_GEN_TIMEOUT_MS);
-	netro_free_bitmap_area(&ndev->mtt_map, nmr->base_mtt, nmr->num_mtt);
+	__crdma_no_param_cmd(dev, CRDMA_CMD_MPT_DESTROY, 0,
+			nmr->mpt_index, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+	crdma_free_bitmap_area(&dev->mtt_map, nmr->base_mtt, nmr->num_mtt);
 	return;
 }
 
-int netro_mpt_query_cmd(struct netro_ibdev *ndev, u32 mpt_index,
-			struct netro_mpt_params *param)
+int crdma_mpt_query_cmd(struct crdma_ibdev *dev, u32 mpt_index,
+			struct crdma_mpt_params *param)
 {
-	struct netro_cmd_mbox out_mbox;
-	struct netro_cmd cmd;
+	struct crdma_cmd_mbox out_mbox;
+	struct crdma_cmd cmd;
 	int status;
 
 	memset(&cmd, 0, sizeof(cmd));
-	if (netro_init_mailbox(ndev, &out_mbox))
+	if (crdma_init_mailbox(dev, &out_mbox))
 		return -1;
 
-	cmd.opcode = NETRO_CMD_MPT_QUERY;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_MPT_QUERY;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.output_param = out_mbox.dma_addr;
 	cmd.input_mod = mpt_index;
 
-	status = netro_cmd(ndev, &cmd);
-	if (status == NETRO_STS_OK) {
+	status = crdma_cmd(dev, &cmd);
+	if (status == CRDMA_STS_OK) {
 		memcpy(param, out_mbox.buf, sizeof(*param));
-		netro_debug("MPT_QUERY returned values (LE)\n");
+		crdma_debug("MPT_QUERY returned values (LE)\n");
 		pr_debug("         Key: 0x%08X\n", param->key);
 		pr_debug("   Flags/PDN: 0x%08X\n", param->flags_pd);
 		pr_debug("   IO Addr_h: 0x%08X\n", param->io_addr_h);
@@ -2231,41 +2232,41 @@ int netro_mpt_query_cmd(struct netro_ibdev *ndev, u32 mpt_index,
 		pr_debug("   MTT Index: 0x%08X\n", param->mtt_index);
 		pr_debug("FRMR Entries: 0x%08X\n", param->frmr_entries);
 
-		netro_info("MPT_QUERY Output Mailbox\n");
+		crdma_info("MPT_QUERY Output Mailbox\n");
 		print_hex_dump(KERN_DEBUG, "OUT:",
 				DUMP_PREFIX_OFFSET, 8, 1, out_mbox.buf, 32, 0);
 	}
-	netro_cleanup_mailbox(ndev, &out_mbox);
+	crdma_cleanup_mailbox(dev, &out_mbox);
 	return status;
 }
 
-int netro_write_sgid_table(struct netro_ibdev *ndev,
+int crdma_write_sgid_table(struct crdma_ibdev *dev,
 			int port_num, int num_entries)
 {
-	struct netro_gid_entry_param *param;
-	struct netro_gid_entry *entry;
-	struct netro_cmd_mbox in_mbox;
-	struct netro_cmd cmd;
+	struct crdma_gid_entry_param *param;
+	struct crdma_gid_entry *entry;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
 	unsigned long flags;
 	u32 port_gid_cnt;
 	int i;
 	int status;
 
-	netro_debug("port_num %d, entries %d\n", port_num, num_entries);
+	crdma_debug("port_num %d, entries %d\n", port_num, num_entries);
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -1;
 
-	if ((num_entries * sizeof(*param)) > NETRO_CMDIF_MBOX_SIZE) {
-		netro_warn("GID table size of %d entries too large\n",
+	if ((num_entries * sizeof(*param)) > CRDMA_CMDIF_MBOX_SIZE) {
+		crdma_warn("GID table size of %d entries too large\n",
 				num_entries);
 		return -1;
 	}
 
 	param = in_mbox.buf;
-	entry = ndev->port[port_num].gid_table_entry;
+	entry = dev->port.gid_table_entry;
 
-	spin_lock_irqsave(&ndev->port[port_num].table_lock, flags);
+	spin_lock_irqsave(&dev->port.table_lock, flags);
 	for (i = 0; i < num_entries; i++, entry++, param++) {
 		param->gid_type = entry->type;
 		if (entry->valid)
@@ -2296,67 +2297,67 @@ int netro_write_sgid_table(struct netro_ibdev *ndev,
 #error Host endianness not defined
 #endif
 	}
-	spin_unlock_irqrestore(&ndev->port[port_num].table_lock, flags);
+	spin_unlock_irqrestore(&dev->port.table_lock, flags);
 
-	port_gid_cnt = (port_num << NETRO_SGID_PARAM_PORT_NUM_SHIFT) |
-			((num_entries & NETRO_SGID_PARAM_COUNT_MASK) <<
-			 NETRO_SGID_PARAM_COUNT_SHIFT);
-	netro_debug("SET_PORT_GID_TABLE port_gid_cnt 0x%08X (LE)\n",
+	port_gid_cnt = (port_num << CRDMA_SGID_PARAM_PORT_NUM_SHIFT) |
+			((num_entries & CRDMA_SGID_PARAM_COUNT_MASK) <<
+			 CRDMA_SGID_PARAM_COUNT_SHIFT);
+	crdma_debug("SET_PORT_GID_TABLE port_gid_cnt 0x%08X (LE)\n",
 			cpu_to_le32(port_gid_cnt));
-	netro_debug("SET_PORT_GID_TABLE input entries\n");
+	crdma_debug("SET_PORT_GID_TABLE input entries\n");
 	print_hex_dump(KERN_DEBUG, "IN:",
 			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf,
 			num_entries * 20, 0);
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_SET_PORT_GID_TABLE;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_SET_PORT_GID_TABLE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
 	cmd.input_mod = port_gid_cnt;
-	status = netro_cmd(ndev, &cmd);
-	netro_cleanup_mailbox(ndev, &in_mbox);
+	status = crdma_cmd(dev, &cmd);
+	crdma_cleanup_mailbox(dev, &in_mbox);
 
 	return status;
 }
 
-int netro_read_sgid_table(struct netro_ibdev *ndev, int port_num,
-		struct netro_gid_entry *entries, int num_entries)
+int crdma_read_sgid_table(struct crdma_ibdev *dev, int port_num,
+		struct crdma_gid_entry *entries, int num_entries)
 {
-	struct netro_gid_entry_param *param;
-	struct netro_gid_entry *entry;
-	struct netro_cmd_mbox out_mbox;
-	struct netro_cmd cmd;
+	struct crdma_gid_entry_param *param;
+	struct crdma_gid_entry *entry;
+	struct crdma_cmd_mbox out_mbox;
+	struct crdma_cmd cmd;
 	u32 port_gid_cnt;
 	int i;
 	int status;
 
-	netro_debug("phys port_num %d, entries %d\n", port_num, num_entries);
+	crdma_debug("phys port_num %d, entries %d\n", port_num, num_entries);
 
-	if (netro_init_mailbox(ndev, &out_mbox))
+	if (crdma_init_mailbox(dev, &out_mbox))
 		return -1;
 
-	if ((num_entries * sizeof(*param)) > NETRO_CMDIF_MBOX_SIZE) {
-		netro_warn("GID table size of %d entries too large\n",
+	if ((num_entries * sizeof(*param)) > CRDMA_CMDIF_MBOX_SIZE) {
+		crdma_warn("GID table size of %d entries too large\n",
 				num_entries);
 		return -1;
 	}
 
-	port_gid_cnt = (port_num << NETRO_SGID_PARAM_PORT_NUM_SHIFT) |
-			((num_entries & NETRO_SGID_PARAM_COUNT_MASK) <<
-			 NETRO_SGID_PARAM_COUNT_SHIFT);
-	netro_debug("GET_PORT_GID_TABLE port_gid_cnt 0x%08X (LE)\n",
+	port_gid_cnt = (port_num << CRDMA_SGID_PARAM_PORT_NUM_SHIFT) |
+			((num_entries & CRDMA_SGID_PARAM_COUNT_MASK) <<
+			 CRDMA_SGID_PARAM_COUNT_SHIFT);
+	crdma_debug("GET_PORT_GID_TABLE port_gid_cnt 0x%08X (LE)\n",
 			cpu_to_le32(port_gid_cnt));
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_GET_PORT_GID_TABLE;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_GET_PORT_GID_TABLE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.output_param = out_mbox.dma_addr;
 	cmd.input_mod = port_gid_cnt;
-	status = netro_cmd(ndev, &cmd);
-	if (status != NETRO_STS_OK)
+	status = crdma_cmd(dev, &cmd);
+	if (status != CRDMA_STS_OK)
 		goto free_mbox;
 
-	netro_debug("GET_PORT_GID_TABLE num output entries\n");
+	crdma_debug("GET_PORT_GID_TABLE num output entries\n");
 	print_hex_dump(KERN_DEBUG, "OUT:",
 			DUMP_PREFIX_OFFSET, 8, 1, out_mbox.buf,
 			num_entries * 20, 0);
@@ -2388,37 +2389,37 @@ int netro_read_sgid_table(struct netro_ibdev *ndev, int port_num,
 	}
 
 free_mbox:
-	netro_cleanup_mailbox(ndev, &out_mbox);
+	crdma_cleanup_mailbox(dev, &out_mbox);
 	return status;
 }
 
-int netro_write_smac_table(struct netro_ibdev *ndev,
+int crdma_write_smac_table(struct crdma_ibdev *dev,
 			int port_num, int num_entries)
 {
-	struct netro_mac_entry_param *param;
-	struct netro_mac_entry *entry;
-	struct netro_cmd_mbox in_mbox;
-	struct netro_cmd cmd;
+	struct crdma_mac_entry_param *param;
+	struct crdma_mac_entry *entry;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
 	unsigned long flags;
 	u32 port_mac_cnt;
 	int i;
 	int status;
 
-	netro_debug("phys port_num %d, entries %d\n", port_num, num_entries);
+	crdma_debug("phys port_num %d, entries %d\n", port_num, num_entries);
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -1;
 
-	if ((num_entries * sizeof(*param)) > NETRO_CMDIF_MBOX_SIZE) {
-		netro_warn("MAC table size of %d entries too large\n",
+	if ((num_entries * sizeof(*param)) > CRDMA_CMDIF_MBOX_SIZE) {
+		crdma_warn("MAC table size of %d entries too large\n",
 				num_entries);
 		return -1;
 	}
 
 	param = in_mbox.buf;
-	entry = ndev->port[port_num].mac_table_entry;
+	entry = dev->port.mac_table_entry;
 
-	spin_lock_irqsave(&ndev->port[port_num].table_lock, flags);
+	spin_lock_irqsave(&dev->port.table_lock, flags);
 	for (i = 0; i < num_entries; i++, entry++, param++) {
 		if (entry->ref_cnt > 0) {
 			param->valid = 1;
@@ -2434,25 +2435,25 @@ int netro_write_smac_table(struct netro_ibdev *ndev,
 			param->mac_l[3] = entry->mac[2];
 		}
 	}
-	spin_unlock_irqrestore(&ndev->port[port_num].table_lock, flags);
+	spin_unlock_irqrestore(&dev->port.table_lock, flags);
 
-	port_mac_cnt = (port_num << NETRO_SMAC_PARAM_PORT_NUM_SHIFT) |
-			((num_entries & NETRO_SMAC_PARAM_COUNT_MASK) <<
-			 NETRO_SMAC_PARAM_COUNT_SHIFT);
-	netro_debug("SET_PORT_MAC_TABLE port_mac_cnt 0x%08X (LE)\n",
+	port_mac_cnt = (port_num << CRDMA_SMAC_PARAM_PORT_NUM_SHIFT) |
+			((num_entries & CRDMA_SMAC_PARAM_COUNT_MASK) <<
+			 CRDMA_SMAC_PARAM_COUNT_SHIFT);
+	crdma_debug("SET_PORT_MAC_TABLE port_mac_cnt 0x%08X (LE)\n",
 			cpu_to_le32(port_mac_cnt));
-	netro_debug("SET_PORT_MAC_TABLE input entries\n");
+	crdma_debug("SET_PORT_MAC_TABLE input entries\n");
 	print_hex_dump(KERN_DEBUG, "IN:",
 			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf,
 			num_entries * 8, 0);
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.opcode = NETRO_CMD_SET_PORT_MAC_TABLE;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.opcode = CRDMA_CMD_SET_PORT_MAC_TABLE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
 	cmd.input_mod = port_mac_cnt;
-	status = netro_cmd(ndev, &cmd);
-	netro_cleanup_mailbox(ndev, &in_mbox);
+	status = crdma_cmd(dev, &cmd);
+	crdma_cleanup_mailbox(dev, &in_mbox);
 
 	return status;
 }
@@ -2465,14 +2466,14 @@ struct eqe_param {
 	u8 event_type;
 };
 
-int netro_test_eq_enqueue(struct netro_ibdev *ndev, int eqn, int cnt)
+int crdma_test_eq_enqueue(struct crdma_ibdev *dev, int eqn, int cnt)
 {
-	struct netro_cmd_mbox in_mbox;
+	struct crdma_cmd_mbox in_mbox;
 	struct eqe_param *param;
-	struct netro_cmd cmd;
+	struct crdma_cmd cmd;
 	int status;
 
-	if (netro_init_mailbox(ndev, &in_mbox))
+	if (crdma_init_mailbox(dev, &in_mbox))
 		return -1;
 
 	param = in_mbox.buf;
@@ -2486,40 +2487,40 @@ int netro_test_eq_enqueue(struct netro_ibdev *ndev, int eqn, int cnt)
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = 205;
-	cmd.timeout = NETRO_CMDIF_GEN_TIMEOUT_MS;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
 	cmd.input_mod = eqn;
-	status = netro_cmd(ndev, &cmd);
+	status = crdma_cmd(dev, &cmd);
 
-	netro_cleanup_mailbox(ndev, &in_mbox);
-	if (status == NETRO_STS_OK)
-		netro_interrupt(0, &ndev->eq_table.eq[eqn]);
+	crdma_cleanup_mailbox(dev, &in_mbox);
+	if (status == CRDMA_STS_OK)
+		crdma_interrupt(0, &dev->eq_table.eq[eqn]);
 
 	return status;
 }
 
-int netro_init_cmdif(struct netro_ibdev *ndev)
+int crdma_init_cmdif(struct crdma_ibdev *dev)
 {
-	mutex_init(&ndev->cmdif_mutex);
-	sema_init(&ndev->poll_sem, 1);
+	mutex_init(&dev->cmdif_mutex);
+	sema_init(&dev->poll_sem, 1);
 
-	ndev->toggle = 1;
-	ndev->token = 1;
-	ndev->use_event_cmds = false;
-	ndev->max_cmds_out = NETRO_CMDIF_DRIVER_MAX_CMDS;
+	dev->toggle = 1;
+	dev->token = 1;
+	dev->use_event_cmds = false;
+	dev->max_cmds_out = CRDMA_CMDIF_DRIVER_MAX_CMDS;
 
-	ndev->mbox_pool = dma_pool_create("netro_cmd", &ndev->nfp_info->pdev->dev,
-			NETRO_CMDIF_MBOX_SIZE, NETRO_CMDIF_MBOX_SIZE, 0);
-	if (!ndev->mbox_pool) {
-		netro_dev_info(ndev, "RoCEv2 command mailbox pool create"
+	dev->mbox_pool = dma_pool_create("crdma_cmd", &dev->nfp_info->pdev->dev,
+			CRDMA_CMDIF_MBOX_SIZE, CRDMA_CMDIF_MBOX_SIZE, 0);
+	if (!dev->mbox_pool) {
+		crdma_dev_info(dev, "RoCEv2 command mailbox pool create"
 			       " failure\n");
 		return -ENOMEM;
 	}
 	return 0;
 }
 
-void netro_cleanup_cmdif(struct netro_ibdev *ndev)
+void crdma_cleanup_cmdif(struct crdma_ibdev *dev)
 {
-	dma_pool_destroy(ndev->mbox_pool);
+	dma_pool_destroy(dev->mbox_pool);
 	return;
 }

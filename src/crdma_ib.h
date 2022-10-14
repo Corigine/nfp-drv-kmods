@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, Netronome, Inc.  All rights reserved.
+ * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -31,10 +32,10 @@
  */
 
 /*
- * netro_ib.h - Provides Netro RoCEv2 InfiniBand specific details.
+ * crdma_ib.h - Provides Corigine RoCEv2 InfiniBand specific details.
  */
-#ifndef NETRO_IB_H
-#define NETRO_IB_H
+#ifndef CRDMA_IB_H
+#define CRDMA_IB_H
 
 #include <linux/compiler.h>
 #include <linux/list.h>
@@ -46,27 +47,27 @@
 #include <rdma/ib_umem.h>
 
 #include "nfp_roce.h"
-#include "netro_abi.h"
-#include "netro_ucif.h"
-#include "netro_util.h"
+#include "crdma_abi.h"
+#include "crdma_ucif.h"
+#include "crdma_util.h"
 
-#define NETRO_IB_HCA_DRV_NAME		"netro"
-#define NETRO_IB_NODE_DESC		"Netronome NFP RoCEv2 HCA"
+#define CRDMA_IB_HCA_DRV_NAME		"crdma"
+#define CRDMA_IB_NODE_DESC		"Corigine NFP RoCEv2 HCA"
 
-/* Internal netro provider ABI between user library and kernel driver */
-#define NETRO_UVERBS_ABI_VERSION	1
+/* Internal crdma provider ABI between user library and kernel driver */
+#define CRDMA_UVERBS_ABI_VERSION	1
 
-#define NETRO_DETAIL_INFO_DEBUG_FLAG 0
+#define CRDMA_DETAIL_INFO_DEBUG_FLAG 0
 
 /*
  * Maximum limits placed on IB resources by the driver.
  */
 enum {
-	NETRO_IB_MAX_PD		= 1 << 16,
-	NETRO_IB_MAX_AH		= 1 << 20,
-	NETRO_IB_MAX_PKEY	= 1,
-	NETRO_IB_MAX_GID_TABLE_SIZE = 128,
-	NETRO_IB_MAX_MAC_TABLE_SIZE = 8
+	CRDMA_IB_MAX_PD		= 1 << 16,
+	CRDMA_IB_MAX_AH		= 1 << 20,
+	CRDMA_IB_MAX_PKEY	= 1,
+	CRDMA_IB_MAX_GID_TABLE_SIZE = 128,
+	CRDMA_IB_MAX_MAC_TABLE_SIZE = 8
 };
 
 /*
@@ -82,8 +83,8 @@ enum {
  * that both types indicate RoCEv2.
  */
 enum {
-       NETRO_ROCE_V2_IPV4_GID_TYPE     = 1,
-       NETRO_ROCE_V2_IPV6_GID_TYPE     = 2
+       CRDMA_ROCE_V2_IPV4_GID_TYPE     = 1,
+       CRDMA_ROCE_V2_IPV6_GID_TYPE     = 2
 };
 
 /*
@@ -91,11 +92,11 @@ enum {
  * for the HCA that are passed to the driver as part of the HCA initialization
  * sequence.
  */
-struct netro_hca_cap {
+struct crdma_hca_cap {
 	/* Keep common IB core attributes directly in common struct */
 	struct ib_device_attr	ib;
 
-	/* Netro specific limits and attributes */
+	/* Corigine specific limits and attributes */
 	u64		build_id;
 	u32		board_id;
 	u16		uc_maj_rev;
@@ -125,48 +126,47 @@ struct netro_hca_cap {
 };
 
 enum {
-	NETRO_MAX_PORTS			= 2,
-	NETRO_MAX_MSG_SIZE		= 0x80000000,
-	NETRO_EQ_ENTRIES_LOG2		= 11,
+	CRDMA_MAX_MSG_SIZE		= 0x80000000,
+	CRDMA_EQ_ENTRIES_LOG2		= 11,
 
 	/* MTT page sizes range expressed log2 values 4K to 16MB. */
-	NETRO_MTT_MIN_PAGESIZE_LOG2	= 12,
-	NETRO_MTT_MAX_PAGESIZE_LOG2	= 24,
-	NETRO_MTT_MAX_PAGESIZE      = 1 << NETRO_MTT_MAX_PAGESIZE_LOG2
+	CRDMA_MTT_MIN_PAGESIZE_LOG2	= 12,
+	CRDMA_MTT_MAX_PAGESIZE_LOG2	= 24,
+	CRDMA_MTT_MAX_PAGESIZE          = 1 << CRDMA_MTT_MAX_PAGESIZE_LOG2
 };
 
-struct netro_mem;
+struct crdma_mem;
 
-struct netro_uar {
+struct crdma_uar {
 	int	index;
 	void __iomem *map;
 };
 
 /*
- * The following provide the netro specific data associated with
+ * The following provide the crdma specific data associated with
  * the verb allocated objects.
  */
-struct netro_ucontext {
+struct crdma_ucontext {
 	struct ib_ucontext	ib_uctxt;
-	struct netro_uar	uar;		/* User Access Region */
+	struct crdma_uar	uar;		/* User Access Region */
 
 	/* Memory pending mmap into the user contexts address space */
 	struct list_head	mmap_pending;
 	struct mutex		mmap_pending_lock;
 };
 
-struct netro_pd {
+struct crdma_pd {
 	struct ib_pd		ib_pd;
 	u32			pd_index;	/* Unique identifier */
 };
 
-struct netro_ah {
+struct crdma_ah {
 	struct ib_ah            ib_ah;
-	struct netro_av         av;
+	struct crdma_av         av;
 	u8                      smac[6];
 };
 
-struct netro_cq {
+struct crdma_cq {
 	struct ib_cq             ib_cq;
 	spinlock_t               lock;
 
@@ -175,8 +175,8 @@ struct netro_cq {
 	u32                      eq_num;         /* EQ used for notifications */
 	struct completion        free;
 
-	struct netro_mem        *mem;            /* CQ memory */
-	struct netro_cqe        *cqe_buf;        /* vaddr for kernel of above */
+	struct crdma_mem        *mem;            /* CQ memory */
+	struct crdma_cqe        *cqe_buf;        /* vaddr for kernel of above */
 
 	int                      arm_seqn;       /* Rolling sequence number */
 	u32                      num_cqe;        /* Power of 2 */
@@ -193,16 +193,16 @@ struct netro_cq {
 	 * last doorbell, providing the physical addresses of these
 	 * values to microcode.
 	 */
-	struct netro_ci_mbox	*ci_mbox;
+	struct crdma_ci_mbox	*ci_mbox;
 	dma_addr_t               ci_mbox_paddr;
 };
 
-struct netro_srq {
+struct crdma_srq {
 	struct ib_srq		ib_srq;
 	u32			srq_index;	/* Assigned control object */
 };
 
-struct netro_hw_workq {
+struct crdma_hw_workq {
 	spinlock_t              lock;
 	void                    *buf;
 	u64                     *wrid_map;      /* WQE index to WRID map */
@@ -216,7 +216,7 @@ struct netro_hw_workq {
 	u32                     mask;           /* Num WQE - 1 */
 };
 
-struct netro_qp {
+struct crdma_qp {
 	struct ib_qp		ib_qp;		/* IB QPN stored here */
 	struct mutex		mutex;
 
@@ -244,14 +244,14 @@ struct netro_qp {
 	struct completion	free;
 
 	/* Hardware work queue DMA memory (for SQ and RQ) */
-	struct netro_mem	*mem;
+	struct crdma_mem	*mem;
 	u32			sq_offset;
 	u32			rq_offset;
 
 #if 1
 	/* Work queues, RQ only valid if QP is not attached to SRQ */
-	struct netro_hw_workq   sq;
-	struct netro_hw_workq   rq;
+	struct crdma_hw_workq   sq;
+	struct crdma_hw_workq   rq;
 #else
 
 	/* SQ control */
@@ -277,7 +277,7 @@ struct netro_qp {
 #endif
 };
 
-struct netro_mr {
+struct crdma_mr {
 	struct ib_mr		ib_mr;
 
 	 /* User page information, or NULL if DMA memory region */
@@ -312,7 +312,7 @@ struct netro_mr {
 };
 
 /* Software formatted copy of microcode GID table entries */
-struct netro_gid_entry {
+struct crdma_gid_entry {
        u8              type;
        u8              valid;
        u8              rsvd[2];
@@ -320,12 +320,12 @@ struct netro_gid_entry {
 };
 
 /* Software formatted copy of microcode SMAC table entries */
-struct netro_mac_entry {
+struct crdma_mac_entry {
        int             ref_cnt;
        u8              mac[ETH_ALEN];
 };
 
-struct netro_port {
+struct crdma_port {
 	struct net_device       *netdev;
 	u8                      mac[ETH_ALEN];
 
@@ -346,8 +346,8 @@ struct netro_port {
 		* exist.
 		*/
 	struct delayed_work     qp1_cq_dwork;
-	struct netro_cq         *qp1_send_ncq;
-	struct netro_cq         *qp1_recv_ncq;
+	struct crdma_cq         *qp1_send_ncq;
+	struct crdma_cq         *qp1_recv_ncq;
 
 	/*
 		* Ports in host memory Ethernet source addressing information.
@@ -359,12 +359,12 @@ struct netro_port {
 		*/
 	spinlock_t              table_lock;
 	int                     gid_table_size;
-	struct netro_gid_entry  gid_table_entry[NETRO_IB_MAX_GID_TABLE_SIZE];
+	struct crdma_gid_entry  gid_table_entry[CRDMA_IB_MAX_GID_TABLE_SIZE];
 	int                     mac_table_size;
-	struct netro_mac_entry  mac_table_entry[NETRO_IB_MAX_MAC_TABLE_SIZE];
+	struct crdma_mac_entry  mac_table_entry[CRDMA_IB_MAX_MAC_TABLE_SIZE];
 };
 
-struct netro_ibdev {
+struct crdma_ibdev {
 	struct ib_device	ibdev;
 
 	/*
@@ -382,12 +382,12 @@ struct netro_ibdev {
 	spinlock_t		ctxt_lock;
 
 	/* Driver resource allocation maps/tables */
-	struct netro_eq_table	eq_table;
-	struct netro_bitmap	mpt_map;
-	struct netro_bitmap	mtt_map;
-	struct netro_bitmap	uar_map;
-	struct netro_bitmap	pd_map;
-	struct netro_bitmap	qp_map;
+	struct crdma_eq_table	eq_table;
+	struct crdma_bitmap	mpt_map;
+	struct crdma_bitmap	mtt_map;
+	struct crdma_bitmap	uar_map;
+	struct crdma_bitmap	pd_map;
+	struct crdma_bitmap	qp_map;
 	spinlock_t		qp_lock;
 	struct radix_tree_root	qp_tree;
 
@@ -396,12 +396,12 @@ struct netro_ibdev {
 	 * and allocating a table for CQN to CQ map; we will change this
 	 * to be a Radix Tree or something with a smaller footprint later.
 	 */
-	struct netro_bitmap	cq_map;
-	struct netro_cq		**cq_table;
+	struct crdma_bitmap	cq_map;
+	struct crdma_cq		**cq_table;
 
 	/* NFP allocated resources and microcode capabilities/attributes */
 	struct nfp_roce_info	*nfp_info;
-	struct netro_hca_cap	cap;
+	struct crdma_hca_cap	cap;
 
 	/*
 	 * Microcode command/status interface register located in NFP
@@ -430,7 +430,7 @@ struct netro_ibdev {
 
 	spinlock_t		cmd_q_lock;
 	u16			token;
-	struct netro_event_cmd	*cmd_q;
+	struct crdma_event_cmd	*cmd_q;
 	int			cmd_q_free;
 
 	/*
@@ -445,8 +445,8 @@ struct netro_ibdev {
 	 * This is because some implementations require unique pages;
 	 * but it is entirely possible they both point to the same page.
 	 */
-	struct netro_uar	priv_eq_uar;	/* Kernel EQ doorbells */
-	struct netro_uar	priv_uar;	/* Kernel SQ/CQ UAR */
+	struct crdma_uar	priv_eq_uar;	/* Kernel EQ doorbells */
+	struct crdma_uar	priv_uar;	/* Kernel SQ/CQ UAR */
 	spinlock_t              priv_uar_lock;  /* For CQ on 32-bit systems */
 
 	int			numa_node;
@@ -455,138 +455,138 @@ struct netro_ibdev {
 	 * Microcode backing store memory points to blocks of memory
 	 * dedicated for use by microcode.
 	 */
-	struct netro_mem	*bs_mem;
+	struct crdma_mem	*bs_mem;
 
 	/* Linkage back to net_device notification chain */
 	struct notifier_block   nb_inet;
 	struct notifier_block   nb_inet6;
 
-	struct netro_port       port[NETRO_MAX_PORTS];
+	struct crdma_port       port;
 };
 
 /**
- * Return Netronome RoCE device from IB device.
+ * Return CRDMA RoCE device from IB device.
  *
  * @ibdev: The IB device returned from ib_alloc_device().
  *
- * Returns the address of the Netro RoCE device.
+ * Returns the address of the CRDMA RoCE device.
  */
-static inline struct netro_ibdev *to_netro_ibdev(struct ib_device *ibdev)
+static inline struct crdma_ibdev *to_crdma_ibdev(struct ib_device *ibdev)
 {
-	return container_of(ibdev, struct netro_ibdev, ibdev);
+	return container_of(ibdev, struct crdma_ibdev, ibdev);
 }
 
 /**
- * Return Netronome RoCE user context from IB verbs user context.
+ * Return CRDMA RoCE user context from IB verbs user context.
  *
  * @ib_uctxt: The IB user context.
  *
- * Returns the address of the Netro user context.
+ * Returns the address of the CRDMA user context.
  */
-static inline struct netro_ucontext *to_netro_uctxt(
+static inline struct crdma_ucontext *to_crdma_uctxt(
 			struct ib_ucontext *ib_uctxt)
 {
-	return container_of(ib_uctxt, struct netro_ucontext, ib_uctxt);
+	return container_of(ib_uctxt, struct crdma_ucontext, ib_uctxt);
 }
 
 /**
- * Return Netronome RoCE protection domain from IB verbs protection domain.
+ * Return CRDMA RoCE protection domain from IB verbs protection domain.
  *
  * @ib_pd: The IB protection domain.
  *
- * Returns the address of the Netro private protection domain.
+ * Returns the address of the CRDMA private protection domain.
  */
-static inline struct netro_pd *to_netro_pd(struct ib_pd *ib_pd)
+static inline struct crdma_pd *to_crdma_pd(struct ib_pd *ib_pd)
 {
-	return container_of(ib_pd, struct netro_pd, ib_pd);
+	return container_of(ib_pd, struct crdma_pd, ib_pd);
 }
 
 /**
- * Return Netronome RoCE CQ from IB verbs completion queue.
+ * Return CRDMA RoCE CQ from IB verbs completion queue.
  *
  * @ib_cq: The IB completion queue.
  *
- * Returns the address of the Netro private completion queue.
+ * Returns the address of the CRDMA private completion queue.
  */
-static inline struct netro_cq *to_netro_cq(struct ib_cq *ib_cq)
+static inline struct crdma_cq *to_crdma_cq(struct ib_cq *ib_cq)
 {
-	return container_of(ib_cq, struct netro_cq, ib_cq);
+	return container_of(ib_cq, struct crdma_cq, ib_cq);
 }
 
 /**
- * Return Netronome RoCE SRQ from IB verbs shared receive queue.
+ * Return CRDMA RoCE SRQ from IB verbs shared receive queue.
  *
  * @ib_srq: The IB shared receive queue.
  *
- * Returns the address of the Netro private shared receive queue.
+ * Returns the address of the CRDMA private shared receive queue.
  */
-static inline struct netro_srq *to_netro_srq(struct ib_srq *ib_srq)
+static inline struct crdma_srq *to_crdma_srq(struct ib_srq *ib_srq)
 {
-	return container_of(ib_srq, struct netro_srq, ib_srq);
+	return container_of(ib_srq, struct crdma_srq, ib_srq);
 }
 
 /**
- * Return Netronome RoCE QP from IB verbs queue pair.
+ * Return CRDMA RoCE QP from IB verbs queue pair.
  *
  * @ib_qp: The IB queue pair.
  *
- * Returns the address of the Netro private queue pair.
+ * Returns the address of the CRDMA private queue pair.
  */
-static inline struct netro_qp *to_netro_qp(struct ib_qp *ib_qp)
+static inline struct crdma_qp *to_crdma_qp(struct ib_qp *ib_qp)
 {
-	return container_of(ib_qp, struct netro_qp, ib_qp);
+	return container_of(ib_qp, struct crdma_qp, ib_qp);
 }
 
 /**
- * Return Netronome RoCE memory region from IB verbs memory region.
+ * Return CRDMA RoCE memory region from IB verbs memory region.
  *
  * @ib_mr: The IB memory region.
  *
- * Returns the address of the Netro private memory region.
+ * Returns the address of the CRDMA private memory region.
  */
-static inline struct netro_mr *to_netro_mr(struct ib_mr *ib_mr)
+static inline struct crdma_mr *to_crdma_mr(struct ib_mr *ib_mr)
 {
-	return container_of(ib_mr, struct netro_mr, ib_mr);
+	return container_of(ib_mr, struct crdma_mr, ib_mr);
 }
 
  /**
- * Return Netronome RoCE address handle from IB address handle.
+ * Return CRDMA RoCE address handle from IB address handle.
  *
  * @ib_ah: The IB address handle.
  *
- * Returns the address of the Netro private address handle structure.
+ * Returns the address of the CRDMA private address handle structure.
  */
-static inline struct netro_ah *to_netro_ah(struct ib_ah *ib_ah)
+static inline struct crdma_ah *to_crdma_ah(struct ib_ah *ib_ah)
 {
-	return container_of(ib_ah, struct netro_ah, ib_ah);
+	return container_of(ib_ah, struct crdma_ah, ib_ah);
 }
 
 /* Add minimal extra detail to pr_xxx() and dev_xxx() type calls */
-#define netro_err(format, ...)				\
+#define crdma_err(format, ...)				\
 	pr_err("%s:%d:(pid %d): " format,			\
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 
-#define netro_warn(format, ...)				\
+#define crdma_warn(format, ...)				\
 	pr_warn("%s:%d:(pid %d): " format,			\
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 
-#define netro_info(format, ...)				\
+#define crdma_info(format, ...)				\
 	pr_info("%s:%d:(pid %d): " format,			\
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 
-#define netro_debug(format, ...)				\
+#define crdma_debug(format, ...)				\
 	pr_debug("%s:%d:(pid %d): " format,			\
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 
-#define netro_dev_err(ndev, format, ...)				\
-	dev_err(&(ndev)->nfp_info->pdev->dev, "%s:%d:(pid %d): " format, \
+#define crdma_dev_err(crdma_dev, format, ...)				\
+	dev_err(&(crdma_dev)->nfp_info->pdev->dev, "%s:%d:(pid %d): " format, \
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 
-#define netro_dev_warn(ndev, format, ...)				\
-	dev_warn(&(ndev)->nfp_info->pdev->dev, "%s:%d:(pid %d): " format, \
+#define crdma_dev_warn(crdma_dev, format, ...)				\
+	dev_warn(&(crdma_dev)->nfp_info->pdev->dev, "%s:%d:(pid %d): " format, \
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 
-#define netro_dev_info(ndev, format, ...)				\
-	dev_info(&(ndev)->nfp_info->pdev->dev, "%s:%d:(pid %d): " format, \
+#define crdma_dev_info(crdma_dev, format, ...)				\
+	dev_info(&(crdma_dev)->nfp_info->pdev->dev, "%s:%d:(pid %d): " format, \
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
-#endif /* NETRO_IB_H */
+#endif /* CRDMA_IB_H */
