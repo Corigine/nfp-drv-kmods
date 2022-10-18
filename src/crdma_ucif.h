@@ -847,10 +847,10 @@ int crdma_cq_create_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq,
 
 /**
  * Resize a completion queue.
- * 
+ *
  * @dev: RoCE IB device.
  * @cq: The driver CQ object.
- * 
+ *
  * Returns 0 on success, otherwise an error.
 */
 int crdma_cq_resize_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq);
@@ -1037,6 +1037,7 @@ struct crdma_mpt_params {
 	__le32		page_info;
 	__le32		mtt_index;
 	__le32		frmr_entries;
+	__le32		reserved;
 } __packed;
 
 /*

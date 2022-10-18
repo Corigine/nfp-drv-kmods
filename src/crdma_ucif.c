@@ -106,7 +106,7 @@ static int crdma_qp_modify_opcode_mod(enum ib_qp_state cur_state,
 	return modifier;
 }
 
-/** 
+/**
  * Map microcode command opcode to string.
  *
  * @opcode: The command opcode.
@@ -250,7 +250,7 @@ const char *crdma_event_to_str(u8 event_type)
  *
  * @dev: RoCE IB device.
  * @cmd: The microcode interface command parameters.
- * 
+ *
  * Returns 0 if command completed; otherwise error code.
  */
 static int crdma_polled_cmd(struct crdma_ibdev *dev, struct crdma_cmd *cmd)
@@ -2167,6 +2167,7 @@ static int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *nmr)
 	param->page_info = cpu_to_le32(page_info);
 	param->mtt_index = cpu_to_le32(nmr->base_mtt);
 	param->frmr_entries = 0;
+	param->reserved = 0;
 
 	crdma_debug("MPT_CREATE input values (LE)\n");
 	pr_debug("         Key: 0x%08X\n", param->key);
@@ -2177,6 +2178,7 @@ static int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *nmr)
 	pr_debug("Pg_Info_Word: 0x%08X\n", param->page_info);
 	pr_debug("   MTT Index: 0x%08X\n", param->mtt_index);
 	pr_debug("FRMR Entries: 0x%08X\n", param->frmr_entries);
+	pr_debug("    reserved: 0x%08X\n", param->reserved);
 
 	crdma_info("MPT_CREATE Input Mailbox\n");
 	print_hex_dump(KERN_DEBUG, "IN:",
