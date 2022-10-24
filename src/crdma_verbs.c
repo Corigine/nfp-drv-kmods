@@ -710,11 +710,7 @@ static int crdma_alloc_ucontext(struct ib_ucontext *ib_uctxt,
 	 */
 	resp.max_qp = dev->cap.ib.max_qp - dev->cap.rsvd_qp;
 
-#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
 	crdma_uctxt = container_of(ib_uctxt, struct crdma_ucontext, ib_uctxt);
-#else
-	crdma_uctxt = kmalloc(sizeof(*crdma_uctxt), GFP_KERNEL);
-#endif
 	if (!crdma_uctxt)
 		return -ENOMEM;
 
@@ -727,7 +723,7 @@ static int crdma_alloc_ucontext(struct ib_ucontext *ib_uctxt,
 
 	err = crdma_alloc_uar(dev, &crdma_uctxt->uar);
 	if (err)
-		goto free_uctxt;
+		return err;
 
 	err = ib_copy_to_udata(udata, &resp, sizeof(resp));
 	if (err)
@@ -737,8 +733,6 @@ static int crdma_alloc_ucontext(struct ib_ucontext *ib_uctxt,
 
 free_uar:
 	crdma_free_uar(dev, &crdma_uctxt->uar);
-free_uctxt:
-	kfree(crdma_uctxt);
 	return err;
 }
 
@@ -887,8 +881,7 @@ static int crdma_alloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
 	crdma_info("crdma_alloc_pd\n");
 	pd->pd_index = crdma_alloc_bitmap_index(&dev->pd_map);
 	if (pd->pd_index < 0) {
-		err = -ENOMEM;
-		goto free_mem;
+		return -ENOMEM;
 	}
 
 	crdma_info("PD Index %d\n", pd->pd_index);
@@ -901,7 +894,6 @@ static int crdma_alloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
 
 free_pd:
 	crdma_free_bitmap_index(&dev->pd_map, pd->pd_index);
-free_mem:
 	return err;
 }
 #else
@@ -1816,18 +1808,15 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	}
 
 #if (VER_NON_RHEL_GE(5,6) || VER_RHEL_GE(8,0))
-	if (udata) {
-		crdma_uctxt = rdma_udata_to_drv_context(
-				udata, struct crdma_ucontext, ib_uctxt);
-		ret = crdma_qp_modify_cmd(dev, cqp, &crdma_uctxt->uar,
-				qp_attr, qp_attr_mask, cur_state, new_state);
-	}
+	crdma_uctxt = rdma_udata_to_drv_context(udata,
+				struct crdma_ucontext, ib_uctxt);
 #else
 	crdma_uctxt = to_crdma_uctxt(qp->uobject->context);
+#endif
 	ret = crdma_qp_modify_cmd(dev, cqp, udata ?
 			&crdma_uctxt->uar : &dev->priv_uar,
 			qp_attr, qp_attr_mask, cur_state, new_state);
-#endif
+
 	if (ret) {
 		crdma_info("Microcode QP_MODIFY error, %d\n", ret);
 		ret = -EINVAL;
