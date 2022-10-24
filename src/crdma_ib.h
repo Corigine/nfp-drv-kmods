@@ -346,8 +346,8 @@ struct crdma_port {
 		* exist.
 		*/
 	struct delayed_work     qp1_cq_dwork;
-	struct crdma_cq         *qp1_send_ncq;
-	struct crdma_cq         *qp1_recv_ncq;
+	struct crdma_cq         *qp1_send_ccq;
+	struct crdma_cq         *qp1_recv_ccq;
 
 	/*
 		* Ports in host memory Ethernet source addressing information.

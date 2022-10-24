@@ -327,7 +327,7 @@ static void crdma_process_err_cqe(struct crdma_cqe *cqe, struct ib_wc *wc)
 /**
  * Process a CQE as part of CQ poll operation.
  *
- * @ncq: Pointer to the crdma CQ.
+ * @ccq: Pointer to the crdma CQ.
  * @cqe: Pointer to the CQE to process.
  * @last_qp: Address of pointer that is set to the QP associated with
  * the CQE being processed. It is used to avoid lookups when making
@@ -338,10 +338,10 @@ static void crdma_process_err_cqe(struct crdma_cqe *cqe, struct ib_wc *wc)
  *          1 if CQE was stale and skipped.
  *          < 0 if there was an error processing the CQE.
  */
-static int crdma_process_cqe(struct crdma_cq *ncq, struct crdma_cqe *cqe,
+static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 		struct crdma_qp **last_qp, struct ib_wc *wc)
 {
-	struct crdma_ibdev *dev = to_crdma_ibdev(ncq->ib_cq.device);
+	struct crdma_ibdev *dev = to_crdma_ibdev(ccq->ib_cq.device);
 	struct crdma_hw_workq *wq;
 	u32 qpn_index = le32_to_cpu(cqe->qpn & CRDMA_CQE_QPN_MASK);
 	u16 wqe_index;
@@ -965,7 +965,7 @@ static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr
 	struct ib_pd *pd = ah->pd;
 	struct rdma_ah_attr *ah_attr = init_attr->ah_attr;
 	struct crdma_ibdev *dev = to_crdma_ibdev(ah->device);
-	struct crdma_ah *nah = to_crdma_ah(ah);
+	struct crdma_ah *cah = to_crdma_ah(ah);
 	struct in6_addr in6;
 	u8 d_mac[ETH_ALEN];
 
@@ -996,28 +996,28 @@ static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr
 					d_mac[4], d_mac[5]);
 
 #if 0 /* Don't turn on until verified operation */
-	crdma_mac_swap(nah->av.d_mac, d_mac);
+	crdma_mac_swap(cah->av.d_mac, d_mac);
 #else
-	nah->av.d_mac[0] = d_mac[3];
-	nah->av.d_mac[1] = d_mac[2];
-	nah->av.d_mac[2] = d_mac[1];
-	nah->av.d_mac[3] = d_mac[0];
-	nah->av.d_mac[4] = d_mac[5];
-	nah->av.d_mac[5] = d_mac[4];
+	cah->av.d_mac[0] = d_mac[3];
+	cah->av.d_mac[1] = d_mac[2];
+	cah->av.d_mac[2] = d_mac[1];
+	cah->av.d_mac[3] = d_mac[0];
+	cah->av.d_mac[4] = d_mac[5];
+	cah->av.d_mac[5] = d_mac[4];
 #endif
 
 	crdma_info("AV D_MAC:%02X:%02X:%02X:%02X:%02X:%02X\n",
-					nah->av.d_mac[0], nah->av.d_mac[1],
-					nah->av.d_mac[2], nah->av.d_mac[3],
-					nah->av.d_mac[4], nah->av.d_mac[5]);
+					cah->av.d_mac[0], cah->av.d_mac[1],
+					cah->av.d_mac[2], cah->av.d_mac[3],
+					cah->av.d_mac[4], cah->av.d_mac[5]);
 
-	nah->av.port = ah_attr->port_num - 1;
-	nah->av.service_level = ah_attr->sl;
-	nah->av.s_gid_ndx = ah_attr->grh.sgid_index;
-	nah->av.hop_limit = ah_attr->grh.hop_limit;
+	cah->av.port = ah_attr->port_num - 1;
+	cah->av.service_level = ah_attr->sl;
+	cah->av.s_gid_ndx = ah_attr->grh.sgid_index;
+	cah->av.hop_limit = ah_attr->grh.hop_limit;
 
 	/* Always swap to account for hardware bus swap */
-	nah->av.flow_label = __swab32(ah_attr->grh.flow_label);
+	cah->av.flow_label = __swab32(ah_attr->grh.flow_label);
 
 	/*
 	* RoCEv2 GID type determines RoCEv1 or RoCEv2 (we only support
@@ -1025,12 +1025,12 @@ static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr
 	* is IPv6 or v4 mapped.
 	*/
 	if (ipv6_addr_v4mapped((struct in6_addr *)ah_attr->grh.dgid.raw))
-		nah->av.gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
+		cah->av.gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
 	else
-		nah->av.gid_type = CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
+		cah->av.gid_type = CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
 
 	/* For now using maximum rate, no IPD */
-	nah->av.ib_sr_ipd = cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
+	cah->av.ib_sr_ipd = cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
 					(to_crdma_pd(pd)->pd_index & CRDMA_AV_PD_MASK));
 
 	/*
@@ -1039,22 +1039,22 @@ static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr
 	* is used in a work request.
 	*/
 #if defined(__BIG_ENDIAN)
-	nah->av.d_gid_word[0] =
+	cah->av.d_gid_word[0] =
 			__swab32(ah_attr->grh.dgid.global.subnet_prefix >> 32);
-	nah->av.d_gid_word[1] =
+	cah->av.d_gid_word[1] =
 			__swab32(ah_attr->grh.dgid.global.subnet_prefix & 0x0FFFFFFFF);
-	nah->av.d_gid_word[2] =
+	cah->av.d_gid_word[2] =
 			__swab32(ah_attr->grh.dgid.global.interface_id >> 32);
-	nah->av.d_gid_word[3] =
+	cah->av.d_gid_word[3] =
 			__swab32(ah_attr->grh.dgid.global.interface_id & 0x0FFFFFFFF);
 #elif defined(__LITTLE_ENDIAN)
-	nah->av.d_gid_word[0] =
+	cah->av.d_gid_word[0] =
 			__swab32(ah_attr->grh.dgid.global.subnet_prefix & 0x0FFFFFFFF);
-	nah->av.d_gid_word[1] =
+	cah->av.d_gid_word[1] =
 			__swab32(ah_attr->grh.dgid.global.subnet_prefix >> 32);
-	nah->av.d_gid_word[2] =
+	cah->av.d_gid_word[2] =
 			__swab32(ah_attr->grh.dgid.global.interface_id & 0x0FFFFFFFF);
-	nah->av.d_gid_word[3] =
+	cah->av.d_gid_word[3] =
 			__swab32(ah_attr->grh.dgid.global.interface_id >> 32);
 #else
 #error Host endianness not defined
@@ -1067,7 +1067,7 @@ static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 			struct ib_udata *uhw)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
-	struct crdma_ah *nah;
+	struct crdma_ah *cah;
 	struct in6_addr in6;
 	u8 d_mac[ETH_ALEN];
 
@@ -1087,8 +1087,8 @@ static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 			return ERR_PTR(-EINVAL);
 	}
 
-	nah = kzalloc(sizeof(*nah), GFP_ATOMIC);
-	if (!nah)
+	cah = kzalloc(sizeof(*cah), GFP_ATOMIC);
+	if (!cah)
 			return ERR_PTR(-ENOMEM);
 
 	memcpy(&in6, ah_attr->grh.dgid.raw, sizeof(in6));
@@ -1102,28 +1102,28 @@ static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 					d_mac[4], d_mac[5]);
 
 #if 0 /* Don't turn on until verified operation */
-	crdma_mac_swap(nah->av.d_mac, d_mac);
+	crdma_mac_swap(cah->av.d_mac, d_mac);
 #else
-	nah->av.d_mac[0] = d_mac[3];
-	nah->av.d_mac[1] = d_mac[2];
-	nah->av.d_mac[2] = d_mac[1];
-	nah->av.d_mac[3] = d_mac[0];
-	nah->av.d_mac[4] = d_mac[5];
-	nah->av.d_mac[5] = d_mac[4];
+	cah->av.d_mac[0] = d_mac[3];
+	cah->av.d_mac[1] = d_mac[2];
+	cah->av.d_mac[2] = d_mac[1];
+	cah->av.d_mac[3] = d_mac[0];
+	cah->av.d_mac[4] = d_mac[5];
+	cah->av.d_mac[5] = d_mac[4];
 #endif
 
 	crdma_info("AV D_MAC:%02X:%02X:%02X:%02X:%02X:%02X\n",
-					nah->av.d_mac[0], nah->av.d_mac[1],
-					nah->av.d_mac[2], nah->av.d_mac[3],
-					nah->av.d_mac[4], nah->av.d_mac[5]);
+					cah->av.d_mac[0], cah->av.d_mac[1],
+					cah->av.d_mac[2], cah->av.d_mac[3],
+					cah->av.d_mac[4], cah->av.d_mac[5]);
 
-	nah->av.port = ah_attr->port_num - 1;
-	nah->av.service_level = ah_attr->sl;
-	nah->av.s_gid_ndx = ah_attr->grh.sgid_index;
-	nah->av.hop_limit = ah_attr->grh.hop_limit;
+	cah->av.port = ah_attr->port_num - 1;
+	cah->av.service_level = ah_attr->sl;
+	cah->av.s_gid_ndx = ah_attr->grh.sgid_index;
+	cah->av.hop_limit = ah_attr->grh.hop_limit;
 
 	/* Always swap to account for hardware bus swap */
-	nah->av.flow_label = __swab32(ah_attr->grh.flow_label);
+	cah->av.flow_label = __swab32(ah_attr->grh.flow_label);
 
 	/*
 	* RoCEv2 GID type determines RoCEv1 or RoCEv2 (we only support
@@ -1131,12 +1131,12 @@ static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 	* is IPv6 or v4 mapped.
 	*/
 	if (ipv6_addr_v4mapped((struct in6_addr *)ah_attr->grh.dgid.raw))
-		nah->av.gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
+		cah->av.gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
 	else
-		nah->av.gid_type = CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
+		cah->av.gid_type = CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
 
 	/* For now using maximum rate, no IPD */
-	nah->av.ib_sr_ipd = cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
+	cah->av.ib_sr_ipd = cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
 					(to_crdma_pd(pd)->pd_index & CRDMA_AV_PD_MASK));
 
 	/*
@@ -1145,59 +1145,59 @@ static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 	* is used in a work request.
 	*/
 #if defined(__BIG_ENDIAN)
-	nah->av.d_gid_word[0] =
+	cah->av.d_gid_word[0] =
 			__swab32(ah_attr->grh.dgid.global.subnet_prefix >> 32);
-	nah->av.d_gid_word[1] =
+	cah->av.d_gid_word[1] =
 			__swab32(ah_attr->grh.dgid.global.subnet_prefix & 0x0FFFFFFFF);
-	nah->av.d_gid_word[2] =
+	cah->av.d_gid_word[2] =
 			__swab32(ah_attr->grh.dgid.global.interface_id >> 32);
-	nah->av.d_gid_word[3] =
+	cah->av.d_gid_word[3] =
 			__swab32(ah_attr->grh.dgid.global.interface_id & 0x0FFFFFFFF);
 #elif defined(__LITTLE_ENDIAN)
-	nah->av.d_gid_word[0] =
+	cah->av.d_gid_word[0] =
 			__swab32(ah_attr->grh.dgid.global.subnet_prefix & 0x0FFFFFFFF);
-	nah->av.d_gid_word[1] =
+	cah->av.d_gid_word[1] =
 			__swab32(ah_attr->grh.dgid.global.subnet_prefix >> 32);
-	nah->av.d_gid_word[2] =
+	cah->av.d_gid_word[2] =
 			__swab32(ah_attr->grh.dgid.global.interface_id & 0x0FFFFFFFF);
-	nah->av.d_gid_word[3] =
+	cah->av.d_gid_word[3] =
 			__swab32(ah_attr->grh.dgid.global.interface_id >> 32);
 #else
 #error Host endianness not defined
 #endif
-	return &nah->ib_ah;
+	return &cah->ib_ah;
 }
 #endif
 
 static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 {
-	struct crdma_ah *nah = to_crdma_ah(ah);
+	struct crdma_ah *cah = to_crdma_ah(ah);
 
 	crdma_info("crdma_query_ah\n");
 
 	memset(ah_attr, 0, sizeof(*ah_attr));
-	ah_attr->sl = nah->av.service_level;
-	ah_attr->port_num = nah->av.port + 1;
-	ah_attr->grh.sgid_index = nah->av.s_gid_ndx;
-	ah_attr->grh.hop_limit = nah->av.hop_limit;
-	ah_attr->grh.flow_label = __swab32(nah->av.flow_label);
+	ah_attr->sl = cah->av.service_level;
+	ah_attr->port_num = cah->av.port + 1;
+	ah_attr->grh.sgid_index = cah->av.s_gid_ndx;
+	ah_attr->grh.hop_limit = cah->av.hop_limit;
+	ah_attr->grh.flow_label = __swab32(cah->av.flow_label);
 
 	/* TODO: IPD  not implemented yet, assumes static rate is 0 */
 
 #if defined(__BIG_ENDIAN)
 	ah_attr->grh.dgid.global.subnet_prefix =
-			((u64)__swab32(nah->av.d_gid_word[0]) << 32) |
-			__swab32(nah->av.d_gid_word[1]);
+			((u64)__swab32(cah->av.d_gid_word[0]) << 32) |
+			__swab32(cah->av.d_gid_word[1]);
 	ah_attr->grh.dgid.global.interface_id =
-			((u64)__swab32(nah->av.d_gid_word[2]) << 32) |
-			__swab32(nah->av.d_gid_word[3]);
+			((u64)__swab32(cah->av.d_gid_word[2]) << 32) |
+			__swab32(cah->av.d_gid_word[3]);
 #elif defined(__LITTLE_ENDIAN)
 	ah_attr->grh.dgid.global.subnet_prefix =
-			((u64)__swab32(nah->av.d_gid_word[1]) << 32) |
-			__swab32(nah->av.d_gid_word[0]);
+			((u64)__swab32(cah->av.d_gid_word[1]) << 32) |
+			__swab32(cah->av.d_gid_word[0]);
 	ah_attr->grh.dgid.global.interface_id =
-			((u64)__swab32(nah->av.d_gid_word[3]) << 32) |
-			__swab32(nah->av.d_gid_word[2]);
+			((u64)__swab32(cah->av.d_gid_word[3]) << 32) |
+			__swab32(cah->av.d_gid_word[2]);
 #else
 #error Host endianness not defined
 #endif
@@ -1415,7 +1415,7 @@ static void crdma_qp1_work(struct work_struct *work)
 {
 	struct delayed_work *delay = to_delayed_work(work);
 	struct crdma_port *port;
-	struct crdma_cq *ncq;
+	struct crdma_cq *ccq;
 	unsigned long flags;
 
 	if (!mad_cq_event_wa) {
@@ -1429,33 +1429,33 @@ static void crdma_qp1_work(struct work_struct *work)
 		return;
 	}
 
-	if (!port->qp1_send_ncq || !port->qp1_recv_ncq) {
+	if (!port->qp1_send_ccq || !port->qp1_recv_ccq) {
 		pr_warn("QP1 work around, CQ not defined\n");
 		return;
 	}
 
-	ncq = port->qp1_send_ncq;
+	ccq = port->qp1_send_ccq;
 
-	ncq->arm_seqn++;
-	atomic_inc(&ncq->ref_cnt);
-	if (ncq->ib_cq.comp_handler)
-		ncq->ib_cq.comp_handler(&ncq->ib_cq, ncq->ib_cq.cq_context);
+	ccq->arm_seqn++;
+	atomic_inc(&ccq->ref_cnt);
+	if (ccq->ib_cq.comp_handler)
+		ccq->ib_cq.comp_handler(&ccq->ib_cq, ccq->ib_cq.cq_context);
 
-	if (ncq != port->qp1_recv_ncq) {
-		if (atomic_dec_and_test(&ncq->ref_cnt))
-			complete(&ncq->free);
+	if (ccq != port->qp1_recv_ccq) {
+		if (atomic_dec_and_test(&ccq->ref_cnt))
+			complete(&ccq->free);
 
-		ncq = port->qp1_recv_ncq;
-		ncq->arm_seqn++;
-		atomic_inc(&ncq->ref_cnt);
+		ccq = port->qp1_recv_ccq;
+		ccq->arm_seqn++;
+		atomic_inc(&ccq->ref_cnt);
 
-		if (ncq->ib_cq.comp_handler)
-			ncq->ib_cq.comp_handler(&ncq->ib_cq,
-					ncq->ib_cq.cq_context);
+		if (ccq->ib_cq.comp_handler)
+			ccq->ib_cq.comp_handler(&ccq->ib_cq,
+					ccq->ib_cq.cq_context);
 	}
 
-	if (atomic_dec_and_test(&ncq->ref_cnt))
-		complete(&ncq->free);
+	if (atomic_dec_and_test(&ccq->ref_cnt))
+		complete(&ccq->free);
 
 	spin_lock_irqsave(&port->qp1_lock, flags);
 	if (port->qp1_created) {
@@ -1472,12 +1472,12 @@ static void crdma_qp1_work(struct work_struct *work)
  * Verify the QP1 port is unused, initialize and update.
  *
  * @dev: The RoCEE IB device.
- * @nqp: The crdma QP associated with the QP1.
+ * @cqp: The crdma QP associated with the QP1.
  * @port_num: The physical port number to be associated with this QP1 (0 based).
  *
  * Returns 0 on success, otherwise an error if it can not be set.
  */
-static int crdma_set_qp1_port(struct crdma_ibdev *dev, struct crdma_qp *nqp,
+static int crdma_set_qp1_port(struct crdma_ibdev *dev, struct crdma_qp *cqp,
 				int port_num)
 {
 	struct crdma_port *port = &dev->port;
@@ -1492,15 +1492,15 @@ static int crdma_set_qp1_port(struct crdma_ibdev *dev, struct crdma_qp *nqp,
 
 		return -EINVAL;
 	}
-	nqp->qp1_port = port_num;
+	cqp->qp1_port = port_num;
 	port->qp1_created = true;
 
 	/* XXX: Temporary work around to enable testing */
 	if (mad_cq_event_wa) {
-		port->qp1_send_ncq = dev->cq_table[nqp->send_cqn];
-		port->qp1_recv_ncq = dev->cq_table[nqp->recv_cqn];
-		crdma_info("QP1 WA send_ncq %p, recv_ncq %p",
-				port->qp1_send_ncq, port->qp1_recv_ncq);
+		port->qp1_send_ccq = dev->cq_table[cqp->send_cqn];
+		port->qp1_recv_ccq = dev->cq_table[cqp->recv_cqn];
+		crdma_info("QP1 WA send_ccq %p, recv_ccq %p",
+				port->qp1_send_ccq, port->qp1_recv_ccq);
 		INIT_DELAYED_WORK(&port->qp1_cq_dwork, crdma_qp1_work);
 		schedule_delayed_work(&port->qp1_cq_dwork,
 					msecs_to_jiffies(100));
@@ -1530,8 +1530,8 @@ static void crdma_clear_qp1_port(struct crdma_ibdev *dev, int port_num)
 
 		if (mad_cq_event_wa) {
 			cancel_delayed_work_sync(&port->qp1_cq_dwork);
-			port->qp1_send_ncq = NULL;
-			port->qp1_recv_ncq = NULL;
+			port->qp1_send_ccq = NULL;
+			port->qp1_recv_ccq = NULL;
 		}
 	} else
 		spin_unlock_irqrestore(&port->qp1_lock, flags);
@@ -1543,7 +1543,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 			struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
-	struct crdma_qp *nqp;
+	struct crdma_qp *cqp;
 	int err;
 
 	crdma_info("crdma_create_qp\n");
@@ -1566,28 +1566,28 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 		return ERR_PTR(-EINVAL);
 	}
 
-	nqp = kzalloc(sizeof(*nqp), GFP_KERNEL);
-	if (!nqp)
+	cqp = kzalloc(sizeof(*cqp), GFP_KERNEL);
+	if (!cqp)
 		return ERR_PTR(-ENOMEM);
 
-	mutex_init(&nqp->mutex);
-	spin_lock_init(&nqp->sq.lock);
-	spin_lock_init(&nqp->rq.lock);
-	nqp->qp_state = IB_QPS_RESET;
-	nqp->pdn = pd ? to_crdma_pd(pd)->pd_index : 0;
-	nqp->send_cqn = qp_init_attr->send_cq ?
+	mutex_init(&cqp->mutex);
+	spin_lock_init(&cqp->sq.lock);
+	spin_lock_init(&cqp->rq.lock);
+	cqp->qp_state = IB_QPS_RESET;
+	cqp->pdn = pd ? to_crdma_pd(pd)->pd_index : 0;
+	cqp->send_cqn = qp_init_attr->send_cq ?
 		to_crdma_cq(qp_init_attr->send_cq)->cqn : 0;
-	nqp->recv_cqn = qp_init_attr->recv_cq ?
+	cqp->recv_cqn = qp_init_attr->recv_cq ?
 		to_crdma_cq(qp_init_attr->recv_cq)->cqn : 0;
-	nqp->srqn = qp_init_attr->srq ?
+	cqp->srqn = qp_init_attr->srq ?
 		to_crdma_srq(qp_init_attr->srq)->srq_index : 0;
 
-	nqp->sq_sig_type = qp_init_attr->sq_sig_type;
+	cqp->sq_sig_type = qp_init_attr->sq_sig_type;
 
 	/* Handle speical QP1 requirements */
 	if (qp_init_attr->qp_type == IB_QPT_GSI) {
 		crdma_debug("Creating Special QP1\n");
-		err = crdma_set_qp1_port(dev, nqp,
+		err = crdma_set_qp1_port(dev, cqp,
 				qp_init_attr->port_num - 1);
 		if (err) {
 			crdma_info("Error %d setting QP1 port number\n", err);
@@ -1597,46 +1597,46 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 	}
 
 	/* Set the actual number and sizes of the QP work requests */
-	err = crdma_qp_set_wq_sizes(dev, nqp, qp_init_attr);
+	err = crdma_qp_set_wq_sizes(dev, cqp, qp_init_attr);
 	if (err) {
 		err = -EINVAL;
 		goto clear_port;
 	}
 
 	/* Allocate resource index for the QP control object */
-	nqp->qp_index = qp_init_attr->qp_type == IB_QPT_GSI ?
+	cqp->qp_index = qp_init_attr->qp_type == IB_QPT_GSI ?
 		qp_init_attr->port_num - 1 :
 		crdma_alloc_bitmap_index(&dev->qp_map);
-	if (nqp->qp_index < 0) {
+	if (cqp->qp_index < 0) {
 		crdma_info("No QP index available\n");
 		err = -ENOMEM;
 		goto clear_port;
 	}
 
 	/* Kernel always allocates QP memory, user contexts will mmap it */
-	nqp->mem = crdma_alloc_hw_queue(dev, nqp->sq.length + nqp->rq.length);
-	if (IS_ERR(nqp->mem)) {
+	cqp->mem = crdma_alloc_hw_queue(dev, cqp->sq.length + cqp->rq.length);
+	if (IS_ERR(cqp->mem)) {
 		crdma_dev_err(dev, "Unable to allocate QP HW queue\n");
 		err = -ENOMEM;
 		goto free_qp_index;
 	}
 
-	crdma_init_wq_ownership(nqp->mem, nqp->sq_offset,
-				nqp->sq.wqe_cnt, nqp->sq.wqe_size);
-	crdma_init_wq_ownership(nqp->mem, nqp->rq_offset,
-				nqp->rq.wqe_cnt, nqp->rq.wqe_size);
+	crdma_init_wq_ownership(cqp->mem, cqp->sq_offset,
+				cqp->sq.wqe_cnt, cqp->sq.wqe_size);
+	crdma_init_wq_ownership(cqp->mem, cqp->rq_offset,
+				cqp->rq.wqe_cnt, cqp->rq.wqe_size);
 
 	/* Add to Radix tree for lookups */
 	spin_lock_irq(&dev->qp_lock);
-	err = radix_tree_insert(&dev->qp_tree, nqp->qp_index, nqp);
+	err = radix_tree_insert(&dev->qp_tree, cqp->qp_index, cqp);
 	spin_unlock_irq(&dev->qp_lock);
 	if (err) {
 		crdma_dev_err(dev, "Unable to insert QP tree\n");
 		goto free_dma_memory;
 	}
 
-	nqp->ib_qp.qp_num = qp_init_attr->qp_type == IB_QPT_GSI ?
-			1 : nqp->qp_index;
+	cqp->ib_qp.qp_num = qp_init_attr->qp_type == IB_QPT_GSI ?
+			1 : cqp->qp_index;
 
 	/* return response */
 	if (udata) {
@@ -1644,19 +1644,19 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 				to_crdma_uctxt(pd->uobject->context);
 		struct crdma_ib_create_qp_resp resp;
 
-		resp.wq_base_addr = sg_dma_address(nqp->mem->alloc);
-		resp.wq_size = nqp->mem->tot_len;
-		if (nqp->sq.length >= nqp->rq.length) {
+		resp.wq_base_addr = sg_dma_address(cqp->mem->alloc);
+		resp.wq_size = cqp->mem->tot_len;
+		if (cqp->sq.length >= cqp->rq.length) {
 			resp.sq_offset = 0;
-			resp.rq_offset = nqp->sq.length;
+			resp.rq_offset = cqp->sq.length;
 		} else {
 			resp.sq_offset = 0;
-			resp.rq_offset = nqp->sq.length;
+			resp.rq_offset = cqp->sq.length;
 		}
-		resp.swqe_size = nqp->sq.wqe_size;
-		resp.num_swqe = nqp->sq.wqe_cnt;
-		resp.rwqe_size = nqp->rq.wqe_size;
-		resp.num_rwqe = nqp->rq.wqe_cnt;
+		resp.swqe_size = cqp->sq.wqe_size;
+		resp.num_swqe = cqp->sq.wqe_cnt;
+		resp.rwqe_size = cqp->rq.wqe_size;
+		resp.num_rwqe = cqp->rq.wqe_cnt;
 		resp.spares = CRDMA_WQ_WQE_SPARES;
 
 		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
@@ -1666,7 +1666,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 		}
 
 		err = crdma_add_mmap_req(crdma_uctxt, resp.wq_base_addr,
-				nqp->mem->tot_len);
+				cqp->mem->tot_len);
 		if (err) {
 			crdma_info("Failed to add pending mmap, %d\n", err);
 			goto delete_qp;
@@ -1677,49 +1677,49 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 			err = -ENOMEM;
 			goto delete_qp;
 		}
-		nqp->sq.buf = sg_virt(nqp->mem->alloc) + nqp->sq_offset;
-		nqp->sq.mask = nqp->sq.wqe_cnt - 1;
-		nqp->sq.wqe_size_log2 = ilog2(nqp->sq.wqe_size);
+		cqp->sq.buf = sg_virt(cqp->mem->alloc) + cqp->sq_offset;
+		cqp->sq.mask = cqp->sq.wqe_cnt - 1;
+		cqp->sq.wqe_size_log2 = ilog2(cqp->sq.wqe_size);
 
-		nqp->sq.wrid_map = kcalloc(nqp->sq.wqe_cnt, sizeof(u64),
+		cqp->sq.wrid_map = kcalloc(cqp->sq.wqe_cnt, sizeof(u64),
 						GFP_KERNEL);
-		if (!nqp->sq.wrid_map) {
+		if (!cqp->sq.wrid_map) {
 			crdma_info("Could not allocate SQ WRID map\n");
 			err = -ENOMEM;
 			goto delete_qp;
 		}
 
-		nqp->rq.buf = sg_virt(nqp->mem->alloc) + nqp->rq_offset;
-		nqp->rq.mask = nqp->rq.wqe_cnt - 1;
-		nqp->rq.wqe_size_log2 = ilog2(nqp->rq.wqe_size);
+		cqp->rq.buf = sg_virt(cqp->mem->alloc) + cqp->rq_offset;
+		cqp->rq.mask = cqp->rq.wqe_cnt - 1;
+		cqp->rq.wqe_size_log2 = ilog2(cqp->rq.wqe_size);
 
-		nqp->rq.wrid_map = kcalloc(nqp->rq.wqe_cnt, sizeof(u64),
+		cqp->rq.wrid_map = kcalloc(cqp->rq.wqe_cnt, sizeof(u64),
 						GFP_KERNEL);
-		if (!nqp->rq.wrid_map) {
+		if (!cqp->rq.wrid_map) {
 			crdma_info("Could not allocate RQ WRID map\n");
 			err = -ENOMEM;
-			kfree(nqp->sq.wrid_map);
+			kfree(cqp->sq.wrid_map);
 			goto delete_qp;
 		}
 	}
-	atomic_set(&nqp->ref_cnt, 1);
-	init_completion(&nqp->free);
-	return &nqp->ib_qp;
+	atomic_set(&cqp->ref_cnt, 1);
+	init_completion(&cqp->free);
+	return &cqp->ib_qp;
 
 delete_qp:
 	spin_lock_irq(&dev->qp_lock);
-	radix_tree_delete(&dev->qp_tree, nqp->qp_index);
+	radix_tree_delete(&dev->qp_tree, cqp->qp_index);
 	spin_unlock_irq(&dev->qp_lock);
 free_dma_memory:
-	crdma_free_hw_queue(dev, nqp->mem);
+	crdma_free_hw_queue(dev, cqp->mem);
 free_qp_index:
 	if (qp_init_attr->qp_type != IB_QPT_GSI)
-		crdma_free_bitmap_index(&dev->qp_map, nqp->qp_index);
+		crdma_free_bitmap_index(&dev->qp_map, cqp->qp_index);
 clear_port:
 	if (qp_init_attr->qp_type == IB_QPT_GSI)
-		crdma_clear_qp1_port(dev, nqp->qp1_port);
+		crdma_clear_qp1_port(dev, cqp->qp1_port);
 free_mem:
-	kfree(nqp);
+	kfree(cqp);
 
 	/*
 	 * XXX: For development only to catch error codes that are not
@@ -1737,7 +1737,7 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(qp->device);
 	struct crdma_ucontext *crdma_uctxt;
-	struct crdma_qp *nqp = to_crdma_qp(qp);
+	struct crdma_qp *cqp = to_crdma_qp(qp);
 	enum ib_qp_state cur_state;
 	enum ib_qp_state new_state;
 	int ret;
@@ -1745,8 +1745,8 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	crdma_info("crdma_modify_qp: attr_mask 0x%08X\n", qp_attr_mask);
 	crdma_info("qp_type %d\n", qp->qp_type);
 
-	mutex_lock(&nqp->mutex);
-	cur_state = nqp->qp_state;
+	mutex_lock(&cqp->mutex);
+	cur_state = cqp->qp_state;
 	new_state = qp_attr_mask & IB_QP_STATE ? qp_attr->qp_state : cur_state;
 
 	crdma_info("curr_state %d, new_state %d\n", cur_state, new_state);
@@ -1819,12 +1819,12 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	if (udata) {
 		crdma_uctxt = rdma_udata_to_drv_context(
 				udata, struct crdma_ucontext, ib_uctxt);
-		ret = crdma_qp_modify_cmd(dev, nqp, &crdma_uctxt->uar,
+		ret = crdma_qp_modify_cmd(dev, cqp, &crdma_uctxt->uar,
 				qp_attr, qp_attr_mask, cur_state, new_state);
 	}
 #else
 	crdma_uctxt = to_crdma_uctxt(qp->uobject->context);
-	ret = crdma_qp_modify_cmd(dev, nqp, udata ?
+	ret = crdma_qp_modify_cmd(dev, cqp, udata ?
 			&crdma_uctxt->uar : &dev->priv_uar,
 			qp_attr, qp_attr_mask, cur_state, new_state);
 #endif
@@ -1834,7 +1834,7 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	}
 
 out:
-	mutex_unlock(&nqp->mutex);
+	mutex_unlock(&cqp->mutex);
 	return ret;
 }
 
@@ -1842,19 +1842,19 @@ static int crdma_query_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 			int qp_attr_mask, struct ib_qp_init_attr *qp_init_attr)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(qp->device);
-	struct crdma_qp *nqp = to_crdma_qp(qp);
+	struct crdma_qp *cqp = to_crdma_qp(qp);
 	int ret = 0;
 
 	crdma_info("crdma_query_qp\n");
-	mutex_lock(&nqp->mutex);
+	mutex_lock(&cqp->mutex);
 
 	/* If we are in RESET state then no attributes are assigned */
-	if (nqp->qp_state == IB_QPS_RESET) {
+	if (cqp->qp_state == IB_QPS_RESET) {
 		qp_attr->qp_state = IB_QPS_RESET;
 		goto out;
 	}
 
-	ret = crdma_qp_query_cmd(dev, nqp, qp_attr, qp_attr_mask);
+	ret = crdma_qp_query_cmd(dev, cqp, qp_attr, qp_attr_mask);
 	if (ret) {
 		crdma_info("Microcode QP_QUERY error, %d\n", ret);
 		ret = -EINVAL;
@@ -1862,16 +1862,16 @@ static int crdma_query_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	}
 
 	qp_attr->cur_qp_state = qp_attr->qp_state;
-	qp_attr->cap.max_recv_wr = nqp->rq.wqe_cnt;
-	qp_attr->cap.max_recv_sge = nqp->rq.max_sg;
-	qp_attr->cap.max_send_wr = nqp->sq.wqe_cnt;
-	qp_attr->cap.max_send_sge = nqp->sq.max_sg;
-	qp_attr->cap.max_inline_data = nqp->max_inline;
-	qp_init_attr->sq_sig_type = nqp->sq_sig_type;
-	qp_init_attr->qp_type = nqp->ib_qp.qp_type;
+	qp_attr->cap.max_recv_wr = cqp->rq.wqe_cnt;
+	qp_attr->cap.max_recv_sge = cqp->rq.max_sg;
+	qp_attr->cap.max_send_wr = cqp->sq.wqe_cnt;
+	qp_attr->cap.max_send_sge = cqp->sq.max_sg;
+	qp_attr->cap.max_inline_data = cqp->max_inline;
+	qp_init_attr->sq_sig_type = cqp->sq_sig_type;
+	qp_init_attr->qp_type = cqp->ib_qp.qp_type;
 	qp_init_attr->cap = qp_attr->cap;
 out:
-	mutex_unlock(&nqp->mutex);
+	mutex_unlock(&cqp->mutex);
 	return ret;
 }
 
@@ -1882,13 +1882,13 @@ static int crdma_destroy_qp(struct ib_qp *qp)
 #endif
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(qp->device);
-	struct crdma_qp *nqp = to_crdma_qp(qp);
+	struct crdma_qp *cqp = to_crdma_qp(qp);
 	int err;
 
 	crdma_info("crdma_destroy_qp\n");
 
-	if (nqp->qp_state != IB_QPS_RESET) {
-		err = crdma_qp_destroy_cmd(dev, nqp);
+	if (cqp->qp_state != IB_QPS_RESET) {
+		err = crdma_qp_destroy_cmd(dev, cqp);
 		if (err) {
 			/*
 			 * XXX: We should consider a BUG_ON here, to
@@ -1900,7 +1900,7 @@ static int crdma_destroy_qp(struct ib_qp *qp)
 	}
 
 	spin_lock_irq(&dev->qp_lock);
-	radix_tree_delete(&dev->qp_tree, nqp->qp_index);
+	radix_tree_delete(&dev->qp_tree, cqp->qp_index);
 	spin_unlock_irq(&dev->qp_lock);
 
 	/* Free resources specific to kernel based QP */
@@ -1909,22 +1909,22 @@ static int crdma_destroy_qp(struct ib_qp *qp)
 #else
 	if (!qp->uobject) {
 #endif
-		if (!nqp->rq.wrid_map)
+		if (!cqp->rq.wrid_map)
 			crdma_warn("RQ WRID map memory NULL\n");
 		else
-			kfree(nqp->rq.wrid_map);
-		if (!nqp->sq.wrid_map)
+			kfree(cqp->rq.wrid_map);
+		if (!cqp->sq.wrid_map)
 			crdma_warn("SQ WRID map memory NULL\n");
 		else
-			kfree(nqp->sq.wrid_map);
+			kfree(cqp->sq.wrid_map);
 	}
 
-	crdma_free_hw_queue(dev, nqp->mem);
-	if (nqp->ib_qp.qp_type != IB_QPT_GSI)
-		crdma_free_bitmap_index(&dev->qp_map, nqp->qp_index);
+	crdma_free_hw_queue(dev, cqp->mem);
+	if (cqp->ib_qp.qp_type != IB_QPT_GSI)
+		crdma_free_bitmap_index(&dev->qp_map, cqp->qp_index);
 	else
-		crdma_clear_qp1_port(dev, nqp->qp1_port);
-	kfree(nqp);
+		crdma_clear_qp1_port(dev, cqp->qp1_port);
+	kfree(cqp);
 	return 0;
 }
 #if 0
@@ -2021,28 +2021,28 @@ static inline void crdma_set_wqe_sge(struct crdma_wqe_sge *wqe_sg, int num_sge,
  * Returns the SWQE on on success, otherwise NULL if an
  * overflow SQ is detected.
  */
-static struct crdma_swqe *get_sq_tail(struct crdma_qp *nqp)
+static struct crdma_swqe *get_sq_tail(struct crdma_qp *cqp)
 {
-	uint32_t next = (nqp->sq.tail + CRDMA_WQ_WQE_SPARES) & nqp->sq.mask;
+	uint32_t next = (cqp->sq.tail + CRDMA_WQ_WQE_SPARES) & cqp->sq.mask;
 	unsigned long flags;
 
 	/*
 		* If it looks like an overflow allow for any active CQ
 		* processing to complete and look again.
 		*/
-	if (next == nqp->sq.head) {
-		struct crdma_cq *ncq = to_crdma_cq(nqp->ib_qp.send_cq);
+	if (next == cqp->sq.head) {
+		struct crdma_cq *ccq = to_crdma_cq(cqp->ib_qp.send_cq);
 
-		spin_lock_irqsave(&ncq->lock, flags);
-		next = (nqp->sq.tail + CRDMA_WQ_WQE_SPARES) & nqp->sq.mask;
-		spin_unlock_irqrestore(&ncq->lock, flags);
-		if (next == nqp->sq.head)
+		spin_lock_irqsave(&ccq->lock, flags);
+		next = (cqp->sq.tail + CRDMA_WQ_WQE_SPARES) & cqp->sq.mask;
+		spin_unlock_irqrestore(&ccq->lock, flags);
+		if (next == cqp->sq.head)
 				return NULL;
 	}
 
 	/* Post SWQE at the software producer tail */
-	crdma_debug("Use SWQE Index %d\n", nqp->sq.tail);
-	return nqp->sq.buf + (nqp->sq.tail << nqp->sq.wqe_size_log2);
+	crdma_debug("Use SWQE Index %d\n", cqp->sq.tail);
+	return cqp->sq.buf + (cqp->sq.tail << cqp->sq.wqe_size_log2);
 }
 #endif
 #define CRDMA_SQ_DB_READY_RETRIES              20
@@ -2055,7 +2055,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 	return 0;
 #if 0
 	struct crdma_ibdev *dev = to_crdma_ibdev(qp->device);
-	struct crdma_qp *nqp = to_crdma_qp(qp);
+	struct crdma_qp *cqp = to_crdma_qp(qp);
 	struct crdma_swqe *swqe;
 	struct crdma_swqe_inline *inline_data;
 	struct crdma_wqe_sge *sg;
@@ -2064,12 +2064,12 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 	int ret = 0;
 	u8 flags;
 	u32 fin_state;
-	u32 qpn = qp->qp_type == IB_QPT_GSI ? nqp->qp1_port : nqp->qp_index;
+	u32 qpn = qp->qp_type == IB_QPT_GSI ? cqp->qp1_port : cqp->qp_index;
 	int cnt = 0;
 
-	spin_lock(&nqp->sq.lock);
+	spin_lock(&cqp->sq.lock);
 	while (wr) {
-		if (wr->num_sge > nqp->sq.max_sg) {
+		if (wr->num_sge > cqp->sq.max_sg) {
 			crdma_info("WR num_sge too large %d\n", wr->num_sge);
 			*bad_wr = wr;
 			ret = -EINVAL;
@@ -2077,7 +2077,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		}
 
 		/* Post new SWQE's at the software tail, NULL if SQ full */
-		swqe = get_sq_tail(nqp);
+		swqe = get_sq_tail(cqp);
 		if (!swqe) {
 			crdma_info("SQ Overflow\n");
 			*bad_wr = wr;
@@ -2157,7 +2157,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		if (wr->send_flags & IB_SEND_INLINE) {
 			flags |= CRDMA_WQE_CTRL_INLINE_DATA_BIT;
 			ret = crdma_copy_inline(inline_data, wr,
-						nqp->max_inline);
+						cqp->max_inline);
 			if (ret) {
 				*bad_wr = wr;
 				goto out;
@@ -2166,7 +2166,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 			owner.num_sg = wr->num_sge;
 			crdma_set_wqe_sge(sg, wr->num_sge, wr->sg_list);
 		}
-		nqp->sq.wrid_map[nqp->sq.tail] = wr->wr_id;
+		cqp->sq.wrid_map[cqp->sq.tail] = wr->wr_id;
 
 		/* Write ownership control word last */
 		owner.opcode = wr->opcode;
@@ -2189,7 +2189,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 
 		/* Advance to the next SWQE to consume */
 		wr_cnt++;
-		nqp->sq.tail = (nqp->sq.tail + 1) & nqp->sq.mask;
+		cqp->sq.tail = (cqp->sq.tail + 1) & cqp->sq.mask;
 		wr = wr->next;
 
 		/*
@@ -2200,7 +2200,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		 * ownership.
 		 */
 		if (wr)
-			set_wqe_sw_ownership(&nqp->sq, nqp->sq.tail +
+			set_wqe_sw_ownership(&cqp->sq, cqp->sq.tail +
 					CRDMA_WQ_WQE_SPARES);
 	}
 
@@ -2244,10 +2244,10 @@ out:
 		 * Make sure the last spare request is set to software
 		 * ownership.
 		 */
-		set_wqe_sw_ownership(&nqp->sq, nqp->sq.tail +
+		set_wqe_sw_ownership(&cqp->sq, cqp->sq.tail +
 				CRDMA_WQ_WQE_SPARES);
 	}
-	spin_unlock(&nqp->sq.lock);
+	spin_unlock(&cqp->sq.lock);
 
 	return 0;
 #endif
@@ -2264,28 +2264,28 @@ out:
  * Returns the RWQE on on success, otherwise NULL if an RQ
  * overflow is detected or the QP is attached to an SRQ.
  */
-static struct crdma_rwqe *get_rq_tail(struct crdma_qp *nqp)
+static struct crdma_rwqe *get_rq_tail(struct crdma_qp *cqp)
 {
-	u32 next = (nqp->rq.tail + CRDMA_WQ_WQE_SPARES) & nqp->rq.mask;
+	u32 next = (cqp->rq.tail + CRDMA_WQ_WQE_SPARES) & cqp->rq.mask;
 	unsigned long flags;
 
 	/*
 	 * If it looks like an overflow allow for any active CQ
 	 * processing to complete and look again.
 	 */
-	if (next == nqp->rq.head) {
-		struct crdma_cq *ncq = to_crdma_cq(nqp->ib_qp.recv_cq);
+	if (next == cqp->rq.head) {
+		struct crdma_cq *ccq = to_crdma_cq(cqp->ib_qp.recv_cq);
 
-		spin_lock_irqsave(&ncq->lock, flags);
-		next = (nqp->rq.tail + CRDMA_WQ_WQE_SPARES) & nqp->rq.mask;
-		spin_unlock_irqrestore(&ncq->lock, flags);
-		if (next == nqp->rq.head)
+		spin_lock_irqsave(&ccq->lock, flags);
+		next = (cqp->rq.tail + CRDMA_WQ_WQE_SPARES) & cqp->rq.mask;
+		spin_unlock_irqrestore(&ccq->lock, flags);
+		if (next == cqp->rq.head)
 			return NULL;
 	}
 
 	/* Post RWQE at the software producer tail */
-	crdma_debug("Use RWQE Index %d\n", nqp->rq.tail);
-	return nqp->rq.buf + (nqp->rq.tail << nqp->rq.wqe_size_log2);
+	crdma_debug("Use RWQE Index %d\n", cqp->rq.tail);
+	return cqp->rq.buf + (cqp->rq.tail << cqp->rq.wqe_size_log2);
 }
 #endif
 static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
@@ -2296,13 +2296,13 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 	return 0;
 
 #if 0
-	struct crdma_qp *nqp = to_crdma_qp(qp);
+	struct crdma_qp *cqp = to_crdma_qp(qp);
 	struct crdma_rwqe *rwqe;
 	int ret = 0;
 
-	spin_lock(&nqp->rq.lock);
+	spin_lock(&cqp->rq.lock);
 	while(wr) {
-		if (wr->num_sge > nqp->rq.max_sg) {
+		if (wr->num_sge > cqp->rq.max_sg) {
 			crdma_info("RQ work request SG entries too large %d\n",
 					wr->num_sge);
 			*bad_wr = wr;
@@ -2310,7 +2310,7 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 			break;
 		}
 
-		rwqe = get_rq_tail(nqp);
+		rwqe = get_rq_tail(cqp);
 		if (!rwqe) {
 			crdma_info("RQ overflow\n");
 			*bad_wr = wr;
@@ -2328,7 +2328,7 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 		crdma_set_wqe_sge(&rwqe->sg[0], wr->num_sge, wr->sg_list);
 		rwqe->ctrl.num_sge = wr->num_sge;
 		rwqe->ctrl.next_srq_wqe_ndx = 0;
-		nqp->rq.wrid_map[nqp->rq.tail] = wr->wr_id;
+		cqp->rq.wrid_map[cqp->rq.tail] = wr->wr_id;
 		wmb();
 
 		rwqe->ctrl.ownership = 0;
@@ -2339,12 +2339,12 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 		 * the new RWQE to be added prior to updating the last
 		 * RWQE in the sliding block to indicate software ownership.
 		 */
-		set_wqe_sw_ownership(&nqp->rq, nqp->rq.tail +
+		set_wqe_sw_ownership(&cqp->rq, cqp->rq.tail +
 				CRDMA_WQ_WQE_SPARES);
-		nqp->rq.tail = (nqp->rq.tail + 1) & nqp->rq.mask;
+		cqp->rq.tail = (cqp->rq.tail + 1) & cqp->rq.mask;
 		wr = wr->next;
 	}
-	spin_unlock(&nqp->rq.lock);
+	spin_unlock(&cqp->rq.lock);
 
 	return ret;
 #endif
@@ -2355,7 +2355,7 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 				  struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
-	struct crdma_cq *ncq = container_of(cq, struct crdma_cq, ib_cq);
+	struct crdma_cq *ccq = container_of(cq, struct crdma_cq, ib_cq);
 	struct crdma_cqe *cqe;
 	unsigned int num_cqe = attr->cqe;
 	int comp_vector = attr->comp_vector;
@@ -2367,26 +2367,26 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 		return -EINVAL;
 	}
 
-	spin_lock_init(&ncq->lock);
-	ncq->num_cqe = roundup_pow_of_two(num_cqe + 1);
-	ncq->ib_cq.cqe = ncq->num_cqe - 1;
+	spin_lock_init(&ccq->lock);
+	ccq->num_cqe = roundup_pow_of_two(num_cqe + 1);
+	ccq->ib_cq.cqe = ccq->num_cqe - 1;
 
 #if CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_info("Rounded up CQE count %d\n", ncq->num_cqe);
+	crdma_info("Rounded up CQE count %d\n", ccq->num_cqe);
 #endif
 
 	/* Allocate resource index for the CQ control object */
-	ncq->cqn = crdma_alloc_bitmap_index(&dev->cq_map);
-	if (ncq->cqn < 0) {
+	ccq->cqn = crdma_alloc_bitmap_index(&dev->cq_map);
+	if (ccq->cqn < 0) {
 		crdma_info("No CQ index available\n");
 		err = -ENOMEM;
 		goto free_mem;
 	}
 
 	/* Kernel allocates CQ memory, user contexts will mmap it */
-	ncq->mem = crdma_alloc_hw_queue(dev,
-				ncq->num_cqe * dev->cap.cqe_size);
-	if (IS_ERR(ncq->mem)) {
+	ccq->mem = crdma_alloc_hw_queue(dev,
+				ccq->num_cqe * dev->cap.cqe_size);
+	if (IS_ERR(ccq->mem)) {
 		crdma_dev_err(dev, "Unable to allocate CQ HW queue\n");
 		err = -ENOMEM;
 		goto free_cq;
@@ -2397,8 +2397,8 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 	 * between 1 and 0 for each reuse of the CQE. Set kernel virtual
 	 * address and initialize to indicate invalid CQE.
 	 */
-	ncq->cqe_buf = sg_virt(ncq->mem->alloc);
-	for (i = 0, cqe = ncq->cqe_buf; i < ncq->num_cqe; i++, cqe++)
+	ccq->cqe_buf = sg_virt(ccq->mem->alloc);
+	for (i = 0, cqe = ccq->cqe_buf; i < ccq->num_cqe; i++, cqe++)
 		cqe->owner = 0;
 
 	/*
@@ -2407,39 +2407,39 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 	 * have multiple CQ mailboxes for the same context share pages
 	 * to reduce overhead.
 	 */
-	ncq->ci_mbox = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
-			PAGE_SIZE, &ncq->ci_mbox_paddr, GFP_KERNEL);
-	if (!ncq->ci_mbox) {
+	ccq->ci_mbox = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
+			PAGE_SIZE, &ccq->ci_mbox_paddr, GFP_KERNEL);
+	if (!ccq->ci_mbox) {
 		crdma_info("ci_mbox allocation failed\n");
 		err = -ENOMEM;
 		goto free_queue_mem;
 	}
-	crdma_debug("CQ CI mailbox DMA addr 0x%016llX\n", ncq->ci_mbox_paddr);
-	ncq->ci_mbox->ci = 0;
-	ncq->ci_mbox->last_db_state = 0;
+	crdma_debug("CQ CI mailbox DMA addr 0x%016llX\n", ccq->ci_mbox_paddr);
+	ccq->ci_mbox->ci = 0;
+	ccq->ci_mbox->last_db_state = 0;
 	wmb();
 
 	/* Assign CQ to MSI-X EQ based on completion vector */
-	ncq->eq_num = dev->eq_table.num_eq > 1 ? 1 + comp_vector %
+	ccq->eq_num = dev->eq_table.num_eq > 1 ? 1 + comp_vector %
 			(dev->eq_table.num_eq - 1) : 0;
-	dev->cq_table[ncq->cqn] = ncq;
+	dev->cq_table[ccq->cqn] = ccq;
 
 	if (udata) {
 		struct crdma_ucontext *crdma_uctxt = rdma_udata_to_drv_context(
 				udata, struct crdma_ucontext, ib_uctxt);
 		struct crdma_ib_create_cq_resp resp;
 
-		err = crdma_cq_create_cmd(dev, ncq, &crdma_uctxt->uar);
+		err = crdma_cq_create_cmd(dev, ccq, &crdma_uctxt->uar);
 		if (err) {
 			crdma_info("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
-		resp.cq_base_addr = sg_dma_address(ncq->mem->alloc);
-		resp.cq_size = ncq->mem->tot_len;
-		resp.ci_mbox_base_addr = ncq->ci_mbox_paddr;
+		resp.cq_base_addr = sg_dma_address(ccq->mem->alloc);
+		resp.cq_size = ccq->mem->tot_len;
+		resp.ci_mbox_base_addr = ccq->ci_mbox_paddr;
 		resp.ci_mbox_size = PAGE_SIZE;
-		resp.cqn = ncq->cqn;
-		resp.num_cqe = ncq->num_cqe;
+		resp.cqn = ccq->cqn;
+		resp.num_cqe = ccq->num_cqe;
 		crdma_debug("CQ buffer paddr 0x%016llX\n", resp.cq_base_addr);
 		crdma_debug("CI mbox paddr 0x%016llX\n",
 				resp.ci_mbox_base_addr);
@@ -2451,7 +2451,7 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 		}
 
 		err = crdma_add_mmap_req(crdma_uctxt, resp.cq_base_addr,
-				ncq->mem->tot_len);
+				ccq->mem->tot_len);
 		if (err) {
 			crdma_info("Failed to add pending mmap, %d\n", err);
 			goto cq_destroy;
@@ -2462,36 +2462,36 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 			crdma_info("Failed to add mbox pending mmap, %d\n",
 					err);
 			crdma_remove_mmap_req(crdma_uctxt, resp.cq_base_addr,
-					ncq->mem->tot_len);
+					ccq->mem->tot_len);
 			goto cq_destroy;
 		}
 	} else {
-		err = crdma_cq_create_cmd(dev, ncq, &dev->priv_uar);
+		err = crdma_cq_create_cmd(dev, ccq, &dev->priv_uar);
 		if (err) {
 			crdma_info("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
-		ncq->mask = ncq->num_cqe - 1;
-		ncq->arm_seqn = 1;
-		while ((1 << ncq->num_cqe_log2) < ncq->num_cqe)
-			ncq->num_cqe_log2++;
+		ccq->mask = ccq->num_cqe - 1;
+		ccq->arm_seqn = 1;
+		while ((1 << ccq->num_cqe_log2) < ccq->num_cqe)
+			ccq->num_cqe_log2++;
 	}
 
-	atomic_set(&ncq->ref_cnt, 1);
-	init_completion(&ncq->free);
+	atomic_set(&ccq->ref_cnt, 1);
+	init_completion(&ccq->free);
 
 	return 0;
 
 cq_destroy:
-	crdma_cq_destroy_cmd(dev, ncq);
+	crdma_cq_destroy_cmd(dev, ccq);
 cmd_fail:
-	dev->cq_table[ncq->cqn] = NULL;
+	dev->cq_table[ccq->cqn] = NULL;
 	dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-			ncq->ci_mbox, ncq->ci_mbox_paddr);
+			ccq->ci_mbox, ccq->ci_mbox_paddr);
 free_queue_mem:
-	crdma_free_hw_queue(dev, ncq->mem);
+	crdma_free_hw_queue(dev, ccq->mem);
 free_cq:
-	crdma_free_bitmap_index(&dev->cq_map, ncq->cqn);
+	crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
 free_mem:
 
 	/*
@@ -2509,7 +2509,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 				  struct ib_ucontext *ib_uctxt, struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
-	struct crdma_cq *ncq;
+	struct crdma_cq *ccq;
 	struct crdma_cqe *cqe;
 	unsigned int num_cqe = attr->cqe;
 	int comp_vector = attr->comp_vector;
@@ -2523,30 +2523,30 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 		return ERR_PTR(-EINVAL);
 	}
 
-	ncq = kzalloc(sizeof(*ncq), GFP_KERNEL);
-	if (!ncq)
+	ccq = kzalloc(sizeof(*ccq), GFP_KERNEL);
+	if (!ccq)
 		return ERR_PTR(-ENOMEM);
 
-	spin_lock_init(&ncq->lock);
-	ncq->num_cqe = roundup_pow_of_two(num_cqe + 1);
-	ncq->ib_cq.cqe = ncq->num_cqe - 1;
+	spin_lock_init(&ccq->lock);
+	ccq->num_cqe = roundup_pow_of_two(num_cqe + 1);
+	ccq->ib_cq.cqe = ccq->num_cqe - 1;
 
 #if CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_info("Rounded up CQE count %d\n", ncq->num_cqe);
+	crdma_info("Rounded up CQE count %d\n", ccq->num_cqe);
 #endif
 
 	/* Allocate resource index for the CQ control object */
-	ncq->cqn = crdma_alloc_bitmap_index(&dev->cq_map);
-	if (ncq->cqn < 0) {
+	ccq->cqn = crdma_alloc_bitmap_index(&dev->cq_map);
+	if (ccq->cqn < 0) {
 		crdma_info("No CQ index available\n");
 		err = -ENOMEM;
 		goto free_mem;
 	}
 
 	/* Kernel allocates CQ memory, user contexts will mmap it */
-	ncq->mem = crdma_alloc_hw_queue(dev,
-				ncq->num_cqe * dev->cap.cqe_size);
-	if (IS_ERR(ncq->mem)) {
+	ccq->mem = crdma_alloc_hw_queue(dev,
+				ccq->num_cqe * dev->cap.cqe_size);
+	if (IS_ERR(ccq->mem)) {
 		crdma_dev_err(dev, "Unable to allocate CQ HW queue\n");
 		err = -ENOMEM;
 		goto free_cq;
@@ -2557,8 +2557,8 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 	 * between 1 and 0 for each reuse of the CQE. Set kernel virtual
 	 * address and initialize to indicate invalid CQE.
 	 */
-	ncq->cqe_buf = sg_virt(ncq->mem->alloc);
-	for (i = 0, cqe = ncq->cqe_buf; i < ncq->num_cqe; i++, cqe++)
+	ccq->cqe_buf = sg_virt(ccq->mem->alloc);
+	for (i = 0, cqe = ccq->cqe_buf; i < ccq->num_cqe; i++, cqe++)
 		cqe->owner = 0;
 
 	/*
@@ -2567,38 +2567,38 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 	 * have multiple CQ mailboxes for the same context share pages
 	 * to reduce overhead.
 	 */
-	ncq->ci_mbox = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
-			PAGE_SIZE, &ncq->ci_mbox_paddr, GFP_KERNEL);
-	if (!ncq->ci_mbox) {
+	ccq->ci_mbox = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
+			PAGE_SIZE, &ccq->ci_mbox_paddr, GFP_KERNEL);
+	if (!ccq->ci_mbox) {
 		crdma_info("ci_mbox allocation failed\n");
 		err = -ENOMEM;
 		goto free_queue_mem;
 	}
-	crdma_debug("CQ CI mailbox DMA addr 0x%016llX\n", ncq->ci_mbox_paddr);
-	ncq->ci_mbox->ci = 0;
-	ncq->ci_mbox->last_db_state = 0;
+	crdma_debug("CQ CI mailbox DMA addr 0x%016llX\n", ccq->ci_mbox_paddr);
+	ccq->ci_mbox->ci = 0;
+	ccq->ci_mbox->last_db_state = 0;
 	wmb();
 
 	/* Assign CQ to MSI-X EQ based on completion vector */
-	ncq->eq_num = dev->eq_table.num_eq > 1 ? 1 + comp_vector %
+	ccq->eq_num = dev->eq_table.num_eq > 1 ? 1 + comp_vector %
 			(dev->eq_table.num_eq - 1) : 0;
-	dev->cq_table[ncq->cqn] = ncq;
+	dev->cq_table[ccq->cqn] = ccq;
 
 	if (ib_uctxt) {
 		struct crdma_ucontext *crdma_uctxt = to_crdma_uctxt(ib_uctxt);
 		struct crdma_ib_create_cq_resp resp;
 
-		err = crdma_cq_create_cmd(dev, ncq, &crdma_uctxt->uar);
+		err = crdma_cq_create_cmd(dev, ccq, &crdma_uctxt->uar);
 		if (err) {
 			crdma_info("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
-		resp.cq_base_addr = sg_dma_address(ncq->mem->alloc);
-		resp.cq_size = ncq->mem->tot_len;
-		resp.ci_mbox_base_addr = ncq->ci_mbox_paddr;
+		resp.cq_base_addr = sg_dma_address(ccq->mem->alloc);
+		resp.cq_size = ccq->mem->tot_len;
+		resp.ci_mbox_base_addr = ccq->ci_mbox_paddr;
 		resp.ci_mbox_size = PAGE_SIZE;
-		resp.cqn = ncq->cqn;
-		resp.num_cqe = ncq->num_cqe;
+		resp.cqn = ccq->cqn;
+		resp.num_cqe = ccq->num_cqe;
 		crdma_debug("CQ buffer paddr 0x%016llX\n", resp.cq_base_addr);
 		crdma_debug("CI mbox paddr 0x%016llX\n",
 				resp.ci_mbox_base_addr);
@@ -2610,7 +2610,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 		}
 
 		err = crdma_add_mmap_req(crdma_uctxt, resp.cq_base_addr,
-				ncq->mem->tot_len);
+				ccq->mem->tot_len);
 		if (err) {
 			crdma_info("Failed to add pending mmap, %d\n", err);
 			goto cq_destroy;
@@ -2621,38 +2621,38 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 			crdma_info("Failed to add mbox pending mmap, %d\n",
 					err);
 			crdma_remove_mmap_req(crdma_uctxt, resp.cq_base_addr,
-					ncq->mem->tot_len);
+					ccq->mem->tot_len);
 			goto cq_destroy;
 		}
 	} else {
-		err = crdma_cq_create_cmd(dev, ncq, &dev->priv_uar);
+		err = crdma_cq_create_cmd(dev, ccq, &dev->priv_uar);
 		if (err) {
 			crdma_info("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
-		ncq->mask = ncq->num_cqe - 1;
-		ncq->arm_seqn = 1;
-		while ((1 << ncq->num_cqe_log2) < ncq->num_cqe)
-			ncq->num_cqe_log2++;
+		ccq->mask = ccq->num_cqe - 1;
+		ccq->arm_seqn = 1;
+		while ((1 << ccq->num_cqe_log2) < ccq->num_cqe)
+			ccq->num_cqe_log2++;
 	}
 
-	atomic_set(&ncq->ref_cnt, 1);
-	init_completion(&ncq->free);
+	atomic_set(&ccq->ref_cnt, 1);
+	init_completion(&ccq->free);
 
-	return &ncq->ib_cq;
+	return &ccq->ib_cq;
 
 cq_destroy:
-	crdma_cq_destroy_cmd(dev, ncq);
+	crdma_cq_destroy_cmd(dev, ccq);
 cmd_fail:
-	dev->cq_table[ncq->cqn] = NULL;
+	dev->cq_table[ccq->cqn] = NULL;
 	dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-			ncq->ci_mbox, ncq->ci_mbox_paddr);
+			ccq->ci_mbox, ccq->ci_mbox_paddr);
 free_queue_mem:
-	crdma_free_hw_queue(dev, ncq->mem);
+	crdma_free_hw_queue(dev, ccq->mem);
 free_cq:
-	crdma_free_bitmap_index(&dev->cq_map, ncq->cqn);
+	crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
 free_mem:
-	kfree(ncq);
+	kfree(ccq);
 
 	/*
 	 * XXX: For development only to catch error codes that are not
@@ -2679,12 +2679,12 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 #endif
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
-	struct crdma_cq *ncq = to_crdma_cq(cq);
+	struct crdma_cq *ccq = to_crdma_cq(cq);
 	int err;
 
-	crdma_info("crdma_destroy_cq cqn =  %d\n", ncq->cqn);
+	crdma_info("crdma_destroy_cq cqn =  %d\n", ccq->cqn);
 
-	err = crdma_cq_destroy_cmd(dev, ncq);
+	err = crdma_cq_destroy_cmd(dev, ccq);
 	if (err) {
 		/*
 		 * TODO: Determine best course of action here, if we
@@ -2696,20 +2696,20 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 	}
 
 	if (dev->have_interrupts)
-		synchronize_irq(dev->eq_table.eq[ncq->eq_num].vector);
+		synchronize_irq(dev->eq_table.eq[ccq->eq_num].vector);
 
-	dev->cq_table[ncq->cqn] = NULL;
+	dev->cq_table[ccq->cqn] = NULL;
 
-	if (atomic_dec_and_test(&ncq->ref_cnt))
-		complete(&ncq->free);
-	wait_for_completion(&ncq->free);
+	if (atomic_dec_and_test(&ccq->ref_cnt))
+		complete(&ccq->free);
+	wait_for_completion(&ccq->free);
 
 	dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-			ncq->ci_mbox, ncq->ci_mbox_paddr);
-	crdma_free_hw_queue(dev, ncq->mem);
-	crdma_free_bitmap_index(&dev->cq_map, ncq->cqn);
+			ccq->ci_mbox, ccq->ci_mbox_paddr);
+	crdma_free_hw_queue(dev, ccq->mem);
+	crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
 #if (!(VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0)))
-	kfree(ncq);
+	kfree(ccq);
 #endif
 	crdma_info("crdma_destroy_cq done\n");
 	return 0;
@@ -2718,7 +2718,7 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
 			struct ib_udata *udata)
 {
-	struct crdma_cq *cq = to_crdma_cq(ibcq);
+	struct crdma_cq *ccq = to_crdma_cq(ibcq);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibcq->device);
 	struct crdma_mem *newmem;
 	struct crdma_cqe *newcqe;
@@ -2738,11 +2738,11 @@ static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
 	}
 	
 	num_cqe = roundup_pow_of_two(num_cqe + 1);
-	oldnum = cq->num_cqe;
-	cq->num_cqe = num_cqe - 1;
+	oldnum = ccq->num_cqe;
+	ccq->num_cqe = num_cqe - 1;
 	if (num_cqe == ibcq->cqe + 1) 
 		return 0;
-	spin_lock_irq(&cq->lock);
+	spin_lock_irq(&ccq->lock);
 	
 	newmem = crdma_alloc_hw_queue(dev,
                                 num_cqe * dev->cap.cqe_size);
@@ -2753,34 +2753,34 @@ static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
         }
 	
 	newcqe = sg_virt(newmem->alloc);
-	for (i = 0, tmpcqe = newcqe; i < cq->num_cqe; i++, tmpcqe++)
+	for (i = 0, tmpcqe = newcqe; i < ccq->num_cqe; i++, tmpcqe++)
                 tmpcqe->owner = 0;
-	memcpy(newcqe, cq->cqe_buf,oldnum * sizeof(struct crdma_cqe));
-	crdma_free_hw_queue(dev, cq->mem);
-	cq->mem = newmem;
-	cq->cqe_buf = newcqe;
-	cq->num_cqe_log2 = ilog2(num_cqe);
+	memcpy(newcqe, ccq->cqe_buf,oldnum * sizeof(struct crdma_cqe));
+	crdma_free_hw_queue(dev, ccq->mem);
+	ccq->mem = newmem;
+	ccq->cqe_buf = newcqe;
+	ccq->num_cqe_log2 = ilog2(num_cqe);
 	ibcq->cqe = num_cqe -1;
 	
-	ret = crdma_cq_resize_cmd(dev, cq);
+	ret = crdma_cq_resize_cmd(dev, ccq);
 	if (ret) {
 		
 		crdma_warn("Microcode resize CQ command failed\n");
 		dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-			cq->ci_mbox, cq->ci_mbox_paddr);
+			ccq->ci_mbox, ccq->ci_mbox_paddr);
 		ret = -EINVAL;
 		goto out;
 	}
 out:
-	spin_unlock_irq(&cq->lock);
+	spin_unlock_irq(&ccq->lock);
 	return ret;
 }
 
-static inline struct crdma_cqe *crdma_cq_head(struct crdma_cq *ncq)
+static inline struct crdma_cqe *crdma_cq_head(struct crdma_cq *ccq)
 {
 	struct crdma_cqe *cqe = NULL;
 
-	cqe = &ncq->cqe_buf[ncq->consumer_cnt & ncq->mask];
+	cqe = &ccq->cqe_buf[ccq->consumer_cnt & ccq->mask];
 
 	/*
 	 * Microcode alternates writing 1 or 0 in the CQE ownership
@@ -2788,7 +2788,7 @@ static inline struct crdma_cqe *crdma_cq_head(struct crdma_cq *ncq)
 	 * a 1 on the first pass.
 	 */
 	if (!!(cqe->owner & CRDMA_CQE_OWNERSHIP_BIT) ==
-			!!(ncq->consumer_cnt & (1 << ncq->num_cqe_log2)))
+			!!(ccq->consumer_cnt & (1 << ccq->num_cqe_log2)))
 			return NULL;
 
 	/*
@@ -2804,16 +2804,16 @@ static inline struct crdma_cqe *crdma_cq_head(struct crdma_cq *ncq)
 static int crdma_poll_cq(struct ib_cq *cq, int num_entries,
 			struct ib_wc *wc)
 {
-	struct crdma_cq	*ncq = to_crdma_cq(cq);
+	struct crdma_cq	*ccq = to_crdma_cq(cq);
 	struct crdma_cqe *cqe;
 	struct crdma_qp *last_qp = NULL;
 	unsigned long	flags;
 	int polled = 0;
 	int ret = 0;
 
-	spin_lock_irqsave(&ncq->lock, flags);
+	spin_lock_irqsave(&ccq->lock, flags);
 	while (polled < num_entries) {
-		cqe = crdma_cq_head(ncq);
+		cqe = crdma_cq_head(ccq);
 		if (!cqe)
 			break;
 		/*
@@ -2822,16 +2822,16 @@ static int crdma_poll_cq(struct ib_cq *cq, int num_entries,
 		 * will not be detected by microcode.
 		 */
 		if (polled)
-			ncq->ci_mbox->ci = cpu_to_le32(ncq->consumer_cnt &
+			ccq->ci_mbox->ci = cpu_to_le32(ccq->consumer_cnt &
 					CRDMA_CQ_MBOX_CONSUMER_NDX_MASK);
 
-		ncq->consumer_cnt++;
+		ccq->consumer_cnt++;
 
 #if 1 /* Extra debug only */
 		print_hex_dump(KERN_DEBUG, "CQE:", DUMP_PREFIX_OFFSET, 8, 1,
 			cqe, 32, 0);
 #endif
-		ret = crdma_process_cqe(ncq, cqe, &last_qp, &wc[polled]);
+		ret = crdma_process_cqe(ccq, cqe, &last_qp, &wc[polled]);
 		if (ret == 0)
 			polled++;
 		else if (ret < 0)
@@ -2839,9 +2839,9 @@ static int crdma_poll_cq(struct ib_cq *cq, int num_entries,
 	}
 
 	/* Update the state of the consumer index shared with microcode */
-	ncq->ci_mbox->ci = cpu_to_le32(ncq->consumer_cnt &
+	ccq->ci_mbox->ci = cpu_to_le32(ccq->consumer_cnt &
 					CRDMA_CQ_MBOX_CONSUMER_NDX_MASK);
-	spin_unlock_irqrestore(&ncq->lock, flags);
+	spin_unlock_irqrestore(&ccq->lock, flags);
 
 	return ret < 0 ? ret : polled;
 }
@@ -2850,25 +2850,25 @@ static int crdma_req_notify_cq(struct ib_cq *cq,
 			enum ib_cq_notify_flags flags)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
-	struct crdma_cq *ncq = to_crdma_cq(cq);
+	struct crdma_cq *ccq = to_crdma_cq(cq);
 	u32 arm;
 	u32 state;
 	u32 db[2];
 	int cnt = 0;
 	u32 fin_state;
 
-	arm = (ncq->arm_seqn << CRDMA_DB_CQ_SEQ_SHIFT) |
+	arm = (ccq->arm_seqn << CRDMA_DB_CQ_SEQ_SHIFT) |
 		((flags & IB_CQ_SOLICITED_MASK) == IB_CQ_SOLICITED ?
 			0 : CRDMA_DB_CQ_ARM_ANY_BIT) |
-		(ncq->cqn & CRDMA_DB_CQN_MASK);
+		(ccq->cqn & CRDMA_DB_CQN_MASK);
 	db[0] = cpu_to_le32(arm);
-	db[1] = cpu_to_le32(CRDMA_DB_FIN_BIT | (ncq->consumer_cnt &
+	db[1] = cpu_to_le32(CRDMA_DB_FIN_BIT | (ccq->consumer_cnt &
 				CRDMA_DB_CQ_CONS_MASK));
 
 	/* Update state and ensure in memory before ringing CQ doorbell */
-	state = (arm & ~CRDMA_DB_CQN_MASK) | (ncq->consumer_cnt &
+	state = (arm & ~CRDMA_DB_CQN_MASK) | (ccq->consumer_cnt &
 				CRDMA_DB_CQ_CONS_MASK);
-	ncq->ci_mbox->last_db_state = cpu_to_le32(state);
+	ccq->ci_mbox->last_db_state = cpu_to_le32(state);
 	wmb();
 
 	/*
@@ -2903,7 +2903,7 @@ static int crdma_req_notify_cq(struct ib_cq *cq,
 static struct ib_mr *crdma_get_dma_mr(struct ib_pd *pd, int access_flags)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
-	struct crdma_mr *nmr;
+	struct crdma_mr *cmr;
 	int err;
 
 #if (!(VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0)))
@@ -2912,42 +2912,42 @@ static struct ib_mr *crdma_get_dma_mr(struct ib_pd *pd, int access_flags)
 #endif
 	crdma_info("crdma_get_dma_mr\n");
 
-	nmr = kmalloc(sizeof(*nmr), GFP_KERNEL);
-	if (!nmr) {
+	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
+	if (!cmr) {
 		crdma_info("No memory for MR object\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
-	nmr->mpt_index = crdma_alloc_bitmap_index(&dev->mpt_map);
-	if (nmr->mpt_index < 0) {
+	cmr->mpt_index = crdma_alloc_bitmap_index(&dev->mpt_map);
+	if (cmr->mpt_index < 0) {
 		err = -ENOMEM;
 		goto free_mem;
 	}
-	crdma_info("DMA MPT Index %d\n", nmr->mpt_index);
+	crdma_info("DMA MPT Index %d\n", cmr->mpt_index);
 
-	nmr->umem = NULL;
-	nmr->pdn = to_crdma_pd(pd)->pd_index;
-	nmr->io_vaddr = 0;
-	nmr->len = ~0ull;
-	nmr->access = access_flags;
-	nmr->page_shift = 0;
-	nmr->mpt_order = 0;
+	cmr->umem = NULL;
+	cmr->pdn = to_crdma_pd(pd)->pd_index;
+	cmr->io_vaddr = 0;
+	cmr->len = ~0ull;
+	cmr->access = access_flags;
+	cmr->page_shift = 0;
+	cmr->mpt_order = 0;
 
-	nmr->key = nmr->mpt_index;
-	nmr->ib_mr.rkey = nmr->ib_mr.lkey = nmr->key;
+	cmr->key = cmr->mpt_index;
+	cmr->ib_mr.rkey = cmr->ib_mr.lkey = cmr->key;
 
-	if (crdma_init_mpt(dev, nmr, 0, 0)) {
+	if (crdma_init_mpt(dev, cmr, 0, 0)) {
 		crdma_info("init_mpt failed\n");
 		err = -ENOMEM;
 		goto free_mpt;
 	}
 
-	return &nmr->ib_mr;
+	return &cmr->ib_mr;
 
 free_mpt:
-	crdma_free_bitmap_index(&dev->mpt_map, nmr->mpt_index);
+	crdma_free_bitmap_index(&dev->mpt_map, cmr->mpt_index);
 free_mem:
-	kfree(nmr);
+	kfree(cmr);
 	return ERR_PTR(err);
 }
 
@@ -2956,7 +2956,7 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 			struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
-	struct crdma_mr *nmr;
+	struct crdma_mr *cmr;
 	int count, num_comp, shift, order, log2_page_sz;
 	int err;
 
@@ -2964,31 +2964,31 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 	crdma_info("parameter: start=0x%llu, length=0x%llu, virt_addr=0x%llu\n",
 		start, length, virt_addr);
 
-	nmr = kmalloc(sizeof(*nmr), GFP_KERNEL);
-	if (!nmr) {
+	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
+	if (!cmr) {
 		crdma_info("No memory for MR object\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
-	nmr->mpt_index = crdma_alloc_bitmap_index(&dev->mpt_map);
-	if (nmr->mpt_index < 0) {
+	cmr->mpt_index = crdma_alloc_bitmap_index(&dev->mpt_map);
+	if (cmr->mpt_index < 0) {
 		err = -ENOMEM;
 		goto free_mem;
 	}
-	crdma_info("MPT Index %d\n", nmr->mpt_index);
+	crdma_info("MPT Index %d\n", cmr->mpt_index);
 
 #if (VER_NON_RHEL_GE(5,6))
-	nmr->umem = ib_umem_get(pd->device, start, length, access_flags);
+	cmr->umem = ib_umem_get(pd->device, start, length, access_flags);
 #elif (VER_NON_RHEL_GE(5,5) || VER_RHEL_GE(8,0))
-	nmr->umem = ib_umem_get(udata, start, length, access_flags);
+	cmr->umem = ib_umem_get(udata, start, length, access_flags);
 #elif (VER_NON_RHEL_GE(5,1))
-	nmr->umem = ib_umem_get(udata, start, length, access_flags, 0);
+	cmr->umem = ib_umem_get(udata, start, length, access_flags, 0);
 #else
-	nmr->umem = ib_umem_get(pd->uobject->context, start, length,
+	cmr->umem = ib_umem_get(pd->uobject->context, start, length,
 			access_flags, 0);
 #endif
-	if (IS_ERR(nmr->umem)) {
-		err = PTR_ERR(nmr->umem);
+	if (IS_ERR(cmr->umem)) {
+		err = PTR_ERR(cmr->umem);
 		crdma_info("ib_umem_get() failed %d\n", err);
 		goto free_mpt;
 	}
@@ -2996,22 +2996,22 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
 	log2_page_sz = PAGE_SHIFT;
 #else
-	log2_page_sz = nmr->umem->page_shift;
+	log2_page_sz = cmr->umem->page_shift;
 #endif
 	crdma_info("User Memory Page Size %d\n", log2_page_sz);
 #if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))
 	crdma_info("User Memory Num Pages %ld\n",
-				ib_umem_num_dma_blocks(nmr->umem, PAGE_SIZE));
+				ib_umem_num_dma_blocks(cmr->umem, PAGE_SIZE));
 #else
 	crdma_info("User Memory Num Pages %d\n",
-				ib_umem_page_count(nmr->umem));
+				ib_umem_page_count(cmr->umem));
 #endif
 	/*
 	 * Find the largest compound page size that can be used
 	 * for the physical page list, limiting to the supported
 	 * microcode maximum.
 	 */
-	crdma_compound_order(nmr->umem, start, &count, &num_comp,
+	crdma_compound_order(cmr->umem, start, &count, &num_comp,
 			&shift, &order);
 	crdma_info("User Memory Pages %d\n", count);
 	crdma_info("User Memory Compound Pages %d\n", num_comp);
@@ -3027,34 +3027,34 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 	crdma_info("Adjusted number of compound pages %d\n", num_comp);
 	crdma_info("Adjusted compound order %d\n", order);
 
-	nmr->pdn = to_crdma_pd(pd)->pd_index;
-	nmr->io_vaddr = virt_addr;
-	nmr->len = length;
-	nmr->access = access_flags;
+	cmr->pdn = to_crdma_pd(pd)->pd_index;
+	cmr->io_vaddr = virt_addr;
+	cmr->len = length;
+	cmr->access = access_flags;
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
-	nmr->page_shift = PAGE_SHIFT;
+	cmr->page_shift = PAGE_SHIFT;
 #else
-	nmr->page_shift = nmr->umem->page_shift;
+	cmr->page_shift = cmr->umem->page_shift;
 #endif
-	nmr->mpt_order = order;
+	cmr->mpt_order = order;
 
-	nmr->key = nmr->mpt_index;
-	nmr->ib_mr.rkey = nmr->ib_mr.lkey = nmr->key;
+	cmr->key = cmr->mpt_index;
+	cmr->ib_mr.rkey = cmr->ib_mr.lkey = cmr->key;
 
-	if (crdma_init_mpt(dev, nmr, num_comp, order)) {
+	if (crdma_init_mpt(dev, cmr, num_comp, order)) {
 		crdma_info("init_mpt failed\n");
 		err = -ENOMEM;
 		goto release_umem;
 	}
 
-	return &nmr->ib_mr;
+	return &cmr->ib_mr;
 
 release_umem:
-	ib_umem_release(nmr->umem);
+	ib_umem_release(cmr->umem);
 free_mpt:
-	crdma_free_bitmap_index(&dev->mpt_map, nmr->mpt_index);
+	crdma_free_bitmap_index(&dev->mpt_map, cmr->mpt_index);
 free_mem:
-	kfree(nmr);
+	kfree(cmr);
 	return ERR_PTR(err);
 }
 
@@ -3065,15 +3065,15 @@ static int crdma_dereg_mr(struct ib_mr *mr)
 #endif
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(mr->device);
-	struct crdma_mr *nmr = to_crdma_mr(mr);
+	struct crdma_mr *cmr = to_crdma_mr(mr);
 
-	crdma_cleanup_mpt(dev, nmr);
-	crdma_free_bitmap_index(&dev->mpt_map, nmr->mpt_index);
+	crdma_cleanup_mpt(dev, cmr);
+	crdma_free_bitmap_index(&dev->mpt_map, cmr->mpt_index);
 
-	if (nmr->umem)
-		ib_umem_release(nmr->umem);
+	if (cmr->umem)
+		ib_umem_release(cmr->umem);
 
-	kfree(nmr);
+	kfree(cmr);
 	return 0;
 }
 
