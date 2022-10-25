@@ -1811,7 +1811,8 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	crdma_uctxt = rdma_udata_to_drv_context(udata,
 				struct crdma_ucontext, ib_uctxt);
 #else
-	crdma_uctxt = to_crdma_uctxt(qp->uobject->context);
+	if (udata)
+		crdma_uctxt = to_crdma_uctxt(qp->uobject->context);
 #endif
 	ret = crdma_qp_modify_cmd(dev, cqp, udata ?
 			&crdma_uctxt->uar : &dev->priv_uar,
@@ -2895,10 +2896,6 @@ static struct ib_mr *crdma_get_dma_mr(struct ib_pd *pd, int access_flags)
 	struct crdma_mr *cmr;
 	int err;
 
-#if (!(VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0)))
-	crdma_info("crdma_get_dma_mr not surpported\n");
-	return ERR_PTR(-ENOMEM);
-#endif
 	crdma_info("crdma_get_dma_mr\n");
 
 	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
