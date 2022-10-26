@@ -1949,7 +1949,7 @@ static void set_wqe_sw_ownership(struct crdma_hw_workq *wq,
  * Returns 0 on success, otherwise NOMEM.
  */
 static inline int crdma_copy_inline(struct crdma_swqe_inline *data,
-                        struct ib_send_wr *wr, int max)
+                                    const struct ib_send_wr *wr, int max)
 {
 	struct ib_sge *sg;
 	int i;
@@ -1988,18 +1988,18 @@ static inline void crdma_set_wqe_sge(struct crdma_wqe_sge *wqe_sg, int num_sge,
 	for (i = 0; i < num_sge; i++, sge_list++, wqe_sg++) {
 		wqe_sg->io_addr_h = cpu_to_le32(sge_list->addr >> 32);
 		wqe_sg->io_addr_l = cpu_to_le32(sge_list->addr &
-										0x0FFFFFFFFull);
+						0x0FFFFFFFFull);
 		wqe_sg->l_key = cpu_to_le32(sge_list->lkey);
 		wqe_sg->byte_count = cpu_to_le32(sge_list->length);
 		crdma_debug("SGE %d addr_h 0x%08X, addr_l 0x%08X\n",
-						i, wqe_sg->io_addr_h, wqe_sg->io_addr_l);
-		crdma_debug("       l_key 0x%08X, byte_count 0x%08X\n",
-						wqe_sg->l_key, wqe_sg->byte_count);
+			    i, wqe_sg->io_addr_h, wqe_sg->io_addr_l);
+		crdma_debug("l_key 0x%08X, byte_count 0x%08X\n",
+			    wqe_sg->l_key, wqe_sg->byte_count);
 	}
 	return;
 }
 
-#if 0
+
 /**
  * Get the address of the SQ SWQE located at the queue producer tail
  * position.
@@ -2034,16 +2034,12 @@ static struct crdma_swqe *get_sq_tail(struct crdma_qp *cqp)
 	crdma_debug("Use SWQE Index %d\n", cqp->sq.tail);
 	return cqp->sq.buf + (cqp->sq.tail << cqp->sq.wqe_size_log2);
 }
-#endif
+
 #define CRDMA_SQ_DB_READY_RETRIES              20
 
 static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
-			const struct ib_send_wr **bad_wr)
+			   const struct ib_send_wr **bad_wr)
 {
-	/*Stage1 we do not cosider ib_post_send*/
-	crdma_warn("crdma_post_send in kernel is not surpported\n");
-	return 0;
-#if 0
 	struct crdma_ibdev *dev = to_crdma_ibdev(qp->device);
 	struct crdma_qp *cqp = to_crdma_qp(qp);
 	struct crdma_swqe *swqe;
@@ -2053,9 +2049,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 	int wr_cnt = 0;
 	int ret = 0;
 	u8 flags;
-	u32 fin_state;
 	u32 qpn = qp->qp_type == IB_QPT_GSI ? cqp->qp1_port : cqp->qp_index;
-	int cnt = 0;
 
 	spin_lock(&cqp->sq.lock);
 	while (wr) {
@@ -2078,7 +2072,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		crdma_debug(">>> SWQE Addr %p\n", swqe);
 
 		if (wr->opcode == IB_WR_SEND_WITH_IMM ||
-				wr->opcode == IB_WR_RDMA_WRITE_WITH_IMM)
+		    wr->opcode == IB_WR_RDMA_WRITE_WITH_IMM)
 			swqe->ctrl.imm_inval = __swab32(wr->ex.imm_data);
 		else
 			swqe->ctrl.imm_inval = 0;
@@ -2087,9 +2081,9 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		case IB_QPT_UD:
 		case IB_QPT_GSI:
 			if (wr->opcode != IB_WR_SEND &&
-				wr->opcode != IB_WR_SEND_WITH_IMM) {
+			    wr->opcode != IB_WR_SEND_WITH_IMM) {
 				crdma_info("Only UD SEND, SEND w/IMM "
-						"supported %d\n", wr->opcode);
+					   "supported %d\n", wr->opcode);
 				*bad_wr = wr;
 				ret = -EINVAL;
 				goto out;
@@ -2097,11 +2091,12 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 
 			/* Set the UD address vector */
 			memcpy(&swqe->ud.addr.av,
-					&to_crdma_ah(wr->wr.ud.ah)->av,
-					sizeof(struct crdma_av));
+			       &to_crdma_ah(ud_wr(wr)->ah)->av,
+			       sizeof(struct crdma_av));
 			swqe->ud.addr.dest_qpn =
-					cpu_to_le32(wr->wr.ud.remote_qpn);
-			swqe->ud.addr.qkey = cpu_to_le32(wr->wr.ud.remote_qkey);
+				cpu_to_le32(ud_wr(wr)->remote_qpn);
+			swqe->ud.addr.qkey =
+				cpu_to_le32(ud_wr(wr)->remote_qkey);
 			inline_data = &swqe->ud.inline_data;
 			sg = &swqe->ud.sg[0];
 			break;
@@ -2113,13 +2108,13 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 			case IB_WR_RDMA_WRITE:
 			case IB_WR_RDMA_WRITE_WITH_IMM:
 				swqe->rc.rem_addr.rem_io_addr_h =
-					cpu_to_le32(wr->wr.rdma.remote_addr >>
-							32);
+					cpu_to_le32(rdma_wr(wr)->remote_addr >>
+						    32);
 				swqe->rc.rem_addr.rem_io_addr_l =
-					cpu_to_le32(wr->wr.rdma.remote_addr &
-							0x0FFFFFFFFLL);
+					cpu_to_le32(rdma_wr(wr)->remote_addr &
+						    0x0FFFFFFFFLL);
 				swqe->rc.rem_addr.r_key =
-					cpu_to_le32(wr->wr.rdma.rkey);
+					cpu_to_le32(rdma_wr(wr)->rkey);
 				swqe->rc.rem_addr.rsvd = 0;
 				break;
 
@@ -2132,7 +2127,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 
 		default:
 			crdma_info("Only UD and RC QP supported %d\n",
-				qp->qp_type);
+				   qp->qp_type);
 			*bad_wr = wr;
 			ret = -EINVAL;
 			goto out;
@@ -2162,19 +2157,19 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		owner.opcode = wr->opcode;
 		owner.flags  = flags |
 				(wr->send_flags & IB_SEND_FENCE ?
-					CRDMA_WQE_CTRL_FENCE_BIT : 0) |
+				 CRDMA_WQE_CTRL_FENCE_BIT : 0) |
 				(wr->send_flags & IB_SEND_SIGNALED ?
-					CRDMA_WQE_CTRL_SIGNAL_BIT : 0) |
+				 CRDMA_WQE_CTRL_SIGNAL_BIT : 0) |
 				(wr->send_flags & IB_SEND_SOLICITED ?
-					CRDMA_WQE_CTRL_SOLICITED_BIT : 0) |
+				 CRDMA_WQE_CTRL_SOLICITED_BIT : 0) |
 				(qp->qp_type == IB_QPT_GSI ?
-					CRDMA_WQE_CTRL_GSI_BIT : 0);
+				 CRDMA_WQE_CTRL_GSI_BIT : 0);
 		wmb();
 		swqe->ctrl.owner.word = owner.word;
 
 #if 1 /* Extra debug only */
 		print_hex_dump(KERN_DEBUG, "SWQE:", DUMP_PREFIX_OFFSET, 8, 1,
-			swqe, 128, 0);
+			       swqe, 128, 0);
 #endif
 
 		/* Advance to the next SWQE to consume */
@@ -2191,21 +2186,11 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		 */
 		if (wr)
 			set_wqe_sw_ownership(&cqp->sq, cqp->sq.tail +
-					CRDMA_WQ_WQE_SPARES);
+					     CRDMA_WQ_WQE_SPARES);
 	}
 
 out:
 	if (wr_cnt) {
-		while (cnt++ < CRDMA_SQ_DB_READY_RETRIES) {
-			fin_state = le32_to_cpu(__raw_readl(
-					dev->priv_uar.map +
-					CRDMA_DB_SQ_ADDR_OFFSET));
-			if (!(fin_state & CRDMA_DB_FIN_BIT))
-				break;
-		}
-
-		if (cnt >= CRDMA_SQ_DB_READY_RETRIES)
-			crdma_warn(">>>>>> SQ doorbell unresponsive\n");
 
 		/*
 		 * Make sure last control word has been written, and we have
@@ -2214,33 +2199,24 @@ out:
 		 */
 		mb();
 		crdma_debug("Write priv UAR SQ DB\n");
-		__raw_writel((__force u32) cpu_to_le32(CRDMA_DB_FIN_BIT |
-					(qpn & CRDMA_DB_SQ_MASK)),
-				dev->priv_uar.map + CRDMA_DB_WA_BIT +
-				CRDMA_DB_SQ_ADDR_OFFSET);
+		__raw_writel((__force u32) cpu_to_le32(qpn & CRDMA_DB_SQ_MASK),
+			     dev->priv_uar.map + CRDMA_DB_SQ_ADDR_OFFSET);
 
-		crdma_debug("SQ doorbell address %p\n",
-				dev->priv_uar.map + CRDMA_DB_WA_BIT +
-				CRDMA_DB_SQ_ADDR_OFFSET);
+		crdma_debug("SQ doorbell address %p\n", dev->priv_uar.map +
+			    CRDMA_DB_SQ_ADDR_OFFSET);
 
 		crdma_debug("SQ doorbell written 0x%08X\n",
-				cpu_to_le32(CRDMA_DB_FIN_BIT |
-					(qpn & CRDMA_DB_SQ_MASK)));
-		crdma_debug("SQ doorbell contents 0x%08X\n",
-				le32_to_cpu(__raw_readl(dev->priv_uar.map +
-					CRDMA_DB_SQ_ADDR_OFFSET)));
-
+			    cpu_to_le32(qpn & CRDMA_DB_SQ_MASK));
 		/*
 		 * Make sure the last spare request is set to software
 		 * ownership.
 		 */
 		set_wqe_sw_ownership(&cqp->sq, cqp->sq.tail +
-				CRDMA_WQ_WQE_SPARES);
+				     CRDMA_WQ_WQE_SPARES);
 	}
 	spin_unlock(&cqp->sq.lock);
 
 	return 0;
-#endif
 }
 
 /**
