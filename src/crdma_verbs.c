@@ -1917,7 +1917,7 @@ static int crdma_destroy_qp(struct ib_qp *qp)
 	kfree(cqp);
 	return 0;
 }
-#if 0
+
 /**
  * Set the WQE index for a QP work queue to be in software ownership.
  * The WQE index will be masked to stay within the bounds of the WQ.
@@ -1937,7 +1937,7 @@ static void set_wqe_sw_ownership(struct crdma_hw_workq *wq,
 	*ownership = 0xFFFFFFFF;
 	return;
 }
-#endif
+
 /**
  * Copy work request data to SWQE in-line data.
  *
@@ -2242,7 +2242,7 @@ out:
 	return 0;
 #endif
 }
-#if 0
+
 /**
  * Get the address of the RQ RWQE located at the queue producer tail
  * position.
@@ -2277,15 +2277,10 @@ static struct crdma_rwqe *get_rq_tail(struct crdma_qp *cqp)
 	crdma_debug("Use RWQE Index %d\n", cqp->rq.tail);
 	return cqp->rq.buf + (cqp->rq.tail << cqp->rq.wqe_size_log2);
 }
-#endif
-static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
-			const struct ib_recv_wr **bad_wr)
-{
-	/*Stage1 we do not cosider crdma_post_recv*/
-	crdma_warn("crdma_post_recv in kernel is not surpported\n");
-	return 0;
 
-#if 0
+static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
+			   const struct ib_recv_wr **bad_wr)
+{
 	struct crdma_qp *cqp = to_crdma_qp(qp);
 	struct crdma_rwqe *rwqe;
 	int ret = 0;
@@ -2294,7 +2289,7 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 	while(wr) {
 		if (wr->num_sge > cqp->rq.max_sg) {
 			crdma_info("RQ work request SG entries too large %d\n",
-					wr->num_sge);
+				   wr->num_sge);
 			*bad_wr = wr;
 			ret = -EINVAL;
 			break;
@@ -2330,14 +2325,14 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 		 * RWQE in the sliding block to indicate software ownership.
 		 */
 		set_wqe_sw_ownership(&cqp->rq, cqp->rq.tail +
-				CRDMA_WQ_WQE_SPARES);
+				     CRDMA_WQ_WQE_SPARES);
 		cqp->rq.tail = (cqp->rq.tail + 1) & cqp->rq.mask;
 		wr = wr->next;
 	}
 	spin_unlock(&cqp->rq.lock);
 
 	return ret;
-#endif
+
 }
 
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
