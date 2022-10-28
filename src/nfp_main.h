@@ -72,6 +72,7 @@ struct nfp_dumpspec {
  * @msix:		Single MSI-X entry for non-netdev mode event monitor
  * @limit_vfs:		Number of VFs supported by firmware (~0 for PCI limit)
  * @num_vfs:		Number of SR-IOV VFs enabled
+ * @max_vf_queues:	number of queues can be allocated to VFs
  * @fw_loaded:		Is the firmware loaded?
  * @unload_fw_on_remove:Do we need to unload firmware on driver removal?
  * @ctrl_vnic:		Pointer to the control vNIC if available
@@ -126,6 +127,7 @@ struct nfp_pf {
 
 	unsigned int limit_vfs;
 	unsigned int num_vfs;
+	unsigned int max_vf_queues;
 
 	bool fw_loaded;
 	bool unload_fw_on_remove;

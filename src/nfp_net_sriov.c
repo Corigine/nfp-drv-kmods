@@ -18,6 +18,9 @@
 #include "nfp_net.h"
 #include "nfp_net_sriov.h"
 
+/* capability of VF pre-configuration */
+#define NFP_NET_VF_PRE_CONFIG	NFP_NET_VF_CFG_MB_CAP_QUEUE_CONFIG
+
 static int
 nfp_net_sriov_check(struct nfp_app *app, int vf, u16 cap, const char *msg, bool warn)
 {
@@ -32,6 +35,10 @@ nfp_net_sriov_check(struct nfp_app *app, int vf, u16 cap, const char *msg, bool 
 			nfp_warn(app->pf->cpp, "ndo_set_vf_%s not supported\n", msg);
 		return -EOPNOTSUPP;
 	}
+
+	/* This capability judgement is for VF pre configuration */
+	if (cap & NFP_NET_VF_PRE_CONFIG)
+		return 0;
 
 	if (vf < 0 || vf >= app->pf->num_vfs) {
 		if (warn)
@@ -342,5 +349,47 @@ int nfp_app_get_vf_config(struct net_device *netdev, int vf,
 			ivi->min_tx_rate = 0;
 	}
 #endif
+	return 0;
+}
+
+int nfp_vf_queues_config(struct nfp_pf *pf, int num_vfs)
+{
+	unsigned int i, offset, num_queues_vfs_evenly;
+	struct nfp_net *nn;
+	u32 raw;
+	int err;
+
+	if (nfp_net_sriov_check(pf->app, 0, NFP_NET_VF_CFG_MB_CAP_QUEUE_CONFIG, "max_queue", true))
+		return 0;
+
+	raw = 0;
+	num_queues_vfs_evenly = pf->max_vf_queues / num_vfs;
+	offset = NFP_NET_VF_CFG_MB_SZ + pf->limit_vfs * NFP_NET_VF_CFG_SZ;
+	for (i = 0; i < num_vfs; i++) {
+		raw |= num_queues_vfs_evenly << ((i % sizeof(raw)) * BITS_PER_BYTE);
+		if ((i + 1) % sizeof(raw) == 0 || i + 1 == num_vfs) {
+			writel(raw, pf->vfcfg_tbl2 + offset);
+			offset += sizeof(raw);
+			raw = 0;
+		}
+	}
+
+	writew(NFP_NET_VF_CFG_MB_UPD_QUEUE_CONFIG, pf->vfcfg_tbl2 + NFP_NET_VF_CFG_MB_UPD);
+
+	nn = list_first_entry(&pf->vnics, struct nfp_net, vnic_list);
+	err = nfp_net_reconfig(nn, NFP_NET_CFG_UPDATE_VF);
+	if (err) {
+		nfp_warn(pf->cpp,
+			 "FW reconfig VF config queue failed: %d\n", err);
+		return -EINVAL;
+	}
+
+	err = readw(pf->vfcfg_tbl2 + NFP_NET_VF_CFG_MB_RET);
+	if (err) {
+		nfp_warn(pf->cpp,
+			 "FW refused VF config queue update with errno: %d\n", err);
+		return -EINVAL;
+	}
+
 	return 0;
 }

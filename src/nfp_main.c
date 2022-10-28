@@ -36,6 +36,7 @@
 #include "nfp_app.h"
 #include "nfp_main.h"
 #include "nfp_net.h"
+#include "nfp_net_sriov.h"
 
 #ifdef CONFIG_NFP_NET_PF
 static bool nfp_pf_netdev = true;
@@ -300,6 +301,10 @@ static int nfp_pcie_sriov_enable(struct pci_dev *pdev, int num_vfs)
 			 pf->limit_vfs);
 		return -EINVAL;
 	}
+
+	err = nfp_vf_queues_config(pf, num_vfs);
+	if (err)
+		return err;
 
 	err = pci_enable_sriov(pdev, num_vfs);
 	if (err) {
@@ -1072,6 +1077,9 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 		if (!pf->nfp_dev_cpp)
 			dev_err(&pdev->dev, "Failed to enable user space access. Ignoring.\n");
 	}
+
+	/* Currently total vf queues num is equal to total vf count. */
+	pf->max_vf_queues = pf->limit_vfs;
 
 	nfp_pf_cfg_hwinfo(pf);
 
