@@ -589,7 +589,7 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 
 	return 0;
 }
-
+#if !(VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
 struct net_device *crdma_get_netdev(struct ib_device *ibdev, u8 port_num)
 {
 	struct crdma_ibdev *crdma_dev = to_crdma_ibdev(ibdev);
@@ -610,7 +610,7 @@ struct net_device *crdma_get_netdev(struct ib_device *ibdev, u8 port_num)
 	rcu_read_unlock();
 	return netdev;
 }
-
+#endif
 int crdma_get_port_immutable(struct ib_device *ibdev, u8 port_num,
 			       struct ib_port_immutable *immutable)
 {
@@ -3065,7 +3065,6 @@ static const struct ib_device_ops crdma_dev_ops = {
     .get_link_layer = crdma_get_link_layer,
     .query_gid = crdma_query_gid,
     .query_pkey = crdma_query_pkey,
-    .get_netdev = crdma_get_netdev,
     .modify_device = crdma_modify_device,
     .modify_port = crdma_modify_port,
     .alloc_ucontext = crdma_alloc_ucontext,
@@ -3168,7 +3167,9 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.get_link_layer       = crdma_get_link_layer;
 	dev->ibdev.query_gid            = crdma_query_gid;
 	dev->ibdev.query_pkey           = crdma_query_pkey;
+#if !(VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
 	dev->ibdev.get_netdev           = crdma_get_netdev;
+#endif
 	dev->ibdev.modify_device        = crdma_modify_device;
 	dev->ibdev.modify_port          = crdma_modify_port;
 	dev->ibdev.alloc_ucontext       = crdma_alloc_ucontext;

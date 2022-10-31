@@ -1095,9 +1095,14 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		goto err_free_idr;
 
 	if (crdma_init_hca(dev))
-		goto  err_free_idr;
+		goto err_free_idr;
 
 	dev->ibdev.phys_port_cnt = dev->cap.n_ports;
+
+#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
+	if (ib_device_set_netdev(&dev->ibdev, dev->nfp_info->netdev, 1))
+		goto err_free_idr;
+#endif
 
 	if (crdma_register_verbs(dev))
 		goto err_cleanup_hca;
