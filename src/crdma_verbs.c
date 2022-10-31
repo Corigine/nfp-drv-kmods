@@ -3057,7 +3057,7 @@ static int crdma_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
 static const struct ib_device_ops crdma_dev_ops = {
     .owner = THIS_MODULE,
-    .driver_id = RDMA_DRIVER_CORIGINE,
+    .driver_id = RDMA_DRIVER_CRDMA,
     .uverbs_abi_ver = CRDMA_UVERBS_ABI_VERSION,
 
     .query_device = crdma_query_device,
@@ -3205,7 +3205,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.alloc_mr             = crdma_alloc_mr;
 	dev->ibdev.get_port_immutable   = crdma_get_port_immutable;
 	dev->ibdev.get_dev_fw_str       = crdma_get_dev_fw_str;
-	dev->ibdev.driver_id            = RDMA_DRIVER_CORIGINE;
+	dev->ibdev.driver_id            = RDMA_DRIVER_CRDMA;
 	ret = ib_register_device(&dev->ibdev, NULL);
 #endif
 	crdma_dev_info(dev, "ib_register_device: status: %d\n", ret);

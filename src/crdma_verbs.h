@@ -41,7 +41,11 @@
  * This is a temporary value. We may change this later according
  * to the value in rdma_driver_id.
  */
-#define RDMA_DRIVER_CORIGINE       19
+
+#ifndef RDMA_DRIVER_CRDMA
+#define RDMA_DRIVER_CRDMA       19
+#endif
+
 /*
  * This is a temporary bit that allows an application to specifically
  * ask for internal loop-back. This is a debug helper using for using
