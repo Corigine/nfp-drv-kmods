@@ -37,6 +37,7 @@
 #include <linux/compiler.h>
 #include "crdma_ib.h"
 
+#define CRDMA_DEFAULT_PKEY      0xFFFF
 /*
  * This is a temporary value. We may change this later according
  * to the value in rdma_driver_id.

@@ -662,19 +662,11 @@ static int crdma_query_gid(struct ib_device *ibdev, u8 port_num,
 static int crdma_query_pkey(struct ib_device *ibdev, u8 port_num,
 			u16 index, u16 *pkey)
 {
-	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
-
 	crdma_info("crdma_query_pkey\n");
-	if (port_num != 1) {
-		crdma_dev_warn(dev, "invalid IB port=%d\n", port_num);
+	if (port_num >= 1)
 		return -EINVAL;
-	}
 
-	if (index > 0) {
-		crdma_dev_warn(dev, "invalid pkey index=%d\n", index);
-		return -EINVAL;
-	}
-	*pkey = 0xFFFF;
+	*pkey = CRDMA_DEFAULT_PKEY;
 	return 0;
 }
 
