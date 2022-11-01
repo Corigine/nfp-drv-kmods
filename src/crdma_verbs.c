@@ -647,15 +647,8 @@ static enum rdma_link_layer crdma_get_link_layer(
 static int crdma_query_gid(struct ib_device *ibdev, u8 port_num,
 			int index, union ib_gid *gid)
 {
-	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
-
-	crdma_info("crdma_query_gid\n");
-
-	if (port_num != 1 ||
-		index >= dev->cap.sgid_table_size)
-        return -EINVAL;
-
-	*gid = dev->port.gid_table_entry[index].gid;
+	/* CRDMA HCA only support RoCEv2, so do nothing in this function */
+	crdma_info("CRDMA HCA only support RoCEv2, it is no-op here.\n");
 	return 0;
 }
 
