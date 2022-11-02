@@ -42,6 +42,7 @@
 #include <rdma/ib_user_verbs.h>
 #include <rdma/ib_mad.h>
 #include <rdma/ib_addr.h>
+#include <rdma/ib_cache.h>
 #include <rdma/uverbs_ioctl.h>
 
 #include "crdma_ib.h"
@@ -642,6 +643,79 @@ static enum rdma_link_layer crdma_get_link_layer(
 			struct ib_device *ibdev, u8 port_num)
 {
 	return IB_LINK_LAYER_ETHERNET;
+}
+
+static int crdma_add_gid(const struct ib_gid_attr *attr, void **context)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(attr->device);
+	struct crdma_port *port = &dev->port;
+	struct crdma_gid_entry *entry;
+	int ret = 0;
+	unsigned long flags;
+	u16 index = attr->index;
+
+	/* CRDMA HCA only support RoCEv2*/
+	if (!rdma_protocol_roce_udp_encap(attr->device, attr->port_num)) {
+		crdma_info("CRDMA HCA only support RoCEv2, it is no-op here.\n");
+		return -EINVAL;
+	}
+
+	if (attr->port_num > 1)
+		return -EINVAL;
+
+	if (index >= dev->cap.sgid_table_size)
+		return -EINVAL;
+
+	entry = &port->gid_table_entry[index];
+	spin_lock_irqsave(&port->table_lock, flags);
+	memcpy(&entry->gid, &attr->gid, sizeof(attr->gid));
+	entry->type = RDMA_ROCE_V2_GID_TYPE;
+	entry->valid = 1;
+	spin_unlock_irqrestore(&port->table_lock, flags);
+
+	ret = crdma_write_sgid_table(dev, attr->port_num - 1, port->gid_table_size);
+	if (ret) {
+		crdma_warn("Write sgid table command failed\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int crdma_del_gid(const struct ib_gid_attr *attr, void **context)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(attr->device);
+	struct crdma_port *port = &dev->port;
+	struct crdma_gid_entry *entry;
+	int ret = 0;
+	unsigned long flags;
+	u16 index = attr->index;
+
+	/* CRDMA HCA only support RoCEv2*/
+	if (!rdma_protocol_roce_udp_encap(attr->device, attr->port_num)) {
+		crdma_info("CRDMA HCA only support RoCEv2, it is no-op here.\n");
+		return -EINVAL;
+	}
+
+	if (attr->port_num > 1)
+		return -EINVAL;
+
+	if (index >= dev->cap.sgid_table_size)
+		return -EINVAL;
+
+	entry = &port->gid_table_entry[index];
+	spin_lock_irqsave(&port->table_lock, flags);
+	memset(&entry->gid, 0, 16);
+	entry->valid = 0;
+	spin_unlock_irqrestore(&port->table_lock, flags);
+
+	ret = crdma_write_sgid_table(dev, attr->port_num - 1, port->gid_table_size);
+	if (ret) {
+		crdma_warn("Write sgid table command failed\n");
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 static int crdma_query_gid(struct ib_device *ibdev, u8 port_num,
@@ -2903,6 +2977,8 @@ static const struct ib_device_ops crdma_dev_ops = {
     .query_device = crdma_query_device,
     .query_port = crdma_query_port,
     .get_link_layer = crdma_get_link_layer,
+    .add_gid = crdma_add_gid,
+    .del_gid = crdma_del_gid,
     .query_gid = crdma_query_gid,
     .query_pkey = crdma_query_pkey,
     .modify_device = crdma_modify_device,
@@ -3008,6 +3084,8 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.query_device         = crdma_query_device;
 	dev->ibdev.query_port           = crdma_query_port;
 	dev->ibdev.get_link_layer       = crdma_get_link_layer;
+	dev->ibdev.add_gid		= crdma_add_gid;
+	dev->ibdev.del_gid		= crdma_del_gid;
 	dev->ibdev.query_gid            = crdma_query_gid;
 	dev->ibdev.query_pkey           = crdma_query_pkey;
 #if !(VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
