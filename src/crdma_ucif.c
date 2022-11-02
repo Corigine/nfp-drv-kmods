@@ -522,7 +522,7 @@ static struct crdma_eqe *crdma_next_eqe(struct crdma_eq *eq)
 static void crdma_qp_async_event(struct crdma_ibdev *dev,
 				struct crdma_eqe *eqe)
 {
-	struct crdma_qp *nqp;
+	struct crdma_qp *cqp;
 	uint32_t qpn;
 	struct ib_event event;
 
@@ -530,19 +530,19 @@ static void crdma_qp_async_event(struct crdma_ibdev *dev,
 	crdma_info("QPN %d, %s\n", qpn, crdma_event_to_str(eqe->type));
 
 	spin_lock(&dev->qp_lock);
-	nqp = radix_tree_lookup(&dev->qp_tree, qpn);
-	if (nqp)
-		atomic_inc(&nqp->ref_cnt);
+	cqp = radix_tree_lookup(&dev->qp_tree, qpn);
+	if (cqp)
+		atomic_inc(&cqp->ref_cnt);
 	spin_unlock(&dev->qp_lock);
 
-	if (!nqp) {
+	if (!cqp) {
 		crdma_warn("QPN %d not found\n", qpn);
 		return;
 	}
 
-	if (nqp->ib_qp.event_handler) {
-		event.device	 = nqp->ib_qp.device;
-		event.element.qp = &nqp->ib_qp;
+	if (cqp->ib_qp.event_handler) {
+		event.device	 = cqp->ib_qp.device;
+		event.element.qp = &cqp->ib_qp;
 
 		switch(eqe->type) {
 		case CRDMA_EQ_QP_COMM_ESTABLISHED:
@@ -576,10 +576,10 @@ static void crdma_qp_async_event(struct crdma_ibdev *dev,
 		}
 
 		/* Dispatch */
-		nqp->ib_qp.event_handler(&event, nqp->ib_qp.qp_context);
+		cqp->ib_qp.event_handler(&event, cqp->ib_qp.qp_context);
 	}
-	if (atomic_dec_and_test(&nqp->ref_cnt))
-		complete(&nqp->free);
+	if (atomic_dec_and_test(&cqp->ref_cnt))
+		complete(&cqp->free);
 
 	return;
 }
@@ -596,7 +596,7 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 {
 	struct crdma_eq *eq = eq_ptr;
 	struct crdma_ibdev *dev = eq->dev;
-	struct crdma_cq *ncq;
+	struct crdma_cq *ccq;
 	struct crdma_eqe *eqe;
 	struct ib_event event;
 	uint32_t cqn;
@@ -617,17 +617,17 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 				crdma_dev_warn(dev, "Bad CQN %d\n", cqn);
 				break;
 			}
-			ncq = dev->cq_table[cqn];
+			ccq = dev->cq_table[cqn];
 #if 1
 			/* XXX: Just for debug, will remove */
-			if (!ncq->ib_cq.comp_handler) {
+			if (!ccq->ib_cq.comp_handler) {
 				crdma_dev_warn(dev, "No CQ handler CQN %d\n",
 						cqn);
 				break;
 			}
 #endif
-			ncq->arm_seqn++;
-			atomic_inc(&ncq->ref_cnt);
+			ccq->arm_seqn++;
+			atomic_inc(&ccq->ref_cnt);
 
 			crdma_info("CQN %d, %s\n", cqn,
 					crdma_event_to_str(eqe->type));
@@ -635,11 +635,11 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 			 * Call back into the Verbs core to dispatch
 			 * the completion notification.
 			 */
-			ncq->ib_cq.comp_handler(&ncq->ib_cq,
-					ncq->ib_cq.cq_context);
+			ccq->ib_cq.comp_handler(&ccq->ib_cq,
+					ccq->ib_cq.cq_context);
 
-			if (atomic_dec_and_test(&ncq->ref_cnt))
-				complete(&ncq->free);
+			if (atomic_dec_and_test(&ccq->ref_cnt))
+				complete(&ccq->free);
 			break;
 
 		case CRDMA_EQ_CQ_ERROR:
@@ -648,8 +648,8 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 				crdma_dev_warn(dev, "Bad CQN %d\n", cqn);
 				break;
 			}
-			ncq = dev->cq_table[cqn];
-			atomic_inc(&ncq->ref_cnt);
+			ccq = dev->cq_table[cqn];
+			atomic_inc(&ccq->ref_cnt);
 
 			crdma_info("CQN %d, %s\n", cqn,
 					crdma_event_to_str(eqe->type));
@@ -658,16 +658,16 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 			 * Call back into the Verbs core to dispatch
 			 * the asynchronous event.
 			 */
-			if (ncq->ib_cq.event_handler) {
-				event.device	= ncq->ib_cq.device;
+			if (ccq->ib_cq.event_handler) {
+				event.device	= ccq->ib_cq.device;
 				event.event	= IB_EVENT_CQ_ERR;
-				event.element.cq = &ncq->ib_cq;
-				ncq->ib_cq.event_handler(&event,
-						ncq->ib_cq.cq_context);
+				event.element.cq = &ccq->ib_cq;
+				ccq->ib_cq.event_handler(&event,
+						ccq->ib_cq.cq_context);
 			}
 
-			if (atomic_dec_and_test(&ncq->ref_cnt))
-				complete(&ncq->free);
+			if (atomic_dec_and_test(&ccq->ref_cnt))
+				complete(&ccq->free);
 			break;
 
 		case CRDMA_EQ_CMDIF_COMPLETE:
@@ -2127,7 +2127,7 @@ int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port)
  *
  * Returns 0 on success, otherwise an error.
  */
-static int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *nmr)
+static int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 {
 	struct crdma_mpt_params *param;
 	struct crdma_cmd_mbox in_mbox;
@@ -2140,32 +2140,32 @@ static int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *nmr)
 		return -1;
 
 	param		= in_mbox.buf;
-	param->key	= cpu_to_le32(nmr->key);
+	param->key	= cpu_to_le32(cmr->key);
 
-	flags_pdn	= nmr->pdn & CRDMA_MPT_CREATE_PD_MASK;
-	flags_pdn	|= ((nmr->access & IB_ACCESS_LOCAL_WRITE) ?
+	flags_pdn	= cmr->pdn & CRDMA_MPT_CREATE_PD_MASK;
+	flags_pdn	|= ((cmr->access & IB_ACCESS_LOCAL_WRITE) ?
 				CRDMA_MPT_LOCAL_WRITE_ENABLE : 0) |
-			((nmr->access & IB_ACCESS_REMOTE_WRITE) ?
+			((cmr->access & IB_ACCESS_REMOTE_WRITE) ?
 				CRDMA_MPT_REMOTE_WRITE_ENABLE : 0) |
-			((nmr->access & IB_ACCESS_REMOTE_READ) ?
+			((cmr->access & IB_ACCESS_REMOTE_READ) ?
 				CRDMA_MPT_REMOTE_READ_ENABLE : 0) |
-			(nmr->umem ? 0 : CRDMA_MPT_DMA);
+			(cmr->umem ? 0 : CRDMA_MPT_DMA);
 
 	/* Set PHYS flag if only a single MTT entry and it is supported */
-	if (nmr->num_mtt == 1 && (dev->cap.opt_flags &
+	if (cmr->num_mtt == 1 && (dev->cap.opt_flags &
 			CRDMA_DEV_CAP_FLAG_PHYS))
 		flags_pdn |= CRDMA_MPT_PHYS;
 	param->flags_pd	= cpu_to_le32(flags_pdn);
 
-	param->io_addr_h = cpu_to_le32(nmr->io_vaddr >> 32);
-	param->io_addr_l = cpu_to_le32(nmr->io_vaddr & 0x0FFFFFFFF);
-	param->length	= cpu_to_le32(nmr->len);
-	param->mtt_index= cpu_to_le32(nmr->base_mtt);
+	param->io_addr_h = cpu_to_le32(cmr->io_vaddr >> 32);
+	param->io_addr_l = cpu_to_le32(cmr->io_vaddr & 0x0FFFFFFFF);
+	param->length	= cpu_to_le32(cmr->len);
+	param->mtt_index= cpu_to_le32(cmr->base_mtt);
 
-	page_info = (nmr->mpt_order + nmr->page_shift) <<
+	page_info = (cmr->mpt_order + cmr->page_shift) <<
 				CRDMA_MPT_LOG2_PAGE_SZ_SHIFT;
 	param->page_info = cpu_to_le32(page_info);
-	param->mtt_index = cpu_to_le32(nmr->base_mtt);
+	param->mtt_index = cpu_to_le32(cmr->base_mtt);
 	param->frmr_entries = 0;
 	param->reserved = 0;
 
@@ -2188,35 +2188,35 @@ static int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *nmr)
 	cmd.opcode = CRDMA_CMD_MPT_CREATE;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
-	cmd.input_mod = nmr->mpt_index;
+	cmd.input_mod = cmr->mpt_index;
 	status = crdma_cmd(dev, &cmd);
 	crdma_cleanup_mailbox(dev, &in_mbox);
 
 	return status;
 }
 
-int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *nmr,
+int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr,
 		int comp_pages, int comp_order)
 {
-	struct ib_umem *umem = nmr->umem;
+	struct ib_umem *umem = cmr->umem;
 	int ret;
 
 	crdma_info("crdma_init_mpt \n");
 
 	if (umem) {
-		nmr->num_mtt = comp_pages;
-		nmr->base_mtt = crdma_alloc_bitmap_area(&dev->mtt_map,
-						nmr->num_mtt);
-		if (nmr->base_mtt < 0)
+		cmr->num_mtt = comp_pages;
+		cmr->base_mtt = crdma_alloc_bitmap_area(&dev->mtt_map,
+						cmr->num_mtt);
+		if (cmr->base_mtt < 0)
 			return -ENOMEM;
 
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
 		ret = crdma_mtt_write_sg(dev, umem->sg_head.sgl, umem->nmap,
-				nmr->base_mtt, nmr->num_mtt, PAGE_SHIFT,
+				cmr->base_mtt, cmr->num_mtt, PAGE_SHIFT,
 				comp_pages, comp_order);
 #else
 		ret = crdma_mtt_write_sg(dev, umem->sg_head.sgl, umem->nmap,
-				nmr->base_mtt, nmr->num_mtt, umem->page_shift,
+				cmr->base_mtt, cmr->num_mtt, umem->page_shift,
 				comp_pages, comp_order);
 #endif
 		if (ret) {
@@ -2225,12 +2225,12 @@ int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *nmr,
 		}
 	} else {
 		/* DMA memory region */
-		nmr->num_mtt = 0;
-		nmr->base_mtt = 0;
+		cmr->num_mtt = 0;
+		cmr->base_mtt = 0;
 	}
 
 	/* Issue MPT Create Command */
-	ret = crdma_mpt_create_cmd(dev, nmr);
+	ret = crdma_mpt_create_cmd(dev, cmr);
 	if (ret) {
 		crdma_dev_info(dev, "crdma_mpt_create_cmd failed, "
 				"returned %d\n", ret);
@@ -2240,16 +2240,16 @@ int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *nmr,
 
 free_mtt:
 	if (umem)
-		crdma_free_bitmap_area(&dev->mtt_map, nmr->base_mtt,
-					nmr->num_mtt);
+		crdma_free_bitmap_area(&dev->mtt_map, cmr->base_mtt,
+					cmr->num_mtt);
 	return -ENOMEM;
 }
 
-void crdma_cleanup_mpt(struct crdma_ibdev *dev, struct crdma_mr *nmr)
+void crdma_cleanup_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 {
 	__crdma_no_param_cmd(dev, CRDMA_CMD_MPT_DESTROY, 0,
-			nmr->mpt_index, CRDMA_CMDIF_GEN_TIMEOUT_MS);
-	crdma_free_bitmap_area(&dev->mtt_map, nmr->base_mtt, nmr->num_mtt);
+			cmr->mpt_index, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+	crdma_free_bitmap_area(&dev->mtt_map, cmr->base_mtt, cmr->num_mtt);
 	return;
 }
 

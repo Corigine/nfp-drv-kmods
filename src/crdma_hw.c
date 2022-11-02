@@ -235,18 +235,18 @@ void crdma_set_cq_db(struct crdma_ibdev *dev, u32 cqn, bool solicited)
 {
 	void __iomem *addr;
 	u32 db;
-	struct crdma_cq	*ncq;
+	struct crdma_cq	*ccq;
 
 	if (cqn >= dev->cap.ib.max_cq) {
 		crdma_dev_warn(dev, "CQN (%u) is invalid.\n", cqn);
 		return;
 	}
 
-	ncq = dev->cq_table[cqn];
+	ccq = dev->cq_table[cqn];
 
-	db = (ncq->arm_seqn << CRDMA_DB_CQ_SEQ_SHIFT) |
+	db = (ccq->arm_seqn << CRDMA_DB_CQ_SEQ_SHIFT) |
 		(solicited ? 0 : CRDMA_DB_CQ_ARM_ANY_BIT) |
-		(ncq->cqn & CRDMA_DB_CQN_MASK);
+		(ccq->cqn & CRDMA_DB_CQN_MASK);
 	addr = dev->priv_eq_uar.map + CRDMA_DB_CQ_ADDR_OFFSET;
 	__raw_writel((__force u32) cpu_to_le32(db), addr);
 	mb();
