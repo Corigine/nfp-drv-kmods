@@ -366,7 +366,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	 */
 	dev->cap.ib.max_fast_reg_page_list_len = 0;
 
-	dev->cap.ib.max_pkeys = CRDMA_IB_MAX_PKEY;
+	dev->cap.ib.max_pkeys = CRDMA_IB_MAX_PKEY_TABLE_SIZE;
 
 	/*
 	 * TODO: Either agree with microcode what this value will

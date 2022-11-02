@@ -63,11 +63,11 @@
  * Maximum limits placed on IB resources by the driver.
  */
 enum {
-	CRDMA_IB_MAX_PD		= 1 << 16,
-	CRDMA_IB_MAX_AH		= 1 << 20,
-	CRDMA_IB_MAX_PKEY	= 1,
-	CRDMA_IB_MAX_GID_TABLE_SIZE = 128,
-	CRDMA_IB_MAX_MAC_TABLE_SIZE = 8
+	CRDMA_IB_MAX_PD			= 1 << 16,
+	CRDMA_IB_MAX_AH			= 1 << 20,
+	CRDMA_IB_MAX_PKEY_TABLE_SIZE	= 1,
+	CRDMA_IB_MAX_GID_TABLE_SIZE	= 128,
+	CRDMA_IB_MAX_MAC_TABLE_SIZE	= 8
 };
 
 /*

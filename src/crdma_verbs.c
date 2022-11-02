@@ -574,7 +574,7 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 	                            IB_PORT_REINIT_SUP |
 			                    IB_PORT_VENDOR_CLASS_SUP;
 	port_attr->gid_tbl_len	= dev->cap.sgid_table_size;
-	port_attr->pkey_tbl_len	= 1;
+	port_attr->pkey_tbl_len	= CRDMA_IB_MAX_PKEY_TABLE_SIZE;
 	port_attr->bad_pkey_cntr = 0;
 	port_attr->qkey_viol_cntr = 0;
 
@@ -656,7 +656,8 @@ static int crdma_query_pkey(struct ib_device *ibdev, u8 port_num,
 			u16 index, u16 *pkey)
 {
 	crdma_info("crdma_query_pkey\n");
-	if (port_num >= 1)
+
+	if (index >= CRDMA_IB_MAX_PKEY_TABLE_SIZE)
 		return -EINVAL;
 
 	*pkey = CRDMA_DEFAULT_PKEY;
