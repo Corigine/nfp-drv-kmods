@@ -200,15 +200,6 @@ u64  crdma_uar_pfn(struct crdma_ibdev *dev,
 		struct crdma_uar *uar);
 
 /**
- * Convert a Ethernet MAC to GUID.
- *
- * @mac: Pointer to the MAC address.
- * @vlan_id: A VLAN ID.
- * @guid: Pointer to the GUID to initialize.
- */
-void crdma_mac_to_guid(u8 *mac, u16 vlan_id, u8 *guid);
-
-/**
  * Translate MAC adding/removing byte swap that occurs in DMA to/from
  * microcode memory.
  *

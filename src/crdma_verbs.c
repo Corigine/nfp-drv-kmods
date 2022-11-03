@@ -3102,8 +3102,8 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.node_type = RDMA_NODE_IB_CA;
 	memcpy(dev->ibdev.node_desc, CRDMA_IB_NODE_DESC,
 			sizeof(CRDMA_IB_NODE_DESC));
-	crdma_mac_to_guid(dev->nfp_info->def_mac, 0xFFFF,
-		(u8 *)&dev->ibdev.node_guid);
+	addrconf_addr_eui48((u8 *)&dev->ibdev.node_guid,
+				dev->nfp_info->netdev->dev_addr);
 	dev->ibdev.phys_port_cnt = dev->cap.n_ports;
 
 	/* If more than one EQ, then EQ 0 is reserved for async events */

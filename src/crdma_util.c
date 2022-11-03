@@ -364,28 +364,6 @@ u64 crdma_uar_pfn(struct crdma_ibdev *dev,
  */
 
 /**
- * Convert interface MAC to GID local EUI64
- *
- * @mac: Pointer to MAC address.
- * @vlan_id: The VLAN ID.
- * @guid: Pointer to GUID to initialize.
- */
-void crdma_mac_to_guid(u8 *mac, u16 vlan_id, u8 *guid)
-{
-	memcpy(guid, mac, 3);
-	memcpy(guid + 5, mac + 3, 3);
-	if (vlan_id < 0x1000) {
-		guid[3] = vlan_id >> 8;
-		guid[4] = vlan_id  & 0xff;
-	} else {
-		guid[3] = 0xff;
-		guid[4] = 0xfe;
-	}
-	guid[0] ^= 2;
-	return;
-}
-
-/**
  * Build a ports default GID
  *
  * @dev: The IB RoCE device.
@@ -401,8 +379,8 @@ static void crdma_get_default_gid(struct crdma_ibdev *dev, int port,
 	crdma_debug("dev_addr %p",
 			dev->port.netdev ?
 			dev->port.netdev->dev_addr : 0);
-	crdma_mac_to_guid(dev->port.netdev->dev_addr,
-			0xFFFF, &gid->raw[8]);
+	addrconf_addr_eui48((u8 *)&gid->raw[8],
+				dev->port.netdev->dev_addr);
 }
 
 /**

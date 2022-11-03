@@ -292,8 +292,8 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 			dev->cap.uc_min_rev;
 	dev->cap.ib.hw_ver = 0;
 
-	crdma_mac_to_guid(dev->nfp_info->def_mac, 0xFFFF,
-			(u8 *)&dev->cap.ib.sys_image_guid);
+	addrconf_addr_eui48((u8 *)&dev->cap.ib.sys_image_guid,
+				dev->nfp_info->netdev->dev_addr);
 	dev->cap.ib.max_mr_size = 1ull << cap->max_mr_size_log2;
 	dev->cap.ib.vendor_id = dev->nfp_info->pdev->vendor;
 	dev->cap.ib.vendor_part_id = dev->nfp_info->pdev->device;
