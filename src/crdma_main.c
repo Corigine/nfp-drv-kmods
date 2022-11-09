@@ -888,7 +888,6 @@ static int crdma_init_port(struct crdma_ibdev *dev)
 	/* Initialize the port's address tables */
 	spin_lock_init(&port->table_lock);
 	memcpy(port->mac, port->netdev->dev_addr, ETH_ALEN);
-	crdma_init_sgid_table(dev, 0);
 	crdma_init_smac_table(dev, 0);
 
 	spin_lock_init(&port->qp1_lock);
@@ -1107,9 +1106,6 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 	if (crdma_register_verbs(dev))
 		goto err_cleanup_hca;
 
-	if (crdma_init_net_notifiers(dev))
-		goto err_unregister_verbs;
-
 	for (i = 0; i < ARRAY_SIZE(crdma_class_attrs); i++)
 		if (device_create_file(&dev->ibdev.dev, crdma_class_attrs[i]))
 			goto err_sysfs;
@@ -1119,8 +1115,6 @@ err_sysfs:
 	for (j = 0; j < i; j++)
 		device_remove_file(&dev->ibdev.dev, crdma_class_attrs[j]);
 	crdma_cleanup_net_notifiers(dev);
-err_unregister_verbs:
-	crdma_unregister_verbs(dev);
 err_cleanup_hca:
 	crdma_cleanup_hca(dev);
 err_free_idr:

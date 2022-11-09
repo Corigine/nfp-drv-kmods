@@ -209,39 +209,6 @@ u64  crdma_uar_pfn(struct crdma_ibdev *dev,
 void crdma_mac_swap(u8 *out_mac, u8 *in_mac);
 
 struct crdma_port;
-/**
- * Add a GID to the ports SGID table.
- *
- * @port: The IB RoCE port.
- * @gid: The IB gid.
- * @gid_type: The RoCE gid type.
- *
- * Returns true if the GID is added to the ports SGID table. If the
- * GID already exists in the table then false is returned.
- */
-bool crdma_add_sgid(struct crdma_port *port, union ib_gid *gid, u8 gid_type);
-
-/**
- * Remove a GID from the ports SGID table.
- *
- * @port: The IB RoCE port.
- * @gid: The IB gid.
- * @gid_type: The RoCE gid type.
- *
- * Returns true if the GID is deleted from the ports SGID table. If the
- * GID does not exists in the table then false is returned.
- */
-bool crdma_remove_sgid(struct crdma_port *port, union ib_gid *gid, u8 gid_type);
-
-/**
- * Initialize a ports SGID table.
- *
- * @dev: The IB RoCE device.
- * @port_num: The port number to initialize [0 based].
- *
- * Returns 0 on success, otherwise an error code.
- */
-int crdma_init_sgid_table(struct crdma_ibdev *dev, int port_num);
 
 /**
  * Add a source MAC (or reference) to the ports source MAC table.
@@ -276,15 +243,6 @@ bool crdma_remove_smac(struct crdma_port *port, u8 *mac);
  * Returns 0 on success, otherwise an error code.
  */
 int crdma_init_smac_table(struct crdma_ibdev *dev, int port_num);
-
-/**
- * Initialize IB device net_device notifier call backs.
- *
- * @dev: The RoCE IB device.
- *
- * Returns 0 on success; otherwise an error.
- */
-int crdma_init_net_notifiers(struct crdma_ibdev *dev);
 
 /**
  * Remove IB device net_device notifier call backs.
