@@ -940,209 +940,72 @@ static int crdma_dealloc_pd(struct ib_pd *pd)
 static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr,
 			struct ib_udata *udata)
 {
-	struct ib_pd *pd = ah->pd;
-	struct rdma_ah_attr *ah_attr = init_attr->ah_attr;
 	struct crdma_ibdev *dev = to_crdma_ibdev(ah->device);
+	struct rdma_ah_attr *ah_attr = init_attr->ah_attr;
+	struct crdma_ib_create_ah_resp resp = {};
 	struct crdma_ah *cah = to_crdma_ah(ah);
-	struct in6_addr in6;
-	u8 d_mac[ETH_ALEN];
+	struct ib_pd *pd = ah->pd;
+	int err;
 
 	crdma_info("crdma_create_ah\n");
 
-	if (!(ah_attr->ah_flags & IB_AH_GRH)) {
-			crdma_info("RoCE requires GRH\n");
-			return -EINVAL;
-	}
-	if (pd->uobject) {
-			crdma_warn("Invocation of kernel only implementation\n");
-			return -EINVAL;
+	if (crdma_check_ah_attr(dev, ah_attr)) {
+		crdma_warn("CRDMA ah attr check failed\n");
+		return -EINVAL;
 	}
 
-	if (ah_attr->grh.sgid_index >= dev->cap.sgid_table_size) {
-			crdma_info("Invalid SGID Index %d\n", ah_attr->grh.sgid_index);
+	if (crdma_set_av(pd, &cah->av, ah_attr)) {
+		return -EINVAL;
+	}
+
+	if (udata) {
+		resp.vlan     = le32_to_cpu(cah->av.vlan);
+		resp.v_id     = cah->av.v_id;
+		resp.gid_type = cah->av.gid_type;
+		memcpy(resp.d_mac, cah->av.d_mac, ETH_ALEN);
+
+		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
+		if (err)
 			return -EINVAL;
 	}
 
-	memcpy(&in6, ah_attr->grh.dgid.raw, sizeof(in6));
-	if (rdma_is_multicast_addr(&in6))
-			rdma_get_mcast_mac(&in6, d_mac);
-	else
-			memcpy(d_mac, ah_attr->roce.dmac, ETH_ALEN);
-
-	crdma_info("D_MAC:%02X:%02X:%02X:%02X:%02X:%02X\n",
-					d_mac[0], d_mac[1], d_mac[2], d_mac[3],
-					d_mac[4], d_mac[5]);
-
-#if 0 /* Don't turn on until verified operation */
-	crdma_mac_swap(cah->av.d_mac, d_mac);
-#else
-	cah->av.d_mac[0] = d_mac[3];
-	cah->av.d_mac[1] = d_mac[2];
-	cah->av.d_mac[2] = d_mac[1];
-	cah->av.d_mac[3] = d_mac[0];
-	cah->av.d_mac[4] = d_mac[5];
-	cah->av.d_mac[5] = d_mac[4];
-#endif
-
-	crdma_info("AV D_MAC:%02X:%02X:%02X:%02X:%02X:%02X\n",
-					cah->av.d_mac[0], cah->av.d_mac[1],
-					cah->av.d_mac[2], cah->av.d_mac[3],
-					cah->av.d_mac[4], cah->av.d_mac[5]);
-
-	cah->av.port = ah_attr->port_num - 1;
-	cah->av.service_level = ah_attr->sl;
-	cah->av.s_gid_ndx = ah_attr->grh.sgid_index;
-	cah->av.hop_limit = ah_attr->grh.hop_limit;
-
-	/* Always swap to account for hardware bus swap */
-	cah->av.flow_label = __swab32(ah_attr->grh.flow_label);
-
-	/*
-	* RoCEv2 GID type determines RoCEv1 or RoCEv2 (we only support
-	* v2 so we further define it to indicate to microcode if the GID
-	* is IPv6 or v4 mapped.
-	*/
-	if (ipv6_addr_v4mapped((struct in6_addr *)ah_attr->grh.dgid.raw))
-		cah->av.gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
-	else
-		cah->av.gid_type = CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
-
-	/* For now using maximum rate, no IPD */
-	cah->av.ib_sr_ipd = cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
-					(to_crdma_pd(pd)->pd_index & CRDMA_AV_PD_MASK));
-
-	/*
-	* Maintain destination GID byte swapped on 32-bit boundary
-	* so that it need not be done each time the address handle
-	* is used in a work request.
-	*/
-#if defined(__BIG_ENDIAN)
-	cah->av.d_gid_word[0] =
-			__swab32(ah_attr->grh.dgid.global.subnet_prefix >> 32);
-	cah->av.d_gid_word[1] =
-			__swab32(ah_attr->grh.dgid.global.subnet_prefix & 0x0FFFFFFFF);
-	cah->av.d_gid_word[2] =
-			__swab32(ah_attr->grh.dgid.global.interface_id >> 32);
-	cah->av.d_gid_word[3] =
-			__swab32(ah_attr->grh.dgid.global.interface_id & 0x0FFFFFFFF);
-#elif defined(__LITTLE_ENDIAN)
-	cah->av.d_gid_word[0] =
-			__swab32(ah_attr->grh.dgid.global.subnet_prefix & 0x0FFFFFFFF);
-	cah->av.d_gid_word[1] =
-			__swab32(ah_attr->grh.dgid.global.subnet_prefix >> 32);
-	cah->av.d_gid_word[2] =
-			__swab32(ah_attr->grh.dgid.global.interface_id & 0x0FFFFFFFF);
-	cah->av.d_gid_word[3] =
-			__swab32(ah_attr->grh.dgid.global.interface_id >> 32);
-#else
-#error Host endianness not defined
-#endif
 	return 0;
 }
 #else
 static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 			struct rdma_ah_attr *ah_attr,
-			struct ib_udata *uhw)
+			struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
+	struct crdma_ib_create_ah_resp resp = {};
 	struct crdma_ah *cah;
-	struct in6_addr in6;
-	u8 d_mac[ETH_ALEN];
+	int err;
 
 	crdma_info("crdma_create_ah\n");
 
-	if (!(ah_attr->ah_flags & IB_AH_GRH)) {
-			crdma_info("RoCE requires GRH\n");
-			return ERR_PTR(-EINVAL);
-	}
-	if (pd->uobject) {
-			crdma_warn("Invocation of kernel only implementation\n");
-			return ERR_PTR(-EINVAL);
-	}
-
-	if (ah_attr->grh.sgid_index >= dev->cap.sgid_table_size) {
-			crdma_info("Invalid SGID Index %d\n", ah_attr->grh.sgid_index);
-			return ERR_PTR(-EINVAL);
+	if (crdma_check_ah_attr(dev, ah_attr)) {
+		crdma_warn("CRDMA ah attr check failed\n");
+		return ERR_PTR(-EINVAL);
 	}
 
 	cah = kzalloc(sizeof(*cah), GFP_ATOMIC);
 	if (!cah)
-			return ERR_PTR(-ENOMEM);
+		return ERR_PTR(-ENOMEM);
 
-	memcpy(&in6, ah_attr->grh.dgid.raw, sizeof(in6));
-	if (rdma_is_multicast_addr(&in6))
-			rdma_get_mcast_mac(&in6, d_mac);
-	else
-			memcpy(d_mac, ah_attr->roce.dmac, ETH_ALEN);
+	if (crdma_set_av(pd, &cah->av, ah_attr))
+		return ERR_PTR(-EINVAL);
 
-	crdma_info("D_MAC:%02X:%02X:%02X:%02X:%02X:%02X\n",
-					d_mac[0], d_mac[1], d_mac[2], d_mac[3],
-					d_mac[4], d_mac[5]);
+	if (udata) {
+		resp.vlan     = le32_to_cpu(cah->av.vlan);
+		resp.v_id     = cah->av.v_id;
+		resp.gid_type = cah->av.gid_type;
+		memcpy(resp.d_mac, cah->av.d_mac, ETH_ALEN);
 
-#if 0 /* Don't turn on until verified operation */
-	crdma_mac_swap(cah->av.d_mac, d_mac);
-#else
-	cah->av.d_mac[0] = d_mac[3];
-	cah->av.d_mac[1] = d_mac[2];
-	cah->av.d_mac[2] = d_mac[1];
-	cah->av.d_mac[3] = d_mac[0];
-	cah->av.d_mac[4] = d_mac[5];
-	cah->av.d_mac[5] = d_mac[4];
-#endif
+		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
+		if (err)
+			return ERR_PTR(-EINVAL);
+	}
 
-	crdma_info("AV D_MAC:%02X:%02X:%02X:%02X:%02X:%02X\n",
-					cah->av.d_mac[0], cah->av.d_mac[1],
-					cah->av.d_mac[2], cah->av.d_mac[3],
-					cah->av.d_mac[4], cah->av.d_mac[5]);
-
-	cah->av.port = ah_attr->port_num - 1;
-	cah->av.service_level = ah_attr->sl;
-	cah->av.s_gid_ndx = ah_attr->grh.sgid_index;
-	cah->av.hop_limit = ah_attr->grh.hop_limit;
-
-	/* Always swap to account for hardware bus swap */
-	cah->av.flow_label = __swab32(ah_attr->grh.flow_label);
-
-	/*
-	* RoCEv2 GID type determines RoCEv1 or RoCEv2 (we only support
-	* v2 so we further define it to indicate to microcode if the GID
-	* is IPv6 or v4 mapped.
-	*/
-	if (ipv6_addr_v4mapped((struct in6_addr *)ah_attr->grh.dgid.raw))
-		cah->av.gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
-	else
-		cah->av.gid_type = CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
-
-	/* For now using maximum rate, no IPD */
-	cah->av.ib_sr_ipd = cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
-					(to_crdma_pd(pd)->pd_index & CRDMA_AV_PD_MASK));
-
-	/*
-	* Maintain destination GID byte swapped on 32-bit boundary
-	* so that it need not be done each time the address handle
-	* is used in a work request.
-	*/
-#if defined(__BIG_ENDIAN)
-	cah->av.d_gid_word[0] =
-			__swab32(ah_attr->grh.dgid.global.subnet_prefix >> 32);
-	cah->av.d_gid_word[1] =
-			__swab32(ah_attr->grh.dgid.global.subnet_prefix & 0x0FFFFFFFF);
-	cah->av.d_gid_word[2] =
-			__swab32(ah_attr->grh.dgid.global.interface_id >> 32);
-	cah->av.d_gid_word[3] =
-			__swab32(ah_attr->grh.dgid.global.interface_id & 0x0FFFFFFFF);
-#elif defined(__LITTLE_ENDIAN)
-	cah->av.d_gid_word[0] =
-			__swab32(ah_attr->grh.dgid.global.subnet_prefix & 0x0FFFFFFFF);
-	cah->av.d_gid_word[1] =
-			__swab32(ah_attr->grh.dgid.global.subnet_prefix >> 32);
-	cah->av.d_gid_word[2] =
-			__swab32(ah_attr->grh.dgid.global.interface_id & 0x0FFFFFFFF);
-	cah->av.d_gid_word[3] =
-			__swab32(ah_attr->grh.dgid.global.interface_id >> 32);
-#else
-#error Host endianness not defined
-#endif
 	return &cah->ib_ah;
 }
 #endif
@@ -1154,44 +1017,35 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 	crdma_info("crdma_query_ah\n");
 
 	memset(ah_attr, 0, sizeof(*ah_attr));
-	ah_attr->sl = cah->av.service_level;
-	ah_attr->port_num = cah->av.port + 1;
-	ah_attr->grh.sgid_index = cah->av.s_gid_ndx;
-	ah_attr->grh.hop_limit = cah->av.hop_limit;
-	ah_attr->grh.flow_label = __swab32(cah->av.flow_label);
+	ah_attr->type              = ah->type;
+	ah_attr->sl                = cah->av.service_level;
+	memcpy(ah_attr->roce.dmac, cah->av.d_mac, ETH_ALEN);
+	ah_attr->port_num          = cah->av.port + 1;
+	ah_attr->static_rate       = 0; /* Do not support*/
+	/* Set grh */
+	ah_attr->grh.sgid_index    = cah->av.s_gid_ndx;
+	ah_attr->grh.hop_limit     = cah->av.hop_limit;
+	ah_attr->grh.traffic_class = cah->av.traffic_class;
+	ah_attr->grh.flow_label    = __swab32(cah->av.flow_label);
+	memcpy(ah_attr->grh.dgid.raw, cah->av.d_gid, 16);
 
-	/* TODO: IPD  not implemented yet, assumes static rate is 0 */
-
-#if defined(__BIG_ENDIAN)
-	ah_attr->grh.dgid.global.subnet_prefix =
-			((u64)__swab32(cah->av.d_gid_word[0]) << 32) |
-			__swab32(cah->av.d_gid_word[1]);
-	ah_attr->grh.dgid.global.interface_id =
-			((u64)__swab32(cah->av.d_gid_word[2]) << 32) |
-			__swab32(cah->av.d_gid_word[3]);
-#elif defined(__LITTLE_ENDIAN)
-	ah_attr->grh.dgid.global.subnet_prefix =
-			((u64)__swab32(cah->av.d_gid_word[1]) << 32) |
-			__swab32(cah->av.d_gid_word[0]);
-	ah_attr->grh.dgid.global.interface_id =
-			((u64)__swab32(cah->av.d_gid_word[3]) << 32) |
-			__swab32(cah->av.d_gid_word[2]);
-#else
-#error Host endianness not defined
-#endif
 	return 0;
 }
 
 #if (VER_NON_RHEL_GE(5,0) || VER_RHEL_GE(8,0))
 static int crdma_destroy_ah(struct ib_ah *ah, u32 flags)
+{
+	crdma_info("crdma_destroy_ah\n");
+	return 0;
+}
 #else
 static int crdma_destroy_ah(struct ib_ah *ah)
-#endif
 {
 	crdma_info("crdma_destroy_ah\n");
 	kfree(to_crdma_ah(ah));
 	return 0;
 }
+#endif
 
 #if (VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0))
 static int crdma_create_srq(struct ib_srq *srq,
@@ -3058,6 +2912,9 @@ static const struct ib_device_ops crdma_dev_ops = {
     .mmap = crdma_mmap,
     .alloc_pd = crdma_alloc_pd,
     .dealloc_pd = crdma_dealloc_pd,
+#if (VER_NON_RHEL_GE(5,11) || VER_RHEL_GE(8,0))
+    .create_user_ah = crdma_create_ah,
+#endif
     .create_ah = crdma_create_ah,
     .query_ah = crdma_query_ah,
     .destroy_ah = crdma_destroy_ah,

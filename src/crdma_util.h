@@ -303,4 +303,10 @@ void crdma_cleanup_net_notifiers(struct crdma_ibdev *dev);
 void crdma_write64_db(struct crdma_ibdev *dev,
 		u32 val[2], int uar_off);
 
+int crdma_check_ah_attr(struct crdma_ibdev *dev, struct rdma_ah_attr *attr);
+
+int crdma_set_av(struct ib_pd *pd,
+		 struct crdma_av *av,
+		 struct rdma_ah_attr *ah_attr);
+
 #endif /* CRDMA_UTIL_H */

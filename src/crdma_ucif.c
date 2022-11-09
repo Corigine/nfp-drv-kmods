@@ -1742,36 +1742,7 @@ static int crdma_set_qp_attr(struct crdma_ibdev *dev,
 		attr->qkey = cpu_to_le32(ib_attr->qkey);
 
 	if (ib_attr_mask & IB_QP_AV) {
-		/* Get mac address */
-		memcpy(attr->av.d_mac, ib_attr->ah_attr.roce.dmac, ETH_ALEN);
-
-		/* Todo vlan*/
-		//attr->av.vlan = cpu_to_le16(ib_attr->ah_attr.vlan_id);
-		attr->av.port = ib_attr->ah_attr.port_num - 1;
-		/* TODO: Can't set correctly yet, use IPv4 */
-		attr->av.gid_type = CRDMA_ROCE_V2_IPV4_GID_TYPE;
-		/* TODO: Can't set correclty yet, use 0 */
-		attr->av.s_mac_ndx = 0;
-		/* TODO: Can't set correctly yet */
-		attr->av.v_id = 0;
-		attr->av.traffic_class = ib_attr->ah_attr.grh.traffic_class;
-		attr->av.hop_limit = ib_attr->ah_attr.grh.hop_limit;
-		attr->av.s_gid_ndx = ib_attr->ah_attr.grh.sgid_index;
-		attr->av.service_level = ib_attr->ah_attr.sl;
-		attr->av.flow_label =
-			__swab32(ib_attr->ah_attr.grh.flow_label);
-		/*
-		 * Maintain destination GID byte swapped on 32-bit boundary
-		 * so that it need not be done each time the address handle
-		 * is used in a work request.
-		 */
-		memcpy(attr->av.d_gid, ib_attr->ah_attr.grh.dgid.raw, 16);
-
-		/* XXX: For now we only allow maximum rate, no IPD */
-		attr->av.ib_sr_ipd =
-			cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
-					(to_crdma_pd(qp->ib_qp.pd)->pd_index &
-					CRDMA_AV_PD_MASK));
+		crdma_set_av(qp->ib_qp.pd, &attr->av, &ib_attr->ah_attr);
 	}	
 
 	if (ib_attr_mask & IB_QP_PATH_MTU)

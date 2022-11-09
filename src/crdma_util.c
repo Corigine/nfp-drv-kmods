@@ -41,6 +41,7 @@
 #include <net/ipv6.h>
 #include <net/addrconf.h>
 #include <rdma/ib_addr.h>
+#include <rdma/ib_cache.h>
 
 #include "crdma_ib.h"
 #include "crdma_util.h"
@@ -818,3 +819,91 @@ void crdma_write64_db(struct crdma_ibdev *dev,
 	return;
 }
 #endif
+
+int crdma_check_ah_attr(struct crdma_ibdev *dev, struct rdma_ah_attr *attr)
+{
+	const struct ib_global_route *grh = rdma_ah_read_grh(attr);
+	struct crdma_port *port = &dev->port;
+
+	if (attr->type != RDMA_AH_ATTR_TYPE_ROCE) {
+		crdma_warn("CRDMA HCA only support RoCE \n");
+		return -EINVAL;
+	}
+
+	if (!(rdma_ah_get_ah_flags(attr) & IB_AH_GRH)) {
+		crdma_warn("RoCE requires GRH\n");
+		return -EINVAL;
+	}
+
+	if (rdma_is_multicast_addr((struct in6_addr *)grh->dgid.raw)) {
+		crdma_warn("CRDMA HCA does not support multicast\n");
+		return -EINVAL;
+	}
+
+	if (grh->sgid_index >= port->gid_table_size) {
+		crdma_warn("Invalid SGID Index %d\n", grh->sgid_index);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int crdma_set_av(struct ib_pd *pd,
+		 struct crdma_av *av,
+		 struct rdma_ah_attr *ah_attr)
+{
+	u8 nw_type;
+	u16 vlan = 0xffff;
+
+	crdma_info("crdma_set_av\n");
+
+	/* Don't swap here */
+	memcpy(av->d_mac, ah_attr->roce.dmac, ETH_ALEN);
+
+	av->port          = ah_attr->port_num - 1;
+	av->service_level = ah_attr->sl;
+	av->s_gid_ndx     = ah_attr->grh.sgid_index;
+	av->hop_limit     = ah_attr->grh.hop_limit;
+	av->traffic_class = ah_attr->grh.traffic_class;
+
+	/* Always swap to account for hardware bus swap */
+	av->flow_label    = __swab32(ah_attr->grh.flow_label);
+	/* For now using maximum rate, no IPD */
+	av->ib_sr_ipd = cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
+				(to_crdma_pd(pd)->pd_index & CRDMA_AV_PD_MASK));
+
+	/* Get gid type */
+	nw_type = rdma_gid_attr_network_type(ah_attr->grh.sgid_attr);
+	if (nw_type == RDMA_NETWORK_IPV4)
+		av->gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
+	else if(nw_type == RDMA_NETWORK_IPV6)
+		av->gid_type = CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
+	else {
+		crdma_warn("No supported network type %d\n", nw_type);
+		return -EINVAL;
+	}
+
+	/* Get vlan id*/
+#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
+	if (rdma_read_gid_l2_fields(ah_attr->grh.sgid_attr, &vlan, NULL)) {
+		crdma_warn("Get vlan failed from gid_attr\n");
+		return -EINVAL;
+	}
+#else
+	if (is_vlan_dev(ah_attr->grh.sgid_attr->ndev))
+		vlan = vlan_dev_vlan_id(ah_attr->grh.sgid_attr->ndev);
+#endif
+	if (vlan < VLAN_CFI_MASK) { /* VLAN ID is valid*/
+		av->vlan = cpu_to_le32(vlan);
+		av->v_id = 1;
+	}
+	else
+		av->v_id = 0;
+
+	/*
+		To DO: check it need swap or not wiht firmare debug
+	*/
+	memcpy(av->d_gid, ah_attr->grh.dgid.raw, 16);
+
+	return 0;
+}
