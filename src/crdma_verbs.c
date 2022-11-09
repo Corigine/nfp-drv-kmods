@@ -2949,12 +2949,71 @@ static int crdma_dereg_mr(struct ib_mr *mr)
 }
 
 static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
-			enum ib_mr_type mr_type, u32 max_num_sg)
+			enum ib_mr_type type, u32 max_num_sg)
 {
-	crdma_warn("crdma_alloc_frmr not implemented\n");
-	return ERR_PTR(-ENOMEM);
-}
+	struct crdma_ibdev *cdev = to_crdma_ibdev(pd->device);
+	struct crdma_mr *cmr;
+	int err;
 
+	crdma_info("crdma_alloc_mr\n");
+
+	if (type != IB_MR_TYPE_MEM_REG) {
+		crdma_info("MR type 0x%x not supported", type);
+		return ERR_PTR(-EINVAL);
+	}
+
+	if (max_num_sg > cdev->cap.ib.max_fast_reg_page_list_len) {
+		crdma_info("max num sg (0x%x) exceeded dev cap (0x%x)\n",
+		    max_num_sg, cdev->cap.ib.max_fast_reg_page_list_len);
+		return ERR_PTR(-EINVAL);
+	}
+
+	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
+	if (!cmr) {
+		crdma_info("No memory for MR object\n");
+		return ERR_PTR(-ENOMEM);
+	}
+
+	cmr->num_mtt = max_num_sg;
+	crdma_info("MTT num_mtt %d\n", cmr->num_mtt);
+	if (cmr->num_mtt) {
+		cmr->base_mtt = crdma_alloc_bitmap_area(&cdev->mtt_map,
+						cmr->num_mtt);
+		if (cmr->base_mtt < 0) {
+			err = -ENOMEM;
+			goto free_mem;
+		}
+		crdma_info("MTT base mtt %d\n", cmr->base_mtt);
+	}
+
+	cmr->mpt_index = crdma_alloc_bitmap_index(&cdev->mpt_map);
+	if (cmr->mpt_index < 0) {
+		err = -ENOMEM;
+		goto free_mtt;
+	}
+	crdma_info("MPT Index %d\n", cmr->mpt_index);
+
+	cmr->pdn = to_crdma_pd(pd)->pd_index;
+	cmr->access = 0;
+	cmr->io_vaddr = 0;
+	cmr->len = 0;
+	cmr->mpt_order = 0;
+	cmr->page_shift = PAGE_SHIFT;
+	cmr->key = cmr->mpt_index;
+	cmr->ib_mr.rkey = cmr->key;
+	cmr->ib_mr.lkey = cmr->key;
+	cmr->umem = NULL;
+
+	return &cmr->ib_mr;
+
+free_mtt:
+	if (cmr->num_mtt)
+		crdma_free_bitmap_area(&cdev->mtt_map, cmr->base_mtt,
+						cmr->num_mtt);
+free_mem:
+	kfree(cmr);
+	return ERR_PTR(err);
+}
 
 static int crdma_attach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 {
@@ -2966,6 +3025,69 @@ static int crdma_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 {
 	crdma_warn("crdma_detach_mcast not implemented\n");
 	return 0;
+}
+
+static int crdma_set_page(struct ib_mr *mr, u64 addr)
+{
+	struct crdma_mr *cmr = to_crdma_mr(mr);
+	unsigned long mask = (1 << (cmr->mpt_order + PAGE_SHIFT)) - 1;
+	struct crdma_mtt_write_param *mtt_param;
+
+	if (unlikely(cmr->npages == cmr->num_mtt))
+		return -ENOMEM;
+
+	mtt_param = cmr->buf;
+	mtt_param->entry[cmr->npages].paddr_h = cpu_to_le32(addr >> 32);
+	mtt_param->entry[cmr->npages].paddr_l =	cpu_to_le32(addr & ~mask);
+
+	cmr->npages++;
+	return 0;
+}
+
+static int crdma_map_mr_sg(struct ib_mr *mr, struct scatterlist *sg,
+			   int sg_nents, unsigned int *sg_offset)
+{
+	struct crdma_mr *cmr = to_crdma_mr(mr);
+	struct crdma_ibdev *cdev = to_crdma_ibdev(mr->device);
+	unsigned int page_size = mr->page_size;
+	long order = get_order(page_size);
+	struct crdma_cmd_mbox in_mbox;
+	int nents;
+	int ret;
+
+	if (crdma_init_mailbox(cdev, &in_mbox))
+		return -ENOMEM;
+
+	cmr->buf = in_mbox.buf;
+	cmr->mpt_order = order;
+	cmr->npages = 0;
+	nents = ib_sg_to_pages(mr, sg, sg_nents, sg_offset, crdma_set_page);
+
+	ret = __crdma_mtt_write(cdev, cmr->base_mtt, cmr->npages, &in_mbox);
+	if (ret) {
+		crdma_warn("MTT_WRITE failed %d\n", ret);
+		goto free_mbox;
+	}
+	crdma_debug("MTT_WRITE MTT %d entries written\n", cmr->npages);
+
+	cmr->access = IB_ACCESS_LOCAL_WRITE|IB_ACCESS_REMOTE_WRITE
+		|IB_ACCESS_REMOTE_READ|IB_ACCESS_REMOTE_ATOMIC;
+	cmr->io_vaddr = mr->iova;
+	cmr->len = cmr->npages * page_size;
+	cmr->page_shift = PAGE_SHIFT + order;
+
+	if(crdma_mpt_create_cmd(cdev, cmr)) {
+		crdma_info("crdma_mpt_create_cmd failed\n");
+		ret = -ENOMEM;
+		goto free_mbox;
+	}
+	ret = nents;
+
+free_mbox:
+	cmr->buf = NULL;
+	crdma_cleanup_mailbox(cdev, &in_mbox);
+
+	return ret;
 }
 
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
@@ -3019,6 +3141,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     .alloc_mr = crdma_alloc_mr,
     .get_port_immutable = crdma_get_port_immutable,
     .get_dev_fw_str = crdma_get_dev_fw_str,
+    .map_mr_sg = crdma_map_mr_sg,
 
     INIT_RDMA_OBJ_SIZE(ib_pd, crdma_pd, ib_pd),
     INIT_RDMA_OBJ_SIZE(ib_cq, crdma_cq, ib_cq),
@@ -3126,6 +3249,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.alloc_mr             = crdma_alloc_mr;
 	dev->ibdev.get_port_immutable   = crdma_get_port_immutable;
 	dev->ibdev.get_dev_fw_str       = crdma_get_dev_fw_str;
+	dev->ibdev.map_mr_sg            = crdma_map_mr_sg;
 	dev->ibdev.driver_id            = RDMA_DRIVER_CRDMA;
 	ret = ib_register_device(&dev->ibdev, NULL);
 #endif

@@ -943,6 +943,7 @@ struct crdma_qp_params {
 } __packed;
 
 struct crdma_qp;
+struct crdma_mr;
 
 /**
  * Modify a queue pair control object.
@@ -1004,6 +1005,16 @@ int crdma_port_enable_cmd(struct crdma_ibdev *dev, u8 port);
  * Returns 0 on success, otherwise an error.
  */
 int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port);
+
+/**
+ * Issue microcode MPT create command.
+ *
+ * @dev: The IB RoCE device.
+ * @cmr: The memory region associated with the MPT.
+ *
+ * Returns 0 on success, otherwise an error.
+ */
+int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr);
 
 /*
  * Create a Memory Access and Protection Table entry.
@@ -1181,6 +1192,40 @@ int crdma_test_eq_enqueue(struct crdma_ibdev *dev, int eqn, int cnt);
  * Returns 0 on success, otherwise an error code.
  */
 int crdma_init_cmdif(struct crdma_ibdev *dev);
+
+/**
+ * Acquire a command input/output DMA buffer for a mailbox.
+ *
+ * @dev: The RoCE IB device.
+ * @mbox: The mail box to assign the DMA buffer too.
+ *
+ * 0 on success, otherwise -ENOMEM.
+ */
+int crdma_init_mailbox(struct crdma_ibdev *dev,
+		struct crdma_cmd_mbox *mbox);
+
+/**
+ * Issues an MTT_WRITE to set a block of HCA MTT values. The MTT values to be
+ * written should have been initialized in the input mailbox.
+ *
+ * @dev: The RoCE IB device.
+ * @base_mtt: The base MTT index for the first MTT entry in the block.
+ * @num_mtt: The number of consecutive MTT entries to write.
+ * @in_mbox: Input mailbox initialized with MTT entry values.
+ *
+ * Returns 0 on success, otherwise an error.
+ */
+int __crdma_mtt_write(struct crdma_ibdev *dev, u32 base_mtt,
+		u32 num_mtt, struct crdma_cmd_mbox *in_mbox);
+
+/**
+ * Release mailbox DMA buffer previously acquired with crdma_init_mailbox().
+ *
+ * @dev: The RoCE IB device.
+ * @mbox: The mail box for which the DMA buffer resources are to be released.
+ */
+void crdma_cleanup_mailbox(struct crdma_ibdev *dev,
+		struct crdma_cmd_mbox *mbox);
 
 /**
  * Release microcode command/status interface resources.

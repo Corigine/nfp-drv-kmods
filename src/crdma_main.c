@@ -364,7 +364,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	 * a maximum to device capabilities that they will support.
 	 * Although I could also calculate from SWQE size.
 	 */
-	dev->cap.ib.max_fast_reg_page_list_len = 0;
+	dev->cap.ib.max_fast_reg_page_list_len = CRDMA_IB_MAX_FAST_REG_PAGES;
 
 	dev->cap.ib.max_pkeys = CRDMA_IB_MAX_PKEY_TABLE_SIZE;
 

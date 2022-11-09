@@ -67,7 +67,8 @@ enum {
 	CRDMA_IB_MAX_AH			= 1 << 20,
 	CRDMA_IB_MAX_PKEY_TABLE_SIZE	= 1,
 	CRDMA_IB_MAX_GID_TABLE_SIZE	= 4,
-	CRDMA_IB_MAX_MAC_TABLE_SIZE	= 8
+	CRDMA_IB_MAX_MAC_TABLE_SIZE	= 8,
+	CRDMA_IB_MAX_FAST_REG_PAGES     = 64
 };
 
 /*
@@ -309,6 +310,9 @@ struct crdma_mr {
 	u32			key;		/* Both Lkey and Rkey */
 	u32			pdn;		/* Protection Domain */
 	u32			access;		/* IB enable flags */
+
+	u32			npages;
+	void			*buf;
 };
 
 /* Software formatted copy of microcode GID table entries */

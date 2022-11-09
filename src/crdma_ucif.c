@@ -455,7 +455,7 @@ static int crdma_cmd(struct crdma_ibdev *dev, struct crdma_cmd *cmd)
  *
  * 0 on success, otherwise -ENOMEM.
  */
-static int crdma_init_mailbox(struct crdma_ibdev *dev,
+int crdma_init_mailbox(struct crdma_ibdev *dev,
 		struct crdma_cmd_mbox *mbox)
 {
 	mbox->buf = dma_pool_alloc(dev->mbox_pool, GFP_KERNEL,
@@ -474,7 +474,7 @@ static int crdma_init_mailbox(struct crdma_ibdev *dev,
  * @dev: The RoCE IB device.
  * @mbox: The mail box for which the DMA buffer resources are to be released.
  */
-static void crdma_cleanup_mailbox(struct crdma_ibdev *dev,
+void crdma_cleanup_mailbox(struct crdma_ibdev *dev,
 		struct crdma_cmd_mbox *mbox)
 {
 	if (!mbox->buf)
@@ -1204,7 +1204,7 @@ int crdma_hca_disable(struct crdma_ibdev *dev)
  *
  * Returns 0 on success, otherwise an error.
  */
-static int __crdma_mtt_write(struct crdma_ibdev *dev, u32 base_mtt,
+int __crdma_mtt_write(struct crdma_ibdev *dev, u32 base_mtt,
 		u32 num_mtt, struct crdma_cmd_mbox *in_mbox)
 {
 	struct crdma_mtt_write_param *mtt_param = in_mbox->buf;
@@ -2098,7 +2098,7 @@ int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port)
  *
  * Returns 0 on success, otherwise an error.
  */
-static int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr)
+int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 {
 	struct crdma_mpt_params *param;
 	struct crdma_cmd_mbox in_mbox;
