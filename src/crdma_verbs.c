@@ -1652,6 +1652,19 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	crdma_info("qp_type %d\n", qp->qp_type);
 
 	mutex_lock(&cqp->mutex);
+	/*
+	 * TODO: Our microcode does not support Queue Pair state transitions.
+	 * This part needs to be adapted latter.
+	 */
+	if (qp_attr_mask & IB_QP_CUR_STATE &&
+	    qp_attr->cur_qp_state != cqp->qp_state) {
+		crdma_info("IB_QP_CUR_STATE is set, but qp_attr->cur_qp_state "
+			   "%d, cqp->qp_state %d\n"
+			   qp_attr->cur_qp_state, cqp->qp_state);
+		ret = -EINVAL;
+		goto out;
+	}
+
 	cur_state = cqp->qp_state;
 	new_state = qp_attr_mask & IB_QP_STATE ? qp_attr->qp_state : cur_state;
 
