@@ -1659,7 +1659,7 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	if (qp_attr_mask & IB_QP_CUR_STATE &&
 	    qp_attr->cur_qp_state != cqp->qp_state) {
 		crdma_info("IB_QP_CUR_STATE is set, but qp_attr->cur_qp_state "
-			   "%d, cqp->qp_state %d\n"
+			   "%d, cqp->qp_state %d\n",
 			   qp_attr->cur_qp_state, cqp->qp_state);
 		ret = -EINVAL;
 		goto out;
