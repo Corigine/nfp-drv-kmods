@@ -367,21 +367,85 @@ void crdma_mac_swap(u8 *out_mac, u8 *in_mac)
 	return;
 }
 
+/**
+ * net_device notifier callback handler.
+ *
+ * @nb: Pointer to the notifier block.
+ * @event: The notification event code.
+ * @ptr: The pointer to private data (net_device).
+ *
+ * Returns NOTIFY_DONE.
+*/
+static int crdma_netdev_event(struct notifier_block *nb,
+			unsigned long event, void *ptr)
+{
+	struct net_device *real_netdev, *netdev = netdev_notifier_info_to_dev(ptr);
+	struct crdma_ibdev *dev;
+
+	crdma_debug("crdma_netdev_event()\n");
+	pr_info("	netdev:  %p\n", netdev);
+	pr_info("	event:  %ld\n", event);
+
+	dev = container_of(nb, struct crdma_ibdev, nb_netdev);
+	pr_info("associated RoCE IB device %p\n", dev);
+
+	if (netdev->priv_flags & IFF_802_1Q_VLAN)
+		real_netdev = rdma_vlan_dev_real_dev(netdev);
+	else
+		real_netdev = netdev;
+
+	if (real_netdev != dev->port.netdev) {
+		crdma_info("Event netdev %p, not for us %p\n",
+					real_netdev, dev->port.netdev);
+		return NOTIFY_DONE;
+	}
+
+	switch(event)
+	{
+		case NETDEV_UP:
+			if (netdev && netdev->name) {
+				crdma_info("dev[%s] is up\n", netdev->name);
+				crdma_port_enable_cmd(dev, 0);
+			}
+			break;
+		case NETDEV_DOWN:
+			if (netdev && netdev->name) {
+				crdma_info("dev[%s] is down\n", netdev->name);
+				crdma_port_disable_cmd(dev, 0);
+			}
+			break;
+		default:
+			break;
+	}
+	return NOTIFY_DONE;
+}
+
+int crdma_init_net_notifiers(struct crdma_ibdev *dev)
+{
+	int err;
+	crdma_debug("crdma_init_net_notifier()\n");
+
+	if (dev->nb_netdev.notifier_call) {
+		crdma_warn("netdevice notifier registered twice!\n");
+		return 0;
+	}
+	dev->nb_netdev.notifier_call = crdma_netdev_event;
+	err = register_netdevice_notifier(&dev->nb_netdev);
+	if (err) {
+		dev->nb_netdev.notifier_call = NULL;
+		return err;
+	}
+	return 0;
+}
+
 void crdma_cleanup_net_notifiers(struct crdma_ibdev *dev)
 {
 	crdma_debug("crdma_cleanup_net_notifier()\n");
 
-	if (dev->nb_inet.notifier_call) {
-		unregister_inetaddr_notifier(&dev->nb_inet);
-		dev->nb_inet.notifier_call = NULL;
+	if (dev->nb_netdev.notifier_call) {
+		unregister_netdevice_notifier(&dev->nb_netdev);
+		dev->nb_netdev.notifier_call = NULL;
 	}
-
-#if IS_ENABLED(CONFIG_IPV6)
-	if (dev->nb_inet6.notifier_call) {
-		unregister_inet6addr_notifier(&dev->nb_inet6);
-		dev->nb_inet6.notifier_call = NULL;
-	}
-#endif
 	return;
 }
 

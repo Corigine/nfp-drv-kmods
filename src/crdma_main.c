@@ -1096,6 +1096,8 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 	if (crdma_init_hca(dev))
 		goto err_free_idr;
 
+	if (crdma_init_net_notifiers(dev))
+		goto err_unregister_verbs;
 	dev->ibdev.phys_port_cnt = dev->cap.n_ports;
 
 #if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
@@ -1115,6 +1117,8 @@ err_sysfs:
 	for (j = 0; j < i; j++)
 		device_remove_file(&dev->ibdev.dev, crdma_class_attrs[j]);
 	crdma_cleanup_net_notifiers(dev);
+err_unregister_verbs:
+	crdma_unregister_verbs(dev);
 err_cleanup_hca:
 	crdma_cleanup_hca(dev);
 err_free_idr:

@@ -245,6 +245,16 @@ bool crdma_remove_smac(struct crdma_port *port, u8 *mac);
 int crdma_init_smac_table(struct crdma_ibdev *dev, int port_num);
 
 /**
+ * Initialize IB device net_device notifier call backs.
+ *
+ * @dev: The RoCE IB device.
+ *
+ * Returns 0 on success; otherwise an error.
+ */
+int crdma_init_net_notifiers(struct crdma_ibdev *dev);
+
+
+/**
  * Remove IB device net_device notifier call backs.
  *
  * @dev: The RoCE IB device.

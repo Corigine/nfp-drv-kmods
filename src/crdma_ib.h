@@ -462,8 +462,7 @@ struct crdma_ibdev {
 	struct crdma_mem	*bs_mem;
 
 	/* Linkage back to net_device notification chain */
-	struct notifier_block   nb_inet;
-	struct notifier_block   nb_inet6;
+	struct notifier_block   nb_netdev;
 
 	struct crdma_port       port;
 };
