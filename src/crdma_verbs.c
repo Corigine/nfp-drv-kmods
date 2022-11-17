@@ -3182,7 +3182,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	/* Currently do not support local DMA key */
 	dev->ibdev.local_dma_lkey = 0;
 
-#if !(VER_NON_RHEL_GE(5,11) || VER_RHEL_GE(8,0))
+#if !(VER_NON_RHEL_GE(5,11) || VER_RHEL_GE(8,5))
 	dev->ibdev.uverbs_cmd_mask =
                 (1ull << IB_USER_VERBS_CMD_GET_CONTEXT)         |
                 (1ull << IB_USER_VERBS_CMD_QUERY_DEVICE)        |
