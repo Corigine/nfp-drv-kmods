@@ -1687,8 +1687,7 @@ static void crdma_set_qp_ctrl(struct crdma_ibdev *dev,
 	if (unlikely(qp->ib_qp.qp_type == IB_QPT_GSI))
 		pr_debug("       GSI QP: physical port %d, control object %d\n",
 					qp->qp1_port, qp->qp1_port);
-	else
-		pr_debug("          QPN: %d\n", qp->qp_index);
+	pr_info("          QPN: 0x%08x\n", qp->qp_index);
 	pr_info("    flags_qpn: 0x%08X\n", ctrl->flags_qpn);
 	pr_info("       wqe_pd: 0x%08X\n", ctrl->wqe_pd);
 	pr_info("    type_scqn: 0x%08X\n", ctrl->type_send_cqn);
@@ -1899,12 +1898,7 @@ int crdma_qp_modify_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 	cmd.opcode_mod = modifier;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
-	/*
-	* Special QP1 use the dedicated port number control object, all
-	* other QP use the allocated control object index.
-	*/
-	cmd.input_mod = qp->ib_qp.qp_type == IB_QPT_GSI ?
-								qp->qp1_port : qp->qp_index;
+	cmd.input_mod = qp->qp_index;
 	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-coded response */
@@ -2067,8 +2061,7 @@ int crdma_qp_destroy_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp)
 	cmd.opcode_mod = CRDMA_QP_MODIFY_2RST;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = in_mbox.dma_addr;
-	cmd.input_mod = qp->ib_qp.qp_type == IB_QPT_GSI ?
-		qp->qp1_port : qp->qp_index;
+	cmd.input_mod = qp->qp_index;
 	status = crdma_cmd(dev, &cmd);
 
 	/* Save new state in QP */

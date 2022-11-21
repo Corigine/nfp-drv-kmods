@@ -1444,6 +1444,8 @@ static void crdma_clear_qp1_port(struct crdma_ibdev *dev, int port_num)
 	return;
 }
 
+#define CRDMA_QP1_INDEX   1
+
 static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 			struct ib_qp_init_attr *qp_init_attr,
 			struct ib_udata *udata)
@@ -1511,8 +1513,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 
 	/* Allocate resource index for the QP control object */
 	cqp->qp_index = qp_init_attr->qp_type == IB_QPT_GSI ?
-		qp_init_attr->port_num - 1 :
-		crdma_alloc_bitmap_index(&dev->qp_map);
+		CRDMA_QP1_INDEX : crdma_alloc_bitmap_index(&dev->qp_map);
 	if (cqp->qp_index < 0) {
 		crdma_info("No QP index available\n");
 		err = -ENOMEM;
@@ -1623,7 +1624,7 @@ free_qp_index:
 		crdma_free_bitmap_index(&dev->qp_map, cqp->qp_index);
 clear_port:
 	if (qp_init_attr->qp_type == IB_QPT_GSI)
-		crdma_clear_qp1_port(dev, cqp->qp1_port);
+		crdma_clear_qp1_port(dev, cqp->qp_index);
 free_mem:
 	kfree(cqp);
 
@@ -1840,7 +1841,7 @@ static int crdma_destroy_qp(struct ib_qp *qp)
 	if (cqp->ib_qp.qp_type != IB_QPT_GSI)
 		crdma_free_bitmap_index(&dev->qp_map, cqp->qp_index);
 	else
-		crdma_clear_qp1_port(dev, cqp->qp1_port);
+		crdma_clear_qp1_port(dev, cqp->qp_index);
 	kfree(cqp);
 	return 0;
 }
@@ -1976,7 +1977,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 	int wr_cnt = 0;
 	int ret = 0;
 	u8 flags;
-	u32 qpn = qp->qp_type == IB_QPT_GSI ? cqp->qp1_port : cqp->qp_index;
+	u32 qpn = cqp->qp_index;
 
 	spin_lock(&cqp->sq.lock);
 	while (wr) {
