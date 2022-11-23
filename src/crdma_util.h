@@ -261,15 +261,11 @@ int crdma_init_net_notifiers(struct crdma_ibdev *dev);
  */
 void crdma_cleanup_net_notifiers(struct crdma_ibdev *dev);
 
-/**
- * Write a 64 bit doorbell using 64-bit write if possible.
- *
- * @dev: The RoCE IB device.
- * @val: Array of the two 32-bit values endian adjusted.
- * @uar_off: The UAR offset to write to.
- */
-void crdma_write64_db(struct crdma_ibdev *dev,
-		u32 val[2], int uar_off);
+void crdma_ring_db32(struct crdma_ibdev *dev, uint32_t value, int offset);
+
+void crdma_sq_ring_db32(struct crdma_ibdev *dev, uint32_t value);
+
+void crdma_cq_ring_db32(struct crdma_ibdev *dev, uint32_t value);
 
 int crdma_check_ah_attr(struct crdma_ibdev *dev, struct rdma_ah_attr *attr);
 

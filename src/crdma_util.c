@@ -511,47 +511,32 @@ int crdma_init_smac_table(struct crdma_ibdev *dev, int port_num)
 	return 0;
 }
 
-#if BITS_PER_LONG == 64
-#if defined(__LITTLE_ENDIAN)
-#define CRDMA_WORDS_TO_LONG(va) ((u64)val[1] << 32 | val[0])
-#elif defined(__BIG_ENDIAN)
-#define CRDMA_WORDS_TO_LONG(va) ((u64)val[0] << 32 | val[1])
-#else
-#error Host byte order not defined
-#endif
-void crdma_write64_db(struct crdma_ibdev *dev,
-		u32 val[2], int uar_off)
-{
-	static int cnt = 0;
-
-	/* Log the first few doorbells as debug helper */
-	if (cnt < 4) {
-		pr_info("Writing 64-bit DB 0x%016llX to %p\n",
-			CRDMA_WORDS_TO_LONG(val),
-			(uint64_t *)(dev->priv_uar.map + uar_off));
-		cnt++;
-	}
-
-	__raw_writeq(CRDMA_WORDS_TO_LONG(val),
-			dev->priv_uar.map + uar_off);
-	return;
-}
-#else
-void crdma_write64_db(struct crdma_ibdev *dev,
-		u32 val[2], int uar_off)
+void crdma_ring_db32(struct crdma_ibdev *dev, uint32_t value, int offset)
 {
 	unsigned long flags;
-
 	spin_lock_irqsave(&dev->priv_uar_lock, flags);
-	__raw_writel((__force u32) val[0],
-			dev->priv_uar.map + uar_off - CRDMA_DB_WA_BIT);
-	__raw_writel((__force u32) val[1],
-			dev->priv_uar.map + uar_off + 4);
+	__raw_writel((__force u32) cpu_to_le32(value), 
+		     dev->priv_uar.map + offset);
 	spin_unlock_irqrestore(&dev->priv_uar_lock, flags);
-
 	return;
 }
-#endif
+
+void crdma_sq_ring_db32(struct crdma_ibdev *dev, uint32_t value)
+{
+	crdma_debug("Write priv UAR SQ DB\n");
+	value  = value & CRDMA_DB_SQ_MASK;
+	crdma_ring_db32(dev, value, CRDMA_DB_SQ_ADDR_OFFSET);
+	crdma_debug("SQ doorbell address %p\n",
+		    dev->priv_uar.map + CRDMA_DB_SQ_ADDR_OFFSET);
+	crdma_debug("SQ doorbell written 0x%08X\n", cpu_to_le32(value));
+	return;
+}
+
+void crdma_cq_ring_db32(struct crdma_ibdev *dev, uint32_t value)
+{
+	crdma_ring_db32(dev, value, CRDMA_DB_CQ_ADDR_OFFSET);
+	return;
+}
 
 int crdma_check_ah_attr(struct crdma_ibdev *dev, struct rdma_ah_attr *attr)
 {

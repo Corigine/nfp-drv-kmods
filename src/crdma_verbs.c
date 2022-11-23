@@ -2134,15 +2134,8 @@ out:
 		 * is written
 		 */
 		mb();
-		crdma_debug("Write priv UAR SQ DB\n");
-		__raw_writel((__force u32) cpu_to_le32(qpn & CRDMA_DB_SQ_MASK),
-			     dev->priv_uar.map + CRDMA_DB_SQ_ADDR_OFFSET);
+		crdma_sq_ring_db32(dev, qpn);
 
-		crdma_debug("SQ doorbell address %p\n", dev->priv_uar.map +
-			    CRDMA_DB_SQ_ADDR_OFFSET);
-
-		crdma_debug("SQ doorbell written 0x%08X\n",
-			    cpu_to_le32(qpn & CRDMA_DB_SQ_MASK));
 		/*
 		 * Make sure the last spare request is set to software
 		 * ownership.
@@ -2743,57 +2736,21 @@ static int crdma_poll_cq(struct ib_cq *cq, int num_entries,
 	return ret < 0 ? ret : polled;
 }
 
-static int crdma_req_notify_cq(struct ib_cq *cq,
-			enum ib_cq_notify_flags flags)
+static int crdma_req_notify_cq(struct ib_cq *cq, enum ib_cq_notify_flags flags)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
 	struct crdma_cq *ccq = to_crdma_cq(cq);
 	u32 arm;
-	u32 state;
-	u32 db[2];
-	int cnt = 0;
-	u32 fin_state;
+	u32 db;
 
 	arm = (ccq->arm_seqn << CRDMA_DB_CQ_SEQ_SHIFT) |
 		((flags & IB_CQ_SOLICITED_MASK) == IB_CQ_SOLICITED ?
 			0 : CRDMA_DB_CQ_ARM_ANY_BIT) |
 		(ccq->cqn & CRDMA_DB_CQN_MASK);
-	db[0] = cpu_to_le32(arm);
-	db[1] = cpu_to_le32(CRDMA_DB_FIN_BIT | (ccq->consumer_cnt &
-				CRDMA_DB_CQ_CONS_MASK));
-
-	/* Update state and ensure in memory before ringing CQ doorbell */
-	state = (arm & ~CRDMA_DB_CQN_MASK) | (ccq->consumer_cnt &
-				CRDMA_DB_CQ_CONS_MASK);
-	ccq->ci_mbox->last_db_state = cpu_to_le32(state);
+	db = cpu_to_le32(arm);
+	ccq->ci_mbox->last_db_state = 0;
 	wmb();
-
-	/*
-	 * During integration we are verifying that the doorbell
-	 * logic has captured any previous CQ doorbell before writing
-	 * a second.
-	 */
-	while (cnt++ < CRDMA_CQ_DB_READY_RETRIES) {
-		fin_state = le32_to_cpu(__raw_readl(
-					dev->priv_uar.map +
-					CRDMA_DB_CQCI_ADDR_OFFSET));
-		if (!(fin_state & CRDMA_DB_FIN_BIT))
-			break;
-	}
-
-	if (cnt >= CRDMA_CQ_DB_READY_RETRIES)
-		crdma_warn(">>>>>> CQ doorbell unresponsive\n");
-
-	if (!mad_cq_event_wa) {
-		crdma_debug("CQ Doorbell[0] = 0x%08X\n", db[0]);
-		crdma_debug("CQ Doorbell[1] = 0x%08X\n", db[1]);
-	}
-
-	/*
-		Todo: In hardware doorbell, cq notify only use 32bit, not 64bit.
-		This part need to be adapted in latter with development of cq notify.
-	*/
-	//crdma_write64_db(dev, db, CRDMA_DB_WA_BIT + CRDMA_DB_CQ_ADDR_OFFSET);
+	crdma_cq_ring_db32(dev, db);
 	return 0;
 }
 
