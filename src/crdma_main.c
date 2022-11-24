@@ -638,7 +638,7 @@ static ssize_t dump_uc_gid(struct device *device,
 	if (!entries)
 		goto out;
 
-	err = crdma_read_sgid_table(dev, 1, entries,
+	err = crdma_read_sgid_table(dev, 0, entries,
 					dev->port.gid_table_size);
 	if (err)
 		goto free_mem;
