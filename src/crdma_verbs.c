@@ -1093,7 +1093,15 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 	memset(ah_attr, 0, sizeof(*ah_attr));
 	ah_attr->type              = ah->type;
 	ah_attr->sl                = cah->av.service_level;
-	memcpy(ah_attr->roce.dmac, cah->av.d_mac, ETH_ALEN);
+
+	/* The reason of swap byte order reference the struct crdma_av */
+	ah_attr->roce.dmac[0]      = cah->av.d_mac[3];
+	ah_attr->roce.dmac[1]      = cah->av.d_mac[2];
+	ah_attr->roce.dmac[2]      = cah->av.d_mac[1];
+	ah_attr->roce.dmac[3]      = cah->av.d_mac[0];
+	ah_attr->roce.dmac[4]      = cah->av.d_mac[5];
+	ah_attr->roce.dmac[5]      = cah->av.d_mac[4];
+
 	ah_attr->port_num          = cah->av.port + 1;
 	ah_attr->static_rate       = 0; /* Do not support*/
 	/* Set grh */

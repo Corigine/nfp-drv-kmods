@@ -590,8 +590,13 @@ int crdma_set_av(struct ib_pd *pd,
 
 	crdma_info("crdma_set_av\n");
 
-	/* Don't swap here */
-	memcpy(av->d_mac, ah_attr->roce.dmac, ETH_ALEN);
+	/* The reason of swap byte order reference the struct crdma_av */
+	av->d_mac[0] = ah_attr->roce.dmac[3];
+	av->d_mac[1] = ah_attr->roce.dmac[2];
+	av->d_mac[2] = ah_attr->roce.dmac[1];
+	av->d_mac[3] = ah_attr->roce.dmac[0];
+	av->d_mac[4] = ah_attr->roce.dmac[5];
+	av->d_mac[5] = ah_attr->roce.dmac[4];
 
 	av->port          = ah_attr->port_num - 1;
 	av->service_level = ah_attr->sl;
