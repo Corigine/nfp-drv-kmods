@@ -1092,7 +1092,7 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 
 	memset(ah_attr, 0, sizeof(*ah_attr));
 	ah_attr->type              = ah->type;
-	ah_attr->sl                = cah->av.service_level;
+	rdma_ah_set_sl(ah_attr, cah->av.service_level);
 
 	/* The reason of swap byte order reference the struct crdma_av */
 	ah_attr->roce.dmac[0]      = cah->av.d_mac[3];
@@ -1102,14 +1102,13 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 	ah_attr->roce.dmac[4]      = cah->av.d_mac[5];
 	ah_attr->roce.dmac[5]      = cah->av.d_mac[4];
 
-	ah_attr->port_num          = cah->av.port + 1;
-	ah_attr->static_rate       = 0; /* Do not support*/
+	rdma_ah_set_port_num(ah_attr, cah->av.port + 1);
+	rdma_ah_set_static_rate(ah_attr, 0); /* Do not support*/
 	/* Set grh */
-	ah_attr->grh.sgid_index    = cah->av.s_gid_ndx;
-	ah_attr->grh.hop_limit     = cah->av.hop_limit;
-	ah_attr->grh.traffic_class = cah->av.traffic_class;
-	ah_attr->grh.flow_label    = __swab32(cah->av.flow_label);
-	memcpy(ah_attr->grh.dgid.raw, cah->av.d_gid, 16);
+	rdma_ah_set_grh(ah_attr, NULL, __swab32(cah->av.flow_label),
+			cah->av.s_gid_ndx, cah->av.hop_limit,
+			cah->av.traffic_class);
+	rdma_ah_set_dgid_raw(ah_attr, cah->av.d_gid);
 
 	return 0;
 }

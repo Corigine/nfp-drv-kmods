@@ -570,6 +570,7 @@ int crdma_set_av(struct ib_pd *pd,
 		 struct crdma_av *av,
 		 struct rdma_ah_attr *ah_attr)
 {
+	const struct ib_global_route *grh = rdma_ah_read_grh(ah_attr);
 	u8 nw_type;
 	u16 vlan = 0xffff;
 
@@ -585,18 +586,18 @@ int crdma_set_av(struct ib_pd *pd,
 
 	av->port          = ah_attr->port_num - 1;
 	av->service_level = ah_attr->sl;
-	av->s_gid_ndx     = ah_attr->grh.sgid_index;
-	av->hop_limit     = ah_attr->grh.hop_limit;
-	av->traffic_class = ah_attr->grh.traffic_class;
+	av->s_gid_ndx     = grh->sgid_index;
+	av->hop_limit     = grh->hop_limit;
+	av->traffic_class = grh->traffic_class;
 
 	/* Always swap to account for hardware bus swap */
-	av->flow_label    = __swab32(ah_attr->grh.flow_label);
+	av->flow_label    = __swab32(grh->flow_label);
 	/* For now using maximum rate, no IPD */
 	av->ib_sr_ipd = cpu_to_le32((0 << CRDMA_AV_IBSR_IPD_SHIFT) |
 				(to_crdma_pd(pd)->pd_index & CRDMA_AV_PD_MASK));
 
 	/* Get gid type */
-	nw_type = rdma_gid_attr_network_type(ah_attr->grh.sgid_attr);
+	nw_type = rdma_gid_attr_network_type(grh->sgid_attr);
 	if (nw_type == RDMA_NETWORK_IPV4)
 		av->gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
 	else if(nw_type == RDMA_NETWORK_IPV6)
@@ -608,13 +609,13 @@ int crdma_set_av(struct ib_pd *pd,
 
 	/* Get vlan id*/
 #if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
-	if (rdma_read_gid_l2_fields(ah_attr->grh.sgid_attr, &vlan, NULL)) {
+	if (rdma_read_gid_l2_fields(grh->sgid_attr, &vlan, NULL)) {
 		crdma_warn("Get vlan failed from gid_attr\n");
 		return -EINVAL;
 	}
 #else
-	if (is_vlan_dev(ah_attr->grh.sgid_attr->ndev))
-		vlan = vlan_dev_vlan_id(ah_attr->grh.sgid_attr->ndev);
+	if (is_vlan_dev(grh->sgid_attr->ndev))
+		vlan = vlan_dev_vlan_id(grh->sgid_attr->ndev);
 #endif
 	if (vlan < VLAN_CFI_MASK) { /* VLAN ID is valid*/
 		av->vlan = cpu_to_le32(vlan);
@@ -626,7 +627,7 @@ int crdma_set_av(struct ib_pd *pd,
 	/*
 		To DO: check it need swap or not wiht firmare debug
 	*/
-	memcpy(av->d_gid, ah_attr->grh.dgid.raw, 16);
+	memcpy(av->d_gid, grh->dgid.raw, 16);
 
 	return 0;
 }

@@ -1921,6 +1921,7 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 	struct crdma_qp_attr_params *param;
 	struct crdma_cmd_mbox out_mbox;
 	struct crdma_cmd cmd;
+	const struct ib_global_route *grh = rdma_ah_read_grh(&qp_attr->ah_attr);
 	union ib_gid *dgid;
 	int status;
 
@@ -1983,16 +1984,15 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 		qp_attr->ah_attr.roce.dmac[4] = param->av.d_mac[5];
 
 		//qp_attr->ah_attr.vlan_id = le16_to_cpu(param->av.vlan);
-		qp_attr->ah_attr.port_num = param->av.port + 1;
+		rdma_ah_set_port_num(&qp_attr->ah_attr, param->av.port + 1);
 		/* TODO: Can't return GID Type yet */
 		/* TODO: We don't return SMAC yet */
 
-		qp_attr->ah_attr.grh.traffic_class = param->av.traffic_class;
-		qp_attr->ah_attr.grh.hop_limit = param->av.hop_limit;
-		qp_attr->ah_attr.grh.sgid_index = param->av.s_gid_ndx;
-		qp_attr->ah_attr.sl = param->av.service_level;
-		qp_attr->ah_attr.grh.flow_label =
-						__swab32(param->av.flow_label);
+		rdma_ah_set_sl(&qp_attr->ah_attr, param->av.service_level);
+		rdma_ah_set_grh(&qp_attr->ah_attr, NULL,
+				__swab32(param->av.flow_label),
+				param->av.s_gid_ndx, param->av.hop_limit,
+				param->av.traffic_class);
 
 		dgid = &qp_attr->ah_attr.grh.dgid;
 #if defined(__BIG_ENDIAN)
@@ -2013,7 +2013,7 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 #error Host endianness not defined
 #endif
 		/* XXX: We only allow full rate for now */
-		qp_attr->ah_attr.static_rate = 0;
+		rdma_ah_set_static_rate(&qp_attr->ah_attr, 0);
 
 		pr_debug("         dmac:%02X:%02X:%02X:%02X:%02X:%02X\n",
 				qp_attr->ah_attr.roce.dmac[0],
@@ -2023,18 +2023,18 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 				qp_attr->ah_attr.roce.dmac[4],
 				qp_attr->ah_attr.roce.dmac[5]);
 		//pr_debug("      vlan_id:0x%04X\n", qp_attr->ah_attr.vlan_id);
-		pr_debug("     port_num:%d\n", qp_attr->ah_attr.port_num);
-		pr_debug("      t_class:0x%08X\n",
-						qp_attr->ah_attr.grh.traffic_class);
-		pr_debug("    hop_limit:%d\n", qp_attr->ah_attr.grh.hop_limit);
-		pr_debug("    s_gid_ndx:%d\n", qp_attr->ah_attr.grh.sgid_index);
-		pr_debug("           sl:0x%02X\n", qp_attr->ah_attr.sl);
-		pr_debug("   flow_label:0x%08X\n",
-						qp_attr->ah_attr.grh.flow_label);
-		pr_debug("        d_gid:0x:%016llX:%016llX\n",
-				qp_attr->ah_attr.grh.dgid.global.subnet_prefix,
-				qp_attr->ah_attr.grh.dgid.global.interface_id);
-		pr_debug(" static rate:0x%02X\n", qp_attr->ah_attr.static_rate);
+		pr_debug("     port_num:%d\n",
+			       rdma_ah_get_port_num(&qp_attr->ah_attr));
+		pr_debug("     t_class:0x%08X\n", grh->traffic_class);
+		pr_debug("     hop_limit:%d\n", grh->hop_limit);
+		pr_debug("     s_gid_ndx:%d\n", grh->sgid_index);
+		pr_debug("     sl:0x%02X\n", rdma_ah_get_sl(&qp_attr->ah_attr));
+		pr_debug("     flow_label:0x%08X\n", grh->flow_label);
+		pr_debug("     d_gid:0x:%016llX:%016llX\n",
+			       grh->dgid.global.subnet_prefix,
+			       grh->dgid.global.interface_id);
+		pr_debug("     static rate:0x%02X\n",
+			       rdma_ah_get_static_rate(&qp_attr->ah_attr));
 	}
 
 free_mbox:
