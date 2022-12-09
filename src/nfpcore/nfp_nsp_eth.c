@@ -30,6 +30,7 @@
 #define NSP_ETH_PORT_PHYLABEL		GENMASK_ULL(59, 54)
 #define NSP_ETH_PORT_FEC_SUPP_BASER	BIT_ULL(60)
 #define NSP_ETH_PORT_FEC_SUPP_RS	BIT_ULL(61)
+#define NSP_ETH_PORT_SUPP_FWLLDP	BIT_ULL(62)
 #define NSP_ETH_PORT_SUPP_ANEG		BIT_ULL(63)
 
 #define NSP_ETH_PORT_LANES_MASK		cpu_to_le64(NSP_ETH_PORT_LANES)
@@ -45,6 +46,7 @@
 #define NSP_ETH_STATE_ANEG		GENMASK_ULL(25, 23)
 #define NSP_ETH_STATE_FEC		GENMASK_ULL(27, 26)
 #define NSP_ETH_STATE_ACT_FEC		GENMASK_ULL(29, 28)
+#define NSP_ETH_STATE_FWLLDP		BIT_ULL(30)
 
 #define NSP_ETH_CTRL_CONFIGURED		BIT_ULL(0)
 #define NSP_ETH_CTRL_ENABLED		BIT_ULL(1)
@@ -55,6 +57,7 @@
 #define NSP_ETH_CTRL_SET_ANEG		BIT_ULL(6)
 #define NSP_ETH_CTRL_SET_FEC		BIT_ULL(7)
 #define NSP_ETH_CTRL_SET_IDMODE		BIT_ULL(8)
+#define NSP_ETH_CTRL_SET_FWLLDP		BIT_ULL(9)
 
 enum nfp_eth_raw {
 	NSP_ETH_RAW_PORT = 0,
@@ -183,6 +186,12 @@ nfp_eth_port_translate(struct nfp_nsp *nsp, const union eth_table_entry *src,
 
 	dst->act_fec = FIELD_GET(NSP_ETH_STATE_ACT_FEC, state);
 	dst->supp_aneg = FIELD_GET(NSP_ETH_PORT_SUPP_ANEG, port);
+
+	if (nfp_nsp_get_abi_ver_minor(nsp) < 35)
+		return;
+
+	dst->fwlldp_enabled = FIELD_GET(NSP_ETH_STATE_FWLLDP, state);
+	dst->supp_fwlldp = FIELD_GET(NSP_ETH_PORT_SUPP_FWLLDP, port);
 }
 
 static void
@@ -554,6 +563,36 @@ int nfp_eth_set_idmode(struct nfp_cpp *cpp, unsigned int idx, bool state)
 	reg = le64_to_cpu(entries[idx].control);
 	reg &= ~NSP_ETH_CTRL_SET_IDMODE;
 	reg |= FIELD_PREP(NSP_ETH_CTRL_SET_IDMODE, state);
+	entries[idx].control = cpu_to_le64(reg);
+
+	nfp_nsp_config_set_modified(nsp, true);
+
+	return nfp_eth_config_commit_end(nsp);
+}
+
+int nfp_eth_set_fwlldp(struct nfp_cpp *cpp, unsigned int idx, bool state)
+{
+	union eth_table_entry *entries;
+	struct nfp_nsp *nsp;
+	u64 reg;
+
+	nsp = nfp_eth_config_start(cpp, idx);
+	if (IS_ERR(nsp))
+		return PTR_ERR(nsp);
+
+	/* Set this features were added in ABI 0.35 */
+	if (nfp_nsp_get_abi_ver_minor(nsp) < 35) {
+		nfp_err(nfp_nsp_cpp(nsp),
+			"set fwlldp operation not supported, please update flash\n");
+		nfp_eth_config_cleanup_end(nsp);
+		return -EOPNOTSUPP;
+	}
+
+	entries = nfp_nsp_config_entries(nsp);
+
+	reg = le64_to_cpu(entries[idx].control);
+	reg &= ~NSP_ETH_CTRL_SET_FWLLDP;
+	reg |= FIELD_PREP(NSP_ETH_CTRL_SET_FWLLDP, state);
 	entries[idx].control = cpu_to_le64(reg);
 
 	nfp_nsp_config_set_modified(nsp, true);

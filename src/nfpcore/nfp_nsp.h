@@ -190,7 +190,8 @@ enum nfp_ethtool_link_mode_list {
  * @ports.tx_enabled:	is TX enabled?
  * @ports.rx_enabled:	is RX enabled?
  * @ports.override_changed: is media reconfig pending?
- *
+ * @ports.supp_fwlldp: hardware of LLDP supported
+ * @ports.fwlldp_enabled: is hardware of LLDP enabled
  * @ports.port_type:	one of %PORT_* defines for ethtool
  * @ports.port_lanes:	total number of lanes on the port (sum of lanes of all
  *			subports)
@@ -227,7 +228,8 @@ struct nfp_eth_table {
 		bool tx_enabled;
 		bool rx_enabled;
 		bool supp_aneg;
-
+		bool supp_fwlldp;
+		bool fwlldp_enabled;
 		bool override_changed;
 
 		/* Computed fields */
@@ -253,6 +255,7 @@ int nfp_eth_set_configured(struct nfp_cpp *cpp, unsigned int idx,
 			   bool configed);
 int
 nfp_eth_set_fec(struct nfp_cpp *cpp, unsigned int idx, enum nfp_eth_fec mode);
+int nfp_eth_set_fwlldp(struct nfp_cpp *cpp, unsigned int idx, bool state);
 
 int nfp_eth_set_idmode(struct nfp_cpp *cpp, unsigned int idx, bool state);
 

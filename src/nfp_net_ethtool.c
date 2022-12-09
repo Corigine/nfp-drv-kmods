@@ -945,6 +945,100 @@ __printf(2, 3) void ethtool_sprintf(u8 **data, const char *fmt, ...)
 }
 #endif
 
+static bool nfp_pflag_get_dis_fwlldp(struct net_device *netdev)
+{
+	struct nfp_eth_table_port *eth_port;
+	struct nfp_port *port;
+
+	port = nfp_port_from_netdev(netdev);
+	eth_port = __nfp_port_get_eth_port(port);
+	if (!eth_port)
+		return false;
+
+	return eth_port->fwlldp_enabled == 0;
+}
+
+static int nfp_pflag_set_dis_fwlldp(struct net_device *netdev, bool en)
+{
+	struct nfp_eth_table_port *eth_port;
+	struct nfp_port *port;
+	int err;
+
+	port = nfp_port_from_netdev(netdev);
+	eth_port = __nfp_port_get_eth_port(port);
+	if (!eth_port || !eth_port->supp_fwlldp)
+		return -EOPNOTSUPP;
+
+	err = nfp_eth_set_fwlldp(port->app->cpp, eth_port->index, !en);
+	if (!err)
+		nfp_net_refresh_port_table(port);
+
+	return err < 0 ? err : 0;
+}
+
+#define DECLARE_NFP_PFLAG(str, flag)	{	\
+	.name	= str,			\
+	.get	= nfp_pflag_get_##flag,	\
+	.set	= nfp_pflag_set_##flag,	\
+	}
+
+static const struct {
+	const char name[ETH_GSTRING_LEN];
+	bool (*get)(struct net_device *netdev);
+	int (*set)(struct net_device *netdev, bool en);
+} nfp_pflags[] = {
+	DECLARE_NFP_PFLAG("disable-fw-lldp", dis_fwlldp),
+};
+
+#define NFP_PFLAG_MAX ARRAY_SIZE(nfp_pflags)
+
+static void nfp_get_pflag_strings(struct net_device *netdev, u8 *data)
+{
+	u32 i;
+
+	for (i = 0; i < NFP_PFLAG_MAX; i++)
+		ethtool_sprintf(&data, nfp_pflags[i].name);
+}
+
+static int nfp_get_pflag_count(struct net_device *netdev)
+{
+	return NFP_PFLAG_MAX;
+}
+
+static u32 nfp_net_get_pflags(struct net_device *netdev)
+{
+	u32 i, pflags = 0;
+
+	for (i = 0; i < NFP_PFLAG_MAX; i++) {
+		if (nfp_pflags[i].get(netdev))
+			pflags |= BIT(i);
+	}
+
+	return pflags;
+}
+
+static int nfp_net_set_pflags(struct net_device *netdev, u32 pflags)
+{
+	u32 i, changed = nfp_net_get_pflags(netdev) ^ pflags;
+	int err;
+
+	for (i = 0; i < NFP_PFLAG_MAX; i++) {
+		bool en;
+
+		if (!(changed & BIT(i)))
+			continue;
+
+		en = !!(pflags & BIT(i));
+		err = nfp_pflags[i].set(netdev, en);
+		if (err)
+			return err;
+
+		netdev_info(netdev, "%s is %sabled.", nfp_pflags[i].name, en ? "en" : "dis");
+	}
+
+	return 0;
+}
+
 static unsigned int nfp_vnic_get_sw_stats_count(struct net_device *netdev)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
@@ -1211,6 +1305,9 @@ static void nfp_net_get_strings(struct net_device *netdev,
 	case ETH_SS_TEST:
 		nfp_get_self_test_strings(netdev, data);
 		break;
+	case ETH_SS_PRIV_FLAGS:
+		nfp_get_pflag_strings(netdev, data);
+		break;
 	}
 }
 
@@ -1247,6 +1344,8 @@ static int nfp_net_get_sset_count(struct net_device *netdev, int sset)
 		return cnt;
 	case ETH_SS_TEST:
 		return nfp_get_self_test_count(netdev);
+	case ETH_SS_PRIV_FLAGS:
+		return nfp_get_pflag_count(netdev);
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -2356,6 +2455,8 @@ static const struct ethtool_ops nfp_net_ethtool_ops = {
 #endif
 	.get_pauseparam		= nfp_port_get_pauseparam,
 	.set_phys_id		= nfp_net_set_phys_id,
+	.get_priv_flags		= nfp_net_get_pflags,
+	.set_priv_flags		= nfp_net_set_pflags,
 };
 
 const struct ethtool_ops nfp_port_ethtool_ops = {
