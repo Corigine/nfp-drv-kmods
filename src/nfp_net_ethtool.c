@@ -712,6 +712,11 @@ static void nfp_get_self_test_strings(struct net_device *netdev, u8 *data)
 			ethtool_sprintf(&data, nfp_self_test[i].name);
 }
 
+static void nfp_get_fpri_strings(struct net_device *netdev, u8 *data)
+{
+    ethtool_sprintf(&data, nfp_priv_flags_strings[0].flag_string);
+}
+
 static int nfp_get_self_test_count(struct net_device *netdev)
 {
 	int i, count = 0;
@@ -1021,6 +1026,9 @@ static void nfp_net_get_strings(struct net_device *netdev,
 	case ETH_SS_TEST:
 		nfp_get_self_test_strings(netdev, data);
 		break;
+	case ETH_SS_PRIV_FLAGS:
+	    nfp_get_fpri_strings(netdev, data);
+	    break;
 	}
 }
 
@@ -1057,6 +1065,8 @@ static int nfp_net_get_sset_count(struct net_device *netdev, int sset)
 		return cnt;
 	case ETH_SS_TEST:
 		return nfp_get_self_test_count(netdev);
+	case ETH_SS_PRIV_FLAGS:
+		return NFP_PRIV_FLAGS_STR_LEN;		
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -2106,6 +2116,58 @@ nfp_net_set_eeprom(struct net_device *netdev,
 	return 0;
 }
 
+static int nfp_set_priv_flags(struct net_device *netdev, u32 pflags)
+{
+    struct nfp_eth_table_port *eth_port;
+    struct nfp_port *port;
+    bool flags;
+    int err;
+
+    netdev_err(netdev, "nfp_set_priv_flags: %d\n",pflags);
+    port = nfp_port_from_netdev(netdev);
+    eth_port = __nfp_port_get_eth_port(port);
+    if (!eth_port || !eth_port->supp_fwlldp)
+        return -EOPNOTSUPP;
+	
+    flags = pflags & BIT(0);
+    if(flags == 0)
+    {
+        eth_port->fwlldp_enabled = 1;
+        err = nfp_eth_set_fwlldp(port->app->cpp, eth_port->index, 1);
+        if(err != 0)
+	{
+            netdev_err(netdev, "nfp_set_priv_flags is err: %d\n",err);
+            return EOPNOTSUPP;
+	}
+    }
+    else 
+    {
+        eth_port->fwlldp_enabled = 0;
+        err = nfp_eth_set_fwlldp(port->app->cpp, eth_port->index, 0);
+        if(err != 0)
+	{
+            netdev_err(netdev, "nfp_set_priv_flags is err: %d\n",err);
+	    return EOPNOTSUPP;
+	}
+    }
+    return 0;
+}
+
+static u32 nfp_get_priv_flags(struct net_device *netdev)
+{
+  
+    struct nfp_eth_table_port *eth_port;
+    struct nfp_port *port;
+    u32 priv_flags = 0;
+    port = nfp_port_from_netdev(netdev);
+    eth_port = __nfp_port_get_eth_port(port);
+    if (!eth_port)
+        return -EOPNOTSUPP;
+    if(eth_port->fwlldp_enabled == 0)
+        priv_flags |= 1;
+    return priv_flags;
+}
+
 static const struct ethtool_ops nfp_net_ethtool_ops = {
 #if VER_NON_RHEL_GE(5, 7) || VER_RHEL_GE(8, 4)
 	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
@@ -2166,6 +2228,8 @@ static const struct ethtool_ops nfp_net_ethtool_ops = {
 #endif
 	.get_pauseparam		= nfp_port_get_pauseparam,
 	.set_phys_id		= nfp_net_set_phys_id,
+        .get_priv_flags    = nfp_get_priv_flags,
+        .set_priv_flags    = nfp_set_priv_flags,
 };
 
 const struct ethtool_ops nfp_port_ethtool_ops = {

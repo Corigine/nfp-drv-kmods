@@ -123,6 +123,23 @@ struct nfp_nfd3_tx_buf;
 struct nfp_nfdk_tx_desc;
 struct nfp_nfdk_tx_buf;
 
+#define NFP_GSTRING_LEN		32
+
+struct nfp_priv_flags {
+    char flag_string[NFP_GSTRING_LEN];
+    bool read_only;
+};
+
+#define NFP_PRIV_FLAG(_name, _read_only) { \
+    .flag_string = _name, \
+    .read_only = _read_only, \
+}
+
+static const struct nfp_priv_flags nfp_priv_flags_strings[] = {
+    NFP_PRIV_FLAG("disable-fw-lldp", 0),
+};
+
+#define NFP_PRIV_FLAGS_STR_LEN  ARRAY_SIZE(nfp_priv_flags_strings)
 /* Convenience macro for wrapping descriptor index on ring size */
 #define D_IDX(ring, idx)	((idx) & ((ring)->cnt - 1))
 
