@@ -1026,7 +1026,7 @@ int crdma_query_dev_cap(struct crdma_ibdev *dev,
 #if CRDMA_DETAIL_INFO_DEBUG_FLAG
 	crdma_info("QUERY_DEV_CAP Output MBox\n");
 	print_hex_dump(KERN_DEBUG, "OUT:", DUMP_PREFIX_OFFSET, 8, 1,
-			out_mbox.buf, sizeof(query_dev_cap_out), 0);
+			out_mbox.buf, sizeof(*cap), 0);
 #endif
 
 	crdma_dump_query_dev_cap(cap);
