@@ -601,18 +601,32 @@ static ssize_t show_board(struct device *device, struct device_attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", dev->cap.board_id);
 }
 
-static ssize_t exec_command_db(struct device *device,
-		struct device_attribute *attr, const char *buf, size_t count)
+static unsigned int db_offset;
+static unsigned int db_value;
+
+static ssize_t show_doorbell(struct device *device, struct device_attribute *attr, char *buf)
+{
+       ssize_t off = 0;
+
+       off += scnprintf(buf, PAGE_SIZE, "doorbell offset: 0x%x, doorbell value: 0x%x.\n",
+                       db_offset, db_value);
+       return off;
+}
+
+static ssize_t store_doorbell(struct device *device, struct device_attribute *attr,
+                              const char *buf, size_t size)
 {
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
-	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
-	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
+       struct ib_device *ibdev = container_of(device, struct ib_device, dev);
+       struct crdma_ibdev *cdev = to_crdma_ibdev(ibdev);
 #else
-	struct crdma_ibdev *dev = dev_get_drvdata(device);
+       struct crdma_ibdev *cdev = dev_get_drvdata(device);
 #endif
-	crdma_set_cq_db(dev, 0, false);
-	return count;
+       sscanf(buf, "%x %x", &db_offset, &db_value);
+       crdma_ring_db32(cdev, db_value, db_offset);
+       return size;
 }
+
 
 static ssize_t dump_uc_gid(struct device *device,
                 struct device_attribute *attr, char *buf)
@@ -754,15 +768,15 @@ static ssize_t exec_command(struct device *device,
 static DEVICE_ATTR(hw_rev,   S_IRUGO, show_hw_rev,    NULL);
 static DEVICE_ATTR(hca_type, S_IRUGO, show_hca_type,    NULL);
 static DEVICE_ATTR(board_id, S_IRUGO, show_board,  NULL);
-static DEVICE_ATTR(command,  S_IWUSR | S_IWGRP, NULL, exec_command);
-static DEVICE_ATTR(testdb,   S_IWUSR | S_IWGRP, NULL, exec_command_db);
+static DEVICE_ATTR(command,  S_IWUSR|S_IWGRP, NULL, exec_command);
+static DEVICE_ATTR(doorbell, S_IRUGO|S_IWUSR|S_IWGRP, show_doorbell, store_doorbell);
 static DEVICE_ATTR(uc_gid, S_IRUGO, dump_uc_gid, NULL);
 
 static struct device_attribute *crdma_class_attrs[] = {
 	&dev_attr_hw_rev,
 	&dev_attr_hca_type,
 	&dev_attr_board_id,
-	&dev_attr_testdb,
+	&dev_attr_doorbell,
 	&dev_attr_command,
 	&dev_attr_uc_gid,
 };
