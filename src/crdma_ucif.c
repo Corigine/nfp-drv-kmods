@@ -160,7 +160,8 @@ const char *crdma_opcode_to_str(u8 opcode)
 		[CRDMA_CMD_MCG_CREATE]          = "MCG_CREATE",
 		[CRDMA_CMD_MCG_DESTROY]         = "MCG_DESTROY",
 		[CRDMA_CMD_MCG_ATTACH]          = "MCG_ATTACH",
-		[CRDMA_CMD_MCG_DETACH]          = "MCG_DETACH"
+		[CRDMA_CMD_MCG_DETACH]          = "MCG_DETACH",
+		[CRDMA_CMD_SET_PORT_MTU]	= "SET_PORT_MTU"
 	};
 
 	if (opcode < ARRAY_SIZE(cmd_to_str))
@@ -2081,6 +2082,21 @@ int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port)
 {
 	return __crdma_no_param_cmd(dev, CRDMA_CMD_ROCE_PORT_DISABLE, 0,
 			port, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+}
+
+int crdma_set_port_mtu_cmd(struct crdma_ibdev *dev, u8 port, u32 mtu)
+{
+	struct crdma_cmd cmd;
+	int status;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opcode = CRDMA_CMD_SET_PORT_MTU;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
+	cmd.input_mod = port;
+	cmd.input_param = mtu;
+	status = crdma_cmd(dev, &cmd);
+
+	return status;
 }
 
 /**

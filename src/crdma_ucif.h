@@ -93,7 +93,8 @@ enum {
 	CRDMA_CMD_MCG_CREATE		= 40,
 	CRDMA_CMD_MCG_DESTROY		= 41,
 	CRDMA_CMD_MCG_ATTACH		= 42,
-	CRDMA_CMD_MCG_DETACH		= 43
+	CRDMA_CMD_MCG_DETACH		= 43,
+	CRDMA_CMD_SET_PORT_MTU		= 49
 };
 
 /* Microcode QP Modify opcode modifiers */
@@ -1005,6 +1006,17 @@ int crdma_port_enable_cmd(struct crdma_ibdev *dev, u8 port);
  * Returns 0 on success, otherwise an error.
  */
 int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port);
+
+/**
+ * Transfer port mtu value to microcode.
+ *
+ * @dev: RoCE IB device.
+ * @port: The port number to enable RoCEv2.
+ * @mtu: MTU value
+ *
+ * Returns 0 on success, otherwise an error.
+ */
+int crdma_set_port_mtu_cmd(struct crdma_ibdev *dev, u8 port, u32 mtu);
 
 /**
  * Issue microcode MPT create command.

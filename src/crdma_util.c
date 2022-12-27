@@ -381,6 +381,7 @@ static int crdma_netdev_event(struct notifier_block *nb,
 {
 	struct net_device *real_netdev, *netdev = netdev_notifier_info_to_dev(ptr);
 	struct crdma_ibdev *dev;
+	u32 mtu;
 
 	crdma_debug("crdma_netdev_event()\n");
 	pr_info("	netdev:  %p\n", netdev);
@@ -412,6 +413,13 @@ static int crdma_netdev_event(struct notifier_block *nb,
 			if (netdev && netdev->name) {
 				crdma_info("dev[%s] is down\n", netdev->name);
 				crdma_port_disable_cmd(dev, 0);
+			}
+			break;
+		case NETDEV_CHANGEMTU:
+			mtu = netdev->mtu;
+			if (netdev && netdev->name) {
+				crdma_info("dev[%s] mtu is changed to %d\n", netdev->name, mtu);
+				crdma_set_port_mtu_cmd(dev, 0, mtu);
 			}
 			break;
 		default:
