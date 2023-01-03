@@ -903,7 +903,8 @@ static int crdma_init_port(struct crdma_ibdev *dev)
 	spin_lock_init(&port->table_lock);
 	memcpy(port->mac, port->netdev->dev_addr, ETH_ALEN);
 	crdma_init_smac_table(dev, 0);
-
+	crdma_info("dev[%s] default mtu is %d\n", port->netdev->name, port->netdev->mtu);
+	crdma_set_port_mtu_cmd(dev, 0, port->netdev->mtu);
 	spin_lock_init(&port->qp1_lock);
 	return 0;
 }
