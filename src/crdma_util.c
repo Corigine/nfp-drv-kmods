@@ -396,8 +396,6 @@ static int crdma_netdev_event(struct notifier_block *nb,
 		real_netdev = netdev;
 
 	if (real_netdev != dev->port.netdev) {
-		crdma_info("Event netdev %p, not for us %p\n",
-					real_netdev, dev->port.netdev);
 		return NOTIFY_DONE;
 	}
 
