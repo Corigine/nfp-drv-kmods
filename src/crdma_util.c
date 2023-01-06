@@ -628,6 +628,10 @@ int crdma_set_av(struct ib_pd *pd,
 		To DO: check it need swap or not wiht firmare debug
 	*/
 	memcpy(av->d_gid, grh->dgid.raw, 16);
+	av->d_gid_word[0] = __swab32(av->d_gid_word[0]);
+	av->d_gid_word[1] = __swab32(av->d_gid_word[1]);
+	av->d_gid_word[2] = __swab32(av->d_gid_word[2]);
+	av->d_gid_word[3] = __swab32(av->d_gid_word[3]);
 
 	return 0;
 }

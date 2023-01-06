@@ -1996,23 +1996,11 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 				param->av.traffic_class);
 
 		dgid = &qp_attr->ah_attr.grh.dgid;
-#if defined(__BIG_ENDIAN)
-		dgid->global.subnet_prefix =
-				((u64)__swab32(param->av.d_gid_word[0]) << 32) |
-				__swab32(param->av.d_gid_word[1]);
-		dgid->global.interface_id =
-				((u64)__swab32(param->av.d_gid_word[2]) << 32) |
-				__swab32(param->av.d_gid_word[3]);
-#elif defined(__LITTLE_ENDIAN)
-		dgid->global.subnet_prefix =
-				((u64)__swab32(param->av.d_gid_word[1]) << 32) |
-				__swab32(param->av.d_gid_word[0]);
-		dgid->global.interface_id =
-				((u64)__swab32(param->av.d_gid_word[3]) << 32) |
-				__swab32(param->av.d_gid_word[2]);
-#else
-#error Host endianness not defined
-#endif
+		((u32 *)dgid->raw)[0] = __swab32(param->av.d_gid_word[0]);
+		((u32 *)dgid->raw)[1] = __swab32(param->av.d_gid_word[1]);
+		((u32 *)dgid->raw)[2] = __swab32(param->av.d_gid_word[2]);
+		((u32 *)dgid->raw)[3] = __swab32(param->av.d_gid_word[3]);
+
 		/* XXX: We only allow full rate for now */
 		rdma_ah_set_static_rate(&qp_attr->ah_attr, 0);
 
@@ -2305,27 +2293,11 @@ int crdma_write_sgid_table(struct crdma_ibdev *dev,
 		 * Perform a 32-bit byte swap on the GIDs that will
 		 * be undone by the DMA.
 		 */
-#if defined(__BIG_ENDIAN)
-		param->gid_word[0] =
-			__swab32(entry->gid.global.subnet_prefix >> 32);
-		param->gid_word[1] =
-			__swab32(entry->gid.global.subnet_prefix & 0x0FFFFFFFF);
-		param->gid_word[2] =
-			__swab32(entry->gid.global.interface_id >> 32);
-		param->gid_word[3] =
-			__swab32(entry->gid.global.interface_id & 0x0FFFFFFFF);
-#elif defined(__LITTLE_ENDIAN)
-		param->gid_word[0] =
-			__swab32(entry->gid.global.subnet_prefix & 0x0FFFFFFFF);
-		param->gid_word[1] =
-			__swab32(entry->gid.global.subnet_prefix >> 32);
-		param->gid_word[2] =
-			__swab32(entry->gid.global.interface_id & 0x0FFFFFFFF);
-		param->gid_word[3] =
-			__swab32(entry->gid.global.interface_id >> 32);
-#else
-#error Host endianness not defined
-#endif
+		memcpy(param->gid, entry->gid.raw, 16);
+		param->gid_word[0] = __swab32(param->gid_word[0]);
+		param->gid_word[1] = __swab32(param->gid_word[1]);
+		param->gid_word[2] = __swab32(param->gid_word[2]);
+		param->gid_word[3] = __swab32(param->gid_word[3]);
 	}
 	spin_unlock_irqrestore(&dev->port.table_lock, flags);
 
@@ -2399,23 +2371,10 @@ int crdma_read_sgid_table(struct crdma_ibdev *dev, int port_num,
 		if (param->valid)
 			entry->valid = 1;
 
-#if defined(__BIG_ENDIAN)
-		entry->gid.global.subnet_prefix =
-			((u64)__swab32(param->gid_word[0]) << 32) |
-			__swab32(param->gid_word[1]);
-		entry->gid.global.interface_id =
-			((u64)__swab32(param->gid_word[2]) << 32) |
-			__swab32(param->gid_word[3]);
-#elif defined(__LITTLE_ENDIAN)
-		entry->gid.global.subnet_prefix =
-			((u64)__swab32(param->gid_word[1]) << 32) |
-			__swab32(param->gid_word[0]);
-		entry->gid.global.interface_id =
-			((u64)__swab32(param->gid_word[3]) << 32) |
-			__swab32(param->gid_word[2]);
-#else
-#error Host endianness not defined
-#endif
+		((u32 *)entry->gid.raw)[0] = __swab32(param->gid_word[0]);
+		((u32 *)entry->gid.raw)[1] = __swab32(param->gid_word[1]);
+		((u32 *)entry->gid.raw)[2] = __swab32(param->gid_word[2]);
+		((u32 *)entry->gid.raw)[3] = __swab32(param->gid_word[3]);
 	}
 
 free_mbox:
