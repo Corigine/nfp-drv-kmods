@@ -3176,7 +3176,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 #endif
 	dev->ibdev.dev.parent			= &dev->nfp_info->pdev->dev;
 
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_GE(5,0) || VER_RHEL_GE(8,0))
 	ib_set_device_ops(&dev->ibdev, &crdma_dev_ops);
 	ret = ib_register_device(&dev->ibdev, "crdma%d", NULL);
 #else
