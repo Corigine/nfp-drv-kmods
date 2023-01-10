@@ -383,13 +383,7 @@ static int crdma_netdev_event(struct notifier_block *nb,
 	struct crdma_ibdev *dev;
 	u32 mtu;
 
-	crdma_debug("crdma_netdev_event()\n");
-	pr_info("	netdev:  %p\n", netdev);
-	pr_info("	event:  %ld\n", event);
-
 	dev = container_of(nb, struct crdma_ibdev, nb_netdev);
-	pr_info("associated RoCE IB device %p\n", dev);
-
 	if (netdev->priv_flags & IFF_802_1Q_VLAN)
 		real_netdev = rdma_vlan_dev_real_dev(netdev);
 	else
