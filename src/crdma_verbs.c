@@ -3178,7 +3178,6 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 
 #if (VER_NON_RHEL_GE(5,0) || VER_RHEL_GE(8,0))
 	ib_set_device_ops(&dev->ibdev, &crdma_dev_ops);
-	ret = ib_register_device(&dev->ibdev, "crdma%d", NULL);
 #else
 	dev->ibdev.owner                = THIS_MODULE;
 	dev->ibdev.driver_id            = RDMA_DRIVER_CRDMA;
@@ -3231,8 +3230,15 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.reg_user_mr          = crdma_reg_user_mr;
 	dev->ibdev.req_notify_cq        = crdma_req_notify_cq;
 	dev->ibdev.resize_cq            = crdma_resize_cq;
+#endif
+
+#if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))
+        ret = ib_register_device(&dev->ibdev, "crdma%d",
+		&dev->nfp_info->pdev->dev);
+#else
 	ret = ib_register_device(&dev->ibdev, NULL);
 #endif
+
 	crdma_dev_info(dev, "ib_register_device: status: %d\n", ret);
 	return ret;
 }
