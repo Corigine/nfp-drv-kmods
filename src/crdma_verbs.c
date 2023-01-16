@@ -1564,8 +1564,8 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 			resp.sq_offset = 0;
 			resp.rq_offset = cqp->sq.length;
 		} else {
-			resp.sq_offset = 0;
-			resp.rq_offset = cqp->sq.length;
+			resp.rq_offset = 0;
+			resp.sq_offset = cqp->rq.length;
 		}
 		resp.swqe_size = cqp->sq.wqe_size;
 		resp.num_swqe = cqp->sq.wqe_cnt;
