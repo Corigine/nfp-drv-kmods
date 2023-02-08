@@ -739,6 +739,13 @@ struct crdma_eq_params {
 
 struct crdma_eq;
 
+struct crdma_eq_map_params {
+	__le32		reserved1;
+	__le32		event:8;
+	__le32		unused1:8;
+	__le32		reserved2:16;
+} __packed;
+
 /**
  * Create a microcode event queue control object.
  *

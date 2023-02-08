@@ -1390,21 +1390,29 @@ int crdma_eq_destroy_cmd(struct crdma_ibdev *dev, struct crdma_eq *eq)
 
 int crdma_eq_map_cmd(struct crdma_ibdev *dev, u32 eqn, u32 events)
 {
+	struct crdma_eq_map_params *param;
 	struct crdma_cmd cmd;
+	struct crdma_cmd_mbox in_mbox;
 	int status;
+
+	if (crdma_init_mailbox(dev, &in_mbox))
+		return -1;
+
+	param		= in_mbox.buf;
+	param->event    = cpu_to_le32(events & CRDMA_EQ_EVENT_MASK);
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode	= CRDMA_CMD_EQ_MAP;
 	cmd.input_mod	= eqn;
 	cmd.timeout	= CRDMA_CMDIF_GEN_TIMEOUT_MS;
-	cmd.input_param = events & CRDMA_EQ_EVENT_MASK;
-
+	cmd.input_param = in_mbox.dma_addr;
 	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-code response */
 	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
 		status = CRDMA_STS_OK;
 	}
+	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
 
