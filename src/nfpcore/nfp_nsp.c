@@ -64,7 +64,7 @@
 #define NFP_CAP_CMD_DMA_SG	0x28
 
 #define NSP_MAGIC		0xab10
-#define NSP_MAJOR		0
+#define NSP_MAJOR		1
 #define NSP_MINOR		8
 
 #define NSP_CODE_MAJOR		GENMASK(15, 12)
@@ -253,14 +253,14 @@ static int nfp_nsp_check(struct nfp_nsp *state)
 	state->ver.major = FIELD_GET(NSP_STATUS_MAJOR, reg);
 	state->ver.minor = FIELD_GET(NSP_STATUS_MINOR, reg);
 
-	if (state->ver.major != NSP_MAJOR) {
+	if (state->ver.major > NSP_MAJOR) {
 		nfp_err(cpp, "Unsupported ABI %hu.%hu\n",
 			state->ver.major, state->ver.minor);
 		return -EINVAL;
 	}
 	if (state->ver.minor < NSP_MINOR) {
-		nfp_err(cpp, "ABI too old to support NIC operation (%u.%hu < %u.%u), please update the management FW on the flash\n",
-			NSP_MAJOR, state->ver.minor, NSP_MAJOR, NSP_MINOR);
+		nfp_err(cpp, "ABI too old to support NIC operation (x.%hu < x.%u), please update the management FW on the flash\n",
+			state->ver.minor, NSP_MINOR);
 		return -EINVAL;
 	}
 

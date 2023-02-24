@@ -802,6 +802,9 @@ static int nfp_nsp_init(struct pci_dev *pdev, struct nfp_pf *pf)
 		return err;
 	}
 
+	pf->multi_pf_support = pdev->multifunction;
+	dev_info(&pdev->dev, "%s-PF detected\n", pf->multi_pf_support ? "Multi" : "Single");
+
 	err = nfp_nsp_wait(nsp);
 	if (err < 0)
 		goto exit_close_nsp;

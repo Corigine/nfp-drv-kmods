@@ -159,6 +159,7 @@ struct nfp_pf {
 
 	struct nfp_shared_buf *shared_bufs;
 	unsigned int num_shared_bufs;
+	bool multi_pf_support;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
 	struct mutex lock;
