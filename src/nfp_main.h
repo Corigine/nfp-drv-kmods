@@ -95,6 +95,12 @@ struct nfp_dumpspec {
  * @port_refresh_work:	Work entry for taking netdevs out
  * @shared_bufs:	Array of shared buffer structures if FW has any SBs
  * @num_shared_bufs:	Number of elements in @shared_bufs
+ * @multi_pf:		Used in multi-PF setup
+ * @multi_pf.en:	Is multi-PF setup?
+ * @multi_pf.id:	PF index
+ * @multi_pf.beat_timer:Timer for beat to keepalive
+ * @multi_pf.beat_area:	Pointer to CPP area for beat to keepalive
+ * @multi_pf.beat_addr:	Pointer to mapped beat address used for keepalive
  * @lock:		Protects all fields which may change after probe,
  *			which is replaced by devlink lock after 5.18(inclusive)
  */
@@ -159,7 +165,14 @@ struct nfp_pf {
 
 	struct nfp_shared_buf *shared_bufs;
 	unsigned int num_shared_bufs;
-	bool multi_pf_support;
+
+	struct {
+		bool en;
+		u8 id;
+		struct timer_list beat_timer;
+		struct nfp_cpp_area *beat_area;
+		u8 __iomem *beat_addr;
+	} multi_pf;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
 	struct mutex lock;
