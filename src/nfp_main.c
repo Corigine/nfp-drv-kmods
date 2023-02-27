@@ -703,6 +703,12 @@ nfp_fw_load(struct pci_dev *pdev, struct nfp_pf *pf, struct nfp_nsp *nsp)
 	if (err)
 		return err;
 
+	/* Skip firmware loading in multi-PF setup if firmware is loaded. */
+	if (pf->multi_pf_support && nfp_nsp_fw_loaded(nsp)) {
+		fw_loaded = true;
+		goto end;
+	}
+
 	fw = nfp_net_fw_find(pdev, pf);
 	do_reset = reset == NFP_NSP_DRV_RESET_ALWAYS ||
 		   (fw && reset == NFP_NSP_DRV_RESET_DISK);
@@ -731,15 +737,27 @@ nfp_fw_load(struct pci_dev *pdev, struct nfp_pf *pf, struct nfp_nsp *nsp)
 		fw_loaded = true;
 	} else if (policy != NFP_NSP_APP_FW_LOAD_DISK &&
 		   nfp_nsp_has_stored_fw_load(nsp)) {
-		/* Don't propagate this error to stick with legacy driver
+		err = nfp_nsp_load_stored_fw(nsp);
+
+		/* Same logic with loading from disk when multi-PF. Othewise:
+		 *
+		 * Don't propagate this error to stick with legacy driver
 		 * behavior, failure will be detected later during init.
+		 *
+		 * Don't flag the fw_loaded in this case since other devices
+		 * may reuse the firmware when configured this way.
 		 */
-		if (!nfp_nsp_load_stored_fw(nsp))
+		if (!err) {
 			dev_info(&pdev->dev, "Finished loading stored FW image\n");
 
-		/* Don't flag the fw_loaded in this case since other devices
-		 * may reuse the firmware when configured this way
-		 */
+			if (pf->multi_pf_support)
+				fw_loaded = true;
+		} else {
+			if (pf->multi_pf_support)
+				dev_err(&pdev->dev, "Stored FW loading failed: %d\n", err);
+			else
+				err = 0;
+		}
 	} else {
 		dev_warn(&pdev->dev, "Didn't load firmware, please update flash or reconfigure card\n");
 	}
@@ -751,9 +769,10 @@ exit_release_fw:
 	 * dependent on it, which could be the case if there are multiple
 	 * devices that could load firmware.
 	 */
-	if (fw_loaded && ifcs == 1)
+	if (fw_loaded && ifcs == 1 && !pf->multi_pf_support)
 		pf->unload_fw_on_remove = true;
 
+end:
 	return err < 0 ? err : fw_loaded;
 }
 
