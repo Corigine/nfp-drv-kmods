@@ -268,6 +268,7 @@
 #define   NFP_NET_CFG_CTRL_PKT_TYPE	  (0x1 << 0) /* Pkttype offload */
 #define   NFP_NET_CFG_CTRL_IPSEC	  (0x1 << 1) /* IPsec offload */
 #define   NFP_NET_CFG_CTRL_MCAST_FILTER	  (0x1 << 2) /* Multicast Filter */
+#define   NFP_NET_CFG_CTRL_MULTI_PF	  (0x1 << 5) /* Multi PF */
 #define   NFP_NET_CFG_CTRL_FREELIST_EN	  (0x1 << 6) /* Freelist enable flag bit */
 #define   NFP_NET_CFG_CTRL_FLOW_STEER	  (0x1 << 8) /* Flow steering */
 #define   NFP_NET_CFG_CTRL_USO		  (0x1 << 16) /* UDP segmentation offload */
