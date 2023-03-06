@@ -6,6 +6,7 @@
 #include "../nfp_app.h"
 #include "../nfp_main.h"
 #include "../nfp_net.h"
+#include "../nfp_port.h"
 #include "main.h"
 
 static int nfp_nic_init(struct nfp_app *app)
@@ -33,11 +34,30 @@ static void nfp_nic_sriov_disable(struct nfp_app *app)
 
 static int nfp_nic_vnic_init(struct nfp_app *app, struct nfp_net *nn)
 {
+	struct nfp_port *port = nn->port;
+
+	if (port->type == NFP_PORT_PHYS_PORT) {
+		/* Enable PHY state here, and its state doesn't change in
+		 * pace with the port upper state by default. The behavior
+		 * can be modified by ethtool private flag "link_state_detach".
+		 */
+		int err = nfp_eth_set_configured(app->cpp,
+						 port->eth_port->index,
+						 true);
+		if (err >= 0)
+			port->eth_forced = true;
+	}
+
 	return nfp_nic_dcb_init(nn);
 }
 
 static void nfp_nic_vnic_clean(struct nfp_app *app, struct nfp_net *nn)
 {
+	struct nfp_port *port = nn->port;
+
+	if (port->type == NFP_PORT_PHYS_PORT)
+		nfp_eth_set_configured(app->cpp, port->eth_port->index, false);
+
 	nfp_nic_dcb_clean(nn);
 }
 

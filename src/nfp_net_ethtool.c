@@ -976,6 +976,41 @@ static int nfp_pflag_set_dis_fwlldp(struct net_device *netdev, bool en)
 	return err < 0 ? err : 0;
 }
 
+static bool nfp_pflag_get_link_state_detach(struct net_device *netdev)
+{
+	struct nfp_port *port = nfp_port_from_netdev(netdev);
+
+	if (!__nfp_port_get_eth_port(port))
+		return false;
+
+	return port->eth_forced;
+}
+
+static int nfp_pflag_set_link_state_detach(struct net_device *netdev, bool en)
+{
+	struct nfp_port *port = nfp_port_from_netdev(netdev);
+	struct nfp_eth_table_port *eth_port;
+
+	eth_port = __nfp_port_get_eth_port(port);
+	if (!eth_port)
+		return -EOPNOTSUPP;
+
+	if (!en) {
+		/* When turning link_state_detach off, we need change the lower
+		 * phy state if it's different with admin state.
+		 * Contrarily, we can leave the lower phy state as it is when
+		 * turning the flag on, since it's detached.
+		 */
+		int err = nfp_eth_set_configured(port->app->cpp, eth_port->index,
+						 netif_running(netdev));
+		if (err < 0 && err != -EOPNOTSUPP)
+			return err;
+	}
+
+	port->eth_forced = en;
+	return 0;
+}
+
 #define DECLARE_NFP_PFLAG(str, flag)	{	\
 	.name	= str,			\
 	.get	= nfp_pflag_get_##flag,	\
@@ -988,6 +1023,7 @@ static const struct {
 	int (*set)(struct net_device *netdev, bool en);
 } nfp_pflags[] = {
 	DECLARE_NFP_PFLAG("disable-fw-lldp", dis_fwlldp),
+	DECLARE_NFP_PFLAG("link-state-detach", link_state_detach),
 };
 
 #define NFP_PFLAG_MAX ARRAY_SIZE(nfp_pflags)
