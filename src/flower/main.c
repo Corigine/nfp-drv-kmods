@@ -445,10 +445,10 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 			goto err_reprs_clean;
 		}
 		if (repr_type == NFP_REPR_TYPE_PF) {
-			port->pf_id = i;
+			port->pf_id = app->pf->multi_pf.id;
 			port->vnic = priv->nn->dp.ctrl_bar;
 		} else {
-			port->pf_id = 0;
+			port->pf_id = app->pf->multi_pf.id;
 			port->vf_id = i;
 			port->vnic =
 				app->pf->vf_cfg_mem + i * NFP_NET_CFG_BAR_SZ;
@@ -513,24 +513,27 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 	struct nfp_eth_table *eth_tbl = app->pf->eth_tbl;
 	atomic_t *replies = &priv->reify_replies;
 	struct nfp_flower_repr_priv *repr_priv;
+	int err, reify_cnt, phy_reprs_num;
 	struct nfp_repr *nfp_repr;
 	struct sk_buff *ctrl_skb;
 	struct nfp_reprs *reprs;
-	int err, reify_cnt;
 	unsigned int i;
 
 	ctrl_skb = nfp_flower_cmsg_mac_repr_start(app, eth_tbl->count);
 	if (!ctrl_skb)
 		return -ENOMEM;
 
+	phy_reprs_num = app->pf->multi_pf.en ? app->pf->max_data_vnics :
+	                eth_tbl->count;
 	reprs = nfp_reprs_alloc(eth_tbl->max_index + 1);
 	if (!reprs) {
 		err = -ENOMEM;
 		goto err_free_ctrl_skb;
 	}
 
-	for (i = 0; i < eth_tbl->count; i++) {
-		unsigned int phys_port = eth_tbl->ports[i].index;
+	for (i = 0; i < phy_reprs_num; i++) {
+		int idx = app->pf->multi_pf.en ? app->pf->multi_pf.id : i;
+		unsigned int phys_port = eth_tbl->ports[idx].index;
 		struct net_device *repr;
 		struct nfp_port *port;
 		u32 cmsg_port_id;
@@ -559,7 +562,7 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 			nfp_repr_free(repr);
 			goto err_reprs_clean;
 		}
-		err = nfp_port_init_phy_port(app->pf, app, port, i);
+		err = nfp_port_init_phy_port(app->pf, app, port, idx);
 		if (err) {
 			kfree(repr_priv);
 			nfp_port_free(port);
@@ -626,7 +629,7 @@ err_free_ctrl_skb:
 static int nfp_flower_vnic_alloc(struct nfp_app *app, struct nfp_net *nn,
 				 unsigned int id)
 {
-	if (id > 0) {
+	if (id > 0 && !app->pf->multi_pf.en) {
 		nfp_warn(app->cpp, "FlowerNIC doesn't support more than one data vNIC\n");
 		goto err_invalid_port;
 	}
