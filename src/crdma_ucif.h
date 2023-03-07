@@ -61,9 +61,9 @@ enum {
 	CRDMA_CMD_HCA_DISABLE		= 8,
 	CRDMA_CMD_ROCE_PORT_ENABLE	= 9,
 	CRDMA_CMD_ROCE_PORT_DISABLE	= 10,
-	CRDMA_CMD_SET_BS_HOST_MEM_SIZE	= 11,
-	CRDMA_CMD_MAP_BS_HOST_MEM	= 12,
-	CRDMA_CMD_UNMAP_BS_HOST_MEM	= 13,
+	CRDMA_CMD_SET_BS_HOST_MEM_SIZE	= 11, //Deprecated
+	CRDMA_CMD_MAP_BS_HOST_MEM	= 12, //Deprecated
+	CRDMA_CMD_UNMAP_BS_HOST_MEM	= 13, //Deprecated
 	CRDMA_CMD_MPT_CREATE		= 14,
 	CRDMA_CMD_MPT_DESTROY		= 15,
 	CRDMA_CMD_MPT_QUERY		= 16,
@@ -592,65 +592,6 @@ int crdma_query_ucode(struct crdma_ibdev *dev,
  * Returns 0 on success, otherwise an error.
  */
 int crdma_query_nic(struct crdma_ibdev *dev, uint32_t *boardid);
-
-/*
- * Set HCA backing store input parameters
- */
-enum {
-	CRDMA_SET_BS_PAGE_SHIFT		= 27,
-	CRDMA_SET_BS_PAGE_MASK		= 0xF8000000ul,
-	CRDMA_SET_BS_NUM_MTT_MASK	= 0x07FFFFFFul,
-	CRDMA_SET_BS_SIZE_MASK		= 0x0000FFFFul,
-};
-
-/**
- * Set the HCA backing store memory size parameter requirements.
- *
- * @dev: RoCE IB device.
- * @num_mtt: The number of entries (starting at index 0).
- * @order: The log2 multiple of page size for the mapping.
- * @size_mb: The size of the backing store expressed as megabytes.
- *
- * Returns 0 on success, otherwise an error.
- */
-int crdma_set_bs_mem_size(struct crdma_ibdev *dev,
-		int num_mtt, int order, int size_mb);
-
-/*
- *Map HCA backing store input mailbox parameters
- */
-struct crdma_bs_map_mem {
-	__le32		vaddr_h;
-	__le32		vaddr_l;
-	__le16		bs_mb_size;
-	__le16		rsvd;
-	__le32		pg_sz_mtts;
-} __packed;
-
-/**
- * Notify microcode that HCA backing store memory is ready for use and
- * pass memory access parameters.
- *
- * @dev: RoCE IB device.
- * @vaddr: The 64 bit virtual I/O address to assign.
- * @size_mb: The size of the backing store expressed as megabytes.
- * @num_mtt: The total number of MTT entries in the mapping.
- * @order: The log2 multiple of page size for the mapping.
- *
- * Returns 0 on success, otherwise an error.
- */
-int crdma_bs_map_mem(struct crdma_ibdev *dev, u64 vaddr, int size_mb,
-		int num_mtt, int order);
-
-/**
- * Notify microcode that HCA backing store memory is being removed and
- * no further accesses by microcode should occur.
- *
- * @dev: RoCE IB device.
- *
- * Returns 0 on success, otherwise an error.
- */
-int crdma_bs_unmap_mem(struct crdma_ibdev *dev);
 
 /*
  * HCA enable parameters - not yet defined.

@@ -456,12 +456,6 @@ struct crdma_ibdev {
 
 	int			numa_node;
 
-	/*
-	 * Microcode backing store memory points to blocks of memory
-	 * dedicated for use by microcode.
-	 */
-	struct crdma_mem	*bs_mem;
-
 	/* Linkage back to net_device notification chain */
 	struct notifier_block   nb_netdev;
 

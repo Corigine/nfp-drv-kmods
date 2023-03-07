@@ -391,118 +391,6 @@ free_mem:
 }
 
 /**
- * Create microcode backing store memory.
- *
- * @dev: The RoCE IB device.
- *
- * Returns 0 on success, otherwise an error.
- */
-static int crdma_create_bs(struct crdma_ibdev *dev)
-{
-	struct crdma_mem *bs_mem;
-	int ret;
-
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "Ucode requested %d MBytes of BS\n",
-			dev->cap.bs_size_mb);
-#endif
-	/* Non-coherent memory for use by microcode */
-	bs_mem = crdma_alloc_dma_mem(dev, false, CRDMA_MEM_DEFAULT_ORDER,
-			dev->cap.bs_size_mb << 20);
-	if (IS_ERR(bs_mem)) {
-		crdma_dev_err(dev, "Unable to allocate BS memory\n");
-		return -ENOMEM;
-	}
-	dev->bs_mem = bs_mem;
-
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("BS size       %d\n", bs_mem->tot_len);
-	crdma_info("BS num allocs %d\n", bs_mem->num_allocs);
-	crdma_info("BS min order  %d\n", bs_mem->min_order);
-	crdma_info("BS num SG     %d\n", bs_mem->num_sg);
-	crdma_info("BS needs      %d MTT entries\n", bs_mem->num_mtt);
-	crdma_info("BS MTT ndx    %d\n", bs_mem->base_mtt_ndx);
-#endif
-
-	/*
-	 * It is a requirement that backing store entries start at the
-	 * base of the MTT entries, i.e. backing store must be the
-	 * first allocation.
-	 */
-	if (bs_mem->base_mtt_ndx) {
-		crdma_err("BS MTT base index must be 0, base %d\n",
-				bs_mem->base_mtt_ndx);
-		ret = -EINVAL;
-		goto free_mem;
-	}
-
-	/*
-	 * Set backing store parameters in microcode, reserving MTT
-	 * entries. Write MTT for backing store translation and enable
-	 * backing store.
-	 */
-	ret = crdma_set_bs_mem_size(dev, bs_mem->num_mtt,
-			bs_mem->min_order, bs_mem->tot_len >> 20);
-	if (ret) {
-		crdma_warn("crdma_set_bs_mem_size returned %d\n", ret);
-		goto free_mem;
-	}
-
-	ret = crdma_mtt_write_sg(dev, bs_mem->alloc, bs_mem->num_sg,
-			bs_mem->base_mtt_ndx, bs_mem->num_mtt,
-			bs_mem->min_order + PAGE_SHIFT,
-			bs_mem->num_sg, 0);
-	if (ret) {
-		crdma_warn("crdma_mtt_write_sg returned %d\n", ret);
-		goto free_mem;
-	}
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("SG virtual addr for alloc 0:%p\n",
-			sg_virt(&bs_mem->alloc[0]));
-#endif
-	ret = crdma_bs_map_mem(dev,  (0xFF8ull << 48),
-			bs_mem->tot_len >> 20, bs_mem->num_mtt,
-			bs_mem->min_order);
-	if (ret) {
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_info("crdma_map_bs_mem returned %d\n", ret);
-#endif
-		goto free_mem;
-	}
-	return 0;
-
-free_mem:
-	crdma_free_dma_mem(dev, dev->bs_mem);
-	dev->bs_mem = NULL;
-	return ret;
-}
-
-/**
- * Cleanup microcode backing store memory.
- *
- * @dev: The RoCE IB device.
- *
- * Returns 0 on success, otherwise an error.
- */
-static void crdma_cleanup_bs(struct crdma_ibdev *dev)
-{
-	int ret;
-
-	/*
-	 * Notify microcode to no longer access backing store memory,
-	 * then free the physical pages backing it. An error would only
-	 * occur if microcode was non-operational.
-	 */
-	ret = crdma_bs_unmap_mem(dev);
-	if (ret)
-		crdma_dev_warn(dev, "crdma_unmap_bs_mem cmd error %d\n", ret);
-
-	crdma_free_dma_mem(dev, dev->bs_mem);
-	dev->bs_mem = NULL;
-	return;
-}
-
-/**
  * Shutdown EQ's and release EQ resources.
  *
  * @dev: The RoCE IB device.
@@ -727,10 +615,7 @@ static ssize_t exec_command(struct device *device,
 	case CRDMA_CMD_QUERY_NIC:
 		err = crdma_query_nic(dev, &outparm);
 		break;
-	case CRDMA_CMD_SET_BS_HOST_MEM_SIZE:
-	case CRDMA_CMD_MAP_BS_HOST_MEM:
 	case CRDMA_CMD_MTT_WRITE:
-	case CRDMA_CMD_UNMAP_BS_HOST_MEM:
 		crdma_info("%s not directly supported, use "
 				"CRDMA_CMD_SET_BS_HOST_MEM_SIZE\n",
 				crdma_opcode_to_str(opcode));
@@ -972,10 +857,8 @@ static int crdma_init_hca(struct crdma_ibdev *dev)
 
 	if (crdma_hca_enable(dev))
 		goto cleanup_uar;
-	if (crdma_create_bs(dev))
-		goto hca_disable;
 	if (crdma_create_eqs(dev))
-		goto free_bs;
+		goto hca_disable;
 	if (crdma_init_event_cmdif(dev))
 		goto free_eqs;
 
@@ -989,8 +872,6 @@ cleanup_ports:
 	crdma_cleanup_port(dev);
 free_eqs:
 	crdma_free_eqs(dev);
-free_bs:
-	crdma_cleanup_bs(dev);
 hca_disable:
 	crdma_hca_disable(dev);
 cleanup_uar:
@@ -1020,9 +901,6 @@ static void crdma_cleanup_hca(struct crdma_ibdev *dev)
 	 */
 	crdma_cleanup_event_cmdif(dev);
 	crdma_free_eqs(dev);
-
-	if (dev->bs_mem)
-		crdma_cleanup_bs(dev);
 
 	ret = crdma_hca_disable(dev);
 	if (ret)
