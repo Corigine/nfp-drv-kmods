@@ -79,8 +79,6 @@ struct cmdif_reg {
 	__le32	cmd_status;
 } __packed;
 
-void __crdma_dump_cmdif(struct crdma_ibdev *dev);
-
 /**
  * Write a command to the micro-code command interface. The command
  * interface mutex should be held outside of the function.
@@ -229,13 +227,5 @@ int crdma_init_hw(struct crdma_ibdev *dev);
  */
 void crdma_cleanup_hw(struct crdma_ibdev *dev);
 
-/**
- * Initialize IB device values that are dependent on the specific
- * chipset model family associated with this device.
- *
- * @dev: RoCE IB device.
- * @model: The model family associated with this device.
- */
-int crdma_set_chip_details(struct crdma_ibdev *dev, u32 model);
 
 #endif /* CRDMA_HW_H */

@@ -156,7 +156,6 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	while ((1 << mem->min_order) < num_pages)
 		mem->min_order++;
 
-
 	/*
 	 * In early driver development we require that a coherent memory
 	 * allocation be backed by a single block of coherent memory.
@@ -168,7 +167,7 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	if (!buf)
 		return -ENOMEM;
 
-#ifdef CRDMA_DEBUG_FLAG
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	pr_info("dma_alloc_coherent information:\n");
 	pr_info("Order:         %d\n", mem->min_order);
 	pr_info("Size:          %ld\n",PAGE_SIZE << mem->min_order);
@@ -368,12 +367,10 @@ static int crdma_netdev_event(struct notifier_block *nb,
 {
 	struct net_device *real_netdev, *netdev = netdev_notifier_info_to_dev(ptr);
 	struct crdma_ibdev *dev;
-	u32 mtu;
 
 	dev = container_of(nb, struct crdma_ibdev, nb_netdev);
-	if (netdev->priv_flags & IFF_802_1Q_VLAN)
-		real_netdev = rdma_vlan_dev_real_dev(netdev);
-	else
+	real_netdev = rdma_vlan_dev_real_dev(netdev);
+	if(!real_netdev)
 		real_netdev = netdev;
 
 	if (real_netdev != dev->port.netdev) {
@@ -383,24 +380,18 @@ static int crdma_netdev_event(struct notifier_block *nb,
 	switch(event)
 	{
 		case NETDEV_UP:
-			if (netdev && netdev->name) {
-				crdma_port_enable_cmd(dev, 0);
-			}
+			crdma_port_enable_cmd(dev, 0);
 			break;
 		case NETDEV_DOWN:
-			if (netdev && netdev->name) {
-				crdma_port_disable_cmd(dev, 0);
-			}
+			crdma_port_disable_cmd(dev, 0);
 			break;
 		case NETDEV_CHANGEMTU:
-			mtu = netdev->mtu;
-			if (netdev && netdev->name) {
-				crdma_set_port_mtu_cmd(dev, 0, mtu);
-			}
+			crdma_set_port_mtu_cmd(dev, 0, netdev->mtu);
 			break;
 		default:
 			break;
 	}
+
 	return NOTIFY_DONE;
 }
 
@@ -455,9 +446,8 @@ bool crdma_add_smac(struct crdma_port *port, u8 *mac)
 			goto done;
 		}
 	}
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("S_MAC table full\n");
-#endif
+
+	crdma_warn("S_MAC table full\n");
 done:
 	spin_unlock_irqrestore(&port->table_lock, flags);
 
@@ -508,11 +498,6 @@ void crdma_sq_ring_db32(struct crdma_ibdev *dev, uint32_t value)
 {
 	value  = value & CRDMA_DB_SQ_MASK;
 	crdma_ring_db32(dev, value, CRDMA_DB_SQ_ADDR_OFFSET);
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("SQ doorbell address %p\n",
-		    dev->priv_uar.map + CRDMA_DB_SQ_ADDR_OFFSET);
-	crdma_debug("SQ doorbell written 0x%08X\n", cpu_to_le32(value));
-#endif
 	return;
 }
 
@@ -557,8 +542,6 @@ int crdma_set_av(struct ib_pd *pd,
 	const struct ib_global_route *grh = rdma_ah_read_grh(ah_attr);
 	u8 nw_type;
 	u16 vlan = 0xffff;
-
-	crdma_info("crdma_set_av\n");
 
 	/* The reason of swap byte order reference the struct crdma_av */
 	av->d_mac[0] = ah_attr->roce.dmac[3];

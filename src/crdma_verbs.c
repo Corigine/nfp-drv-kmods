@@ -152,14 +152,15 @@ static struct crdma_mem *crdma_alloc_hw_queue(struct crdma_ibdev *dev,
 		crdma_dev_err(dev, "Unable to allocate queue memory\n");
 		return mem;
 	}
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("crdma_alloc_hw_queue dump: \n");
-	pr_info("HWQ memory size        %d\n", mem->tot_len);
-	pr_info("HWQ num allocs         %d\n", mem->num_allocs);
-	pr_info("HWQ min order          %d\n", mem->min_order);
-	pr_info("HWQ num SG             %d\n", mem->num_sg);
-	pr_info("HWQ needs              %d MTT entries\n", mem->num_mtt);
-	pr_info("HWQ base_mtt_ndx       %d\n", mem->base_mtt_ndx);
+
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_dev_info(dev, "Dump HWQ information: \n");
+	crdma_dev_info(dev, "Memory Size              %d\n", mem->tot_len);
+	crdma_dev_info(dev, "Number Allocs            %d\n", mem->num_allocs);
+	crdma_dev_info(dev, "Min Order                %d\n", mem->min_order);
+	crdma_dev_info(dev, "Number of SG             %d\n", mem->num_sg);
+	crdma_dev_info(dev, "Number of MTT entries    %d\n", mem->num_mtt);
+	crdma_dev_info(dev, "Base_mtt_ndx             %d\n", mem->base_mtt_ndx);
 #endif
 	err = crdma_mtt_write_sg(dev, mem->alloc, mem->num_sg,
 			mem->base_mtt_ndx, mem->num_mtt,
@@ -223,13 +224,7 @@ static void crdma_compound_order(struct ib_umem *umem, u64 start,
 	pfn_bits = (unsigned long)(start >> page_shift);
 	order = __ffs(pfn_bits);
 	comp_mask = (1 << order) - 1;
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("start 0x%016llx, page_shift: %ld\n",
-			start, page_shift);
-	crdma_debug("pfn_bits: 0%lx\n", pfn_bits);
-	crdma_debug("find_first_bit returned: %ld\n", order);
-	crdma_debug("Alignment comp_mask: 0x%08X\n", comp_mask);
-#endif
+
 	/*
 	 * Go through the memory reducing the alignment to the smallest
 	 * order found in the region.
@@ -249,11 +244,6 @@ static void crdma_compound_order(struct ib_umem *umem, u64 start,
 				comp_mask = (1 << order) - 1;
 				base = pfn;
 				comp_pages = 0;
-#ifdef CRDMA_DEBUG_FLAG
-				crdma_debug("new page: pfn_bits: 0x%lx, "
-					"order: %ld, comp_mask: 0x%08X\n",
-					pfn_bits, order, comp_mask);
-#endif
 			} else if (base + comp_pages != pfn) {
 				/*
 				 * Non compound pages, reset the new
@@ -271,22 +261,12 @@ static void crdma_compound_order(struct ib_umem *umem, u64 start,
 	}
 
 	if (tot_pages) {
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_debug("Determine order, tot_pages: %d, order: %ld\n",
-				tot_pages, order);
-#endif
 		order = min_t(unsigned long,
 				ilog2(roundup_pow_of_two(tot_pages)),
 				order);
 		if (comp_order)
 			*comp_order = order;
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_debug("order: %d\n", *comp_order);
-#endif
 		*num_comp = DIV_ROUND_UP(tot_pages, (1 << order));
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_debug("num_comp: %d\n", *num_comp);
-#endif
 	} else {
 		order = 0;
 		if (comp_order)
@@ -487,21 +467,7 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 		 */
 		wc->sl  = le16_to_cpu(cqe->sl_vid) >> 13;
 	}
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("IB WC:\n");
-	crdma_debug("      WRID: 0x%016llX\n", wc->wr_id);
-	crdma_debug("    status: %d\n", wc->status);
-	crdma_debug("    opcode: %d\n", wc->opcode);
-	crdma_debug("        QP: %p\n", wc->qp);
-	crdma_debug("     flags: 0x%X\n", wc->wc_flags);
-	if (!(cqe->flags & CRDMA_CQE_SENDQ_FLAG_BIT)) {
-		crdma_debug("  byte len: %d\n", wc->byte_len);
-		crdma_debug("   src QPN: 0x%08X\n", wc->src_qp);
-		crdma_debug("      smac: %02x:%02x:%02x:%02x:%02x:%02x\n",
-				wc->smac[0], wc->smac[1], wc->smac[2],
-				wc->smac[3], wc->smac[4], wc->smac[5]);
-	}
-#endif
+
 	return 0;
 }
 
@@ -596,8 +562,6 @@ struct net_device *crdma_get_netdev(struct ib_device *ibdev, u8 port_num)
 {
 	struct crdma_ibdev *crdma_dev = to_crdma_ibdev(ibdev);
 	struct net_device *netdev;
-
-	crdma_info("crdma_get_netdev: %d\n", port_num);
 
 	if (port_num != 1) {
 		crdma_dev_warn(crdma_dev, "invalid port=%d\n", port_num);
@@ -864,11 +828,11 @@ static int crdma_mmap(struct ib_ucontext *ib_uctxt,
 	u64 offset = vma->vm_pgoff << PAGE_SHIFT;
 	u64 length = vma->vm_end - vma->vm_start;
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("mmap uctxt: 0x%p\n", crdma_uctxt);
-	pr_info("  vma->vm_pgoff = %ld\n", vma->vm_pgoff);
-	pr_info("  offset = 0x%016llX\n", offset);
-	pr_info("  length = 0x%lld\n", length);
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_dev_info(dev, "uctxt           0x%p\n", crdma_uctxt);
+	crdma_dev_info(dev, "vma->vm_pgoff   %ld\n", vma->vm_pgoff);
+	crdma_dev_info(dev, "offset          0x%016llX\n", offset);
+	crdma_dev_info(dev, "length          0x%lld\n", length);
 #endif
 
 	if (vma->vm_start & (PAGE_SIZE -1))
@@ -876,8 +840,9 @@ static int crdma_mmap(struct ib_ucontext *ib_uctxt,
 
 	/* First page offset is for user context UAR used for doorbells */
 	if (vma->vm_pgoff == 0) {
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_info("Map user context UAR, index: %d\n", crdma_uctxt->uar.index);
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+		crdma_dev_info(dev, "Map user context UAR, index: %d\n",
+			crdma_uctxt->uar.index);
 #endif
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
@@ -1053,7 +1018,6 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 {
 	struct crdma_ah *cah = to_crdma_ah(ah);
 
-
 	memset(ah_attr, 0, sizeof(*ah_attr));
 	ah_attr->type              = ah->type;
 	rdma_ah_set_sl(ah_attr, cah->av.service_level);
@@ -1194,16 +1158,16 @@ static int crdma_qp_set_wq_sizes(struct crdma_ibdev *dev,
 		qp->sq_offset = qp->rq.length;
 	}
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("Set WQ sizes\n");
-	pr_info("SQ WQE size %d\n", qp->sq.wqe_size);
-	pr_info("SQ WQE count %d\n", qp->sq.wqe_cnt);
-	pr_info("SQ WQE num SG %d\n", qp->sq.max_sg);
-	pr_info("SQ byte length %d\n", qp->sq.length);
-	pr_info("RQ WQE size %d\n", qp->rq.wqe_size);
-	pr_info("RQ WQE count %d\n", qp->rq.wqe_cnt);
-	pr_info("RQ WQE num SG %d\n", qp->rq.max_sg);
-	pr_info("RQ byte length %d\n", qp->rq.length);
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_dev_info(dev, "Dump WQ information\n");
+	crdma_dev_info(dev, "SQ WQE size      %d\n", qp->sq.wqe_size);
+	crdma_dev_info(dev, "SQ WQE count     %d\n", qp->sq.wqe_cnt);
+	crdma_dev_info(dev, "SQ WQE num SG    %d\n", qp->sq.max_sg);
+	crdma_dev_info(dev, "SQ byte length   %d\n", qp->sq.length);
+	crdma_dev_info(dev, "RQ WQE size      %d\n", qp->rq.wqe_size);
+	crdma_dev_info(dev, "RQ WQE count     %d\n", qp->rq.wqe_cnt);
+	crdma_dev_info(dev, "RQ WQE num SG    %d\n", qp->rq.max_sg);
+	crdma_dev_info(dev, "RQ byte length   %d\n", qp->rq.length);
 #endif
 	return 0;
 }
@@ -1764,10 +1728,6 @@ static void set_wqe_sw_ownership(struct crdma_hw_workq *wq,
 
 	wqe_index &= wq->mask;
 	ownership = wq->buf + (wqe_index << wq->wqe_size_log2);
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("Set ownership for WQE index %d, %p\n",
-					wqe_index, ownership);
-#endif
 	*ownership = 0xFFFFFFFF;
 	return;
 }
@@ -1790,10 +1750,6 @@ static inline int crdma_copy_inline(struct crdma_swqe_inline *data,
 	int length = 0;
 
 	for (i = 0, sg = wr->sg_list; i < wr->num_sge; i++, sg++) {
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_debug("sg->length %d total length %d\n",
-						sg->length, length);
-#endif
 		if (length + sg->length > max)
 				return ENOMEM;
 		memcpy(&data->data[length], (void *)(uintptr_t)sg->addr,
@@ -1815,23 +1771,15 @@ static inline void crdma_set_wqe_sge(struct crdma_wqe_sge *wqe_sg, int num_sge,
                                 struct ib_sge *sge_list)
 {
 	int i;
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("num_sge %d, wqe_sg %p, sge_list %p\n",
-					num_sge, wqe_sg, sge_list);
-#endif
+
 	for (i = 0; i < num_sge; i++, sge_list++, wqe_sg++) {
 		wqe_sg->io_addr_h = cpu_to_le32(sge_list->addr >> 32);
 		wqe_sg->io_addr_l = cpu_to_le32(sge_list->addr &
 						0x0FFFFFFFFull);
 		wqe_sg->l_key = cpu_to_le32(sge_list->lkey);
 		wqe_sg->byte_count = cpu_to_le32(sge_list->length);
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_debug("SGE %d addr_h 0x%08X, addr_l 0x%08X\n",
-			    i, wqe_sg->io_addr_h, wqe_sg->io_addr_l);
-		crdma_debug("l_key 0x%08X, byte_count 0x%08X\n",
-			    wqe_sg->l_key, wqe_sg->byte_count);
-#endif
 	}
+
 	return;
 }
 
@@ -2000,7 +1948,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		wmb();
 		swqe->ctrl.owner.word = owner.word;
 
-#ifdef CRDMA_DEBUG_FLAG /* Extra debug only */
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG /* Extra debug only */
 		print_hex_dump(KERN_DEBUG, "SWQE:", DUMP_PREFIX_OFFSET, 8, 1,
 			       swqe, 128, 0);
 #endif
@@ -2155,7 +2103,7 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 	ccq->num_cqe = roundup_pow_of_two(num_cqe + 1);
 	ccq->ib_cq.cqe = ccq->num_cqe - 1;
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("Rounded up CQE count %d\n", ccq->num_cqe);
 #endif
 
@@ -2223,9 +2171,6 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 		resp.ci_mbox_size = PAGE_SIZE;
 		resp.cqn = ccq->cqn;
 		resp.num_cqe = ccq->num_cqe;
-		crdma_debug("CQ buffer paddr 0x%016llX\n", resp.cq_base_addr);
-		crdma_debug("CI mbox paddr 0x%016llX\n",
-				resp.ci_mbox_base_addr);
 
 		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
 		if (err) {
@@ -2312,7 +2257,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 	ccq->num_cqe = roundup_pow_of_two(num_cqe + 1);
 	ccq->ib_cq.cqe = ccq->num_cqe - 1;
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("Rounded up CQE count %d\n", ccq->num_cqe);
 #endif
 
@@ -2379,11 +2324,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 		resp.ci_mbox_size = PAGE_SIZE;
 		resp.cqn = ccq->cqn;
 		resp.num_cqe = ccq->num_cqe;
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_debug("CQ buffer paddr 0x%016llX\n", resp.cq_base_addr);
-		crdma_debug("CI mbox paddr 0x%016llX\n",
-				resp.ci_mbox_base_addr);
-#endif
+
 		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
 		if (err) {
 			crdma_warn("Copy of UDATA failed, %d\n", err);
@@ -2490,7 +2431,7 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 #if (!(VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0)))
 	kfree(ccq);
 #endif
-	crdma_info("crdma_destroy_cq done\n");
+
 	return 0;
 }
 
@@ -2727,8 +2668,8 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 #else
 	log2_page_sz = cmr->umem->page_shift;
 #endif
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("User Memory Page Size %d\n", log2_page_sz);
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_dev_info(dev, "User Memory Page Size %d\n", log2_page_sz);
 #endif
 	/*
 	 * Find the largest compound page size that can be used
@@ -2737,11 +2678,11 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 	 */
 	crdma_compound_order(cmr->umem, start, &count, &num_comp,
 			&shift, &order);
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("User Memory Pages %d\n", count);
-	crdma_info("User Memory Compound Pages %d\n", num_comp);
-	crdma_info("User Memory Compound Page Shift %d\n", shift);
-	crdma_info("User Memory Compound Page Order %d\n", order);
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_dev_info(dev, "User Memory Pages                 %d\n", count);
+	crdma_dev_info(dev, "User Memory Compound Pages        %d\n", num_comp);
+	crdma_dev_info(dev, "User Memory Compound Page Shift   %d\n", shift);
+	crdma_dev_info(dev, "User Memory Compound Page Order   %d\n", order);
 #endif
 	if (order + log2_page_sz > CRDMA_MTT_MAX_PAGESIZE_LOG2) {
 		num_comp <<= order  + log2_page_sz -
@@ -2749,9 +2690,9 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 		order -=  order + log2_page_sz -
 				CRDMA_MTT_MAX_PAGESIZE_LOG2;
 	}
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("Adjusted number of compound pages %d\n", num_comp);
-	crdma_info("Adjusted compound order %d\n", order);
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_dev_info(dev, "Adjusted number of compound pages %d\n", num_comp);
+	crdma_dev_info(dev, "Adjusted compound order           %d\n", order);
 #endif
 	cmr->pdn = to_crdma_pd(pd)->pd_index;
 	cmr->io_vaddr = virt_addr;
@@ -2918,7 +2859,6 @@ static int crdma_map_mr_sg(struct ib_mr *mr, struct scatterlist *sg,
 		crdma_warn("MTT_WRITE failed %d\n", ret);
 		goto free_mbox;
 	}
-	crdma_debug("MTT_WRITE MTT %d entries written\n", cmr->npages);
 
 	cmr->access = IB_ACCESS_LOCAL_WRITE|IB_ACCESS_REMOTE_WRITE
 		|IB_ACCESS_REMOTE_READ|IB_ACCESS_REMOTE_ATOMIC;

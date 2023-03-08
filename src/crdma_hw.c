@@ -72,12 +72,8 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 		}
 	}
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	pr_info("input_param: 0x%016llx\n", input_param);
-	pr_info("output_param: 0x%016llx\n", output_param);
-	pr_info("input_mod: 0x%08x\n", input_mod);
-	pr_info("opcode (%d), opcode_mod(%d), token: 0x%04x\n",
-			opcode, opcode_mod, token);
+#ifdef CRDMA_DEBUG_FLAG
+	crdma_dev_info(dev, "Opcode (%s)\n", crdma_opcode_to_str(opcode));
 #endif
 
 	/*
@@ -103,13 +99,7 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 			(opcode_mod << CRDMA_CMDIF_OPCODE_MOD_SHIFT) |
 			opcode;
 
-	rmb();
-
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	pr_info("Command word to post:0x%08X\n", cmd_word);
-#endif
-
-	wmb();
+	mb();
 	__raw_writel((__force u32) cpu_to_le32(cmd_word),
 			&reg->cmd_status);
 
@@ -118,28 +108,6 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 	mmiowb();
 #endif
 	return 0;
-}
-
-void __crdma_dump_cmdif(struct crdma_ibdev *dev)
-{
-	struct cmdif_reg __iomem *reg = dev->cmdif;
-
-	/* For now we use "raw" to explicitly control endian conversion */
-	pr_info("Dump of command interface registers: %p\n", reg);
-	pr_info("input_parm_high:0x%08x\n",
-			le32_to_cpu(__raw_readl(&reg->input_param_high)));
-	pr_info("input_parm_low:0x%08x\n",
-			le32_to_cpu(__raw_readl(&reg->input_param_low)));
-	pr_info("input_mod:0x%08x\n",
-			le32_to_cpu(__raw_readl(&reg->input_mod)));
-	pr_info("output_parm_high:0x%08x\n",
-			le32_to_cpu(__raw_readl(&reg->output_param_high)));
-	pr_info("output_parm_low:0x%08x\n",
-			le32_to_cpu(__raw_readl(&reg->output_param_low)));
-	pr_info("token:0x%08x\n",
-			le32_to_cpu(__raw_readl(&reg->token)));
-	pr_info("cmd_status:0x%08x\n",
-			le32_to_cpu(__raw_readl(&reg->cmd_status)));
 }
 
 bool crdma_cmdif_busy(struct crdma_ibdev *dev)
@@ -185,15 +153,7 @@ int __crdma_read_cmdif_results(struct crdma_ibdev *dev,
 int crdma_acquire_pci_resources(struct crdma_ibdev *dev)
 {
 	dev->cmdif = dev->nfp_info->cmdif;
-	if (!dev->cmdif) {
-		crdma_warn("Command interface iomem passed as NULL\n");
-		return -EINVAL;
-	}
 	dev->db_paddr = dev->nfp_info->db_base;
-#ifdef CRDMA_DEBUG_FLAG
-	pr_info("cmdif_reg IOMEM address:%p\n", dev->cmdif);
-	pr_info("DB pages bus/DMA address:0x%016llX\n", dev->db_paddr);
-#endif
 	return 0;
 }
 
@@ -218,9 +178,10 @@ void crdma_set_sq_db(struct crdma_ibdev *dev, u32 qpn)
 	__raw_writel((__force u32) cpu_to_le32(db), addr);
 	mb();
 
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_dev_info(dev, "Write SQ_Doorbell %p with 0x%08X\n",
 		addr, cpu_to_le32(db));
-
+#endif
 	return;
 }
 
@@ -271,15 +232,3 @@ inline void crdma_set_eq_ci(struct crdma_ibdev *dev,  u32 eqn,
 	return;
 }
 
-
-int crdma_set_chip_details(struct crdma_ibdev *dev, u32 model)
-{
-	/*
-	 * Place holder for initializing device parameters that
-	 * are chipset family specific.
-	 */
-
-	/* XXX: Todo add doorbell routines */
-
-	return 0;
-}

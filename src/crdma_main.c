@@ -141,22 +141,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.opt_flags = cap->flags;
 
 #ifdef CRDMA_DEBUG_FLAG
-	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_RC)
-		crdma_dev_info(dev, "RC supported in ucode\n");
-	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_UD)
-		crdma_dev_info(dev, "UD supported in ucode\n");
-	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_UC)
-		crdma_dev_info(dev, "UC supported in ucode\n");
-	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_XRC)
-		crdma_dev_info(dev, "XRC supported in ucode\n");
-	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_PHYS)
-		crdma_dev_info(dev, "PHYS supported in ucode\n");
-	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_FRMR)
-		crdma_dev_info(dev, "FRMR supported in ucode\n");
-	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_MW)
-		crdma_dev_info(dev, "MW supported in ucode\n");
-	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_SRQ)
-		crdma_dev_info(dev, "SRQ supported in ucode\n");
+	crdma_dev_info(dev, "Device cap flags %x\n", dev->cap.opt_flags);
 #endif
 
 	dev->cap.n_ports = (cap->ports_rsvd >> CRDMA_DEV_CAP_PORT_SHIFT) &
@@ -189,7 +174,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.max_mpt = cap->max_mpt;
 
 	if (cap->max_mtt <= 0) {
-		crdma_warn("Specified Max MTT %d < 1\n", cap->max_mtt);
+		crdma_dev_warn(dev, "Specified Max MTT %d < 1\n", cap->max_mtt);
 		ret = -EINVAL;
 		goto free_mem;
 	}
@@ -215,7 +200,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.sgid_table_size = cap->sgid_table_size;
 
 	if (dev->cap.sgid_table_size > CRDMA_IB_MAX_GID_TABLE_SIZE) {
-		crdma_warn("Specified SGID table size capped to %d entries\n",
+		crdma_dev_warn(dev, "Specified SGID table size capped to %d entries\n",
 				CRDMA_IB_MAX_GID_TABLE_SIZE);
 		dev->cap.sgid_table_size = CRDMA_IB_MAX_GID_TABLE_SIZE;
 	}
@@ -242,16 +227,11 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.rsvd_qp = cap->rsvd_qp;
 
 	if (cap->max_eq_log2 > 3) {
-		crdma_warn("Specified max EQ log2 numer %d capped to %d\n",
+		crdma_dev_warn(dev, "Specified max EQ log2 numer %d capped to %d\n",
 				cap->max_eq_log2, 3);
 		cap->max_eq_log2 = 3;
 	}
-	if (cap->max_eq_log2 < 0) {
-		crdma_dev_err(dev, "Specified max EQ log2 %d less than 0\n",
-				cap->max_eq_log2);
-		ret = -EINVAL;
-		goto free_mem;
-	}
+
 	dev->cap.max_eq = 1 << cap->max_eq_log2;
 
 	if (cap->cqe_size_log2 != 5) {
@@ -262,24 +242,6 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	}
 
 	dev->cap.cqe_size = 1 << cap->cqe_size_log2;
-
-	/*
-	 * Microcode is setting the maximum EQ log2 num entries too small,
-	 * adjust to something reasonable.  This should be removed when
-	 * microcode correctly sets a reasonable value.
-	 */
-	if (cap->max_eqe_log2 < 12) {
-		crdma_warn("Specified max EQE log2 size unreasonable: %d, "
-				"adjusting to %d\n", cap->cqe_size_log2, 12);
-		cap->max_eqe_log2 = 12;
-	}
-
-	if (cap->max_eqe_log2 < 12) {
-		crdma_dev_err(dev, "Specified EQE log2 size %d too small\n",
-				cap->max_eqe_log2);
-		ret = -EINVAL;
-		goto free_mem;
-	}
 	dev->cap.max_eqe = 1 << cap->max_eqe_log2;
 
 	if (cap->eqe_size_log2 != 4) {
@@ -644,9 +606,10 @@ static ssize_t exec_command(struct device *device,
 				crdma_opcode_to_str(opcode));
 		return -EINVAL;
 	}
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("%s returned %d\n", crdma_opcode_to_str(opcode), err);
-#endif
+
+	crdma_dev_info(dev, "%s returned %d\n",
+		crdma_opcode_to_str(opcode), err);
+
 	return count;
 }
 
@@ -712,7 +675,7 @@ static int crdma_init_maps(struct crdma_ibdev *dev)
 		crdma_dev_warn(dev, "Unable to allocate QP map\n");
 		goto cleanup_cq_mem;
 	}
-#ifdef CRDMA_DEBUG_FLAG
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	crdma_info("Allocate UAR bitmap min %d, max %d\n",
 		0, dev->cap.max_uar_pages - 1);
 	crdma_info("Allocate MPT bitmap min %d, max %d\n",
@@ -754,17 +717,6 @@ static void crdma_cleanup_maps(struct crdma_ibdev *dev)
 	crdma_cleanup_bitmap(&dev->mtt_map);
 	crdma_cleanup_bitmap(&dev->mpt_map);
 	crdma_cleanup_bitmap(&dev->uar_map);
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("=== crdma_cleanup_maps ===  \n");
-	crdma_info("Cleanup QP bitmap \n");
-	crdma_info("Free CQ Table \n");
-	crdma_info("Cleanup CQ bitmap \n");
-	crdma_info("Cleanup PD bitmap \n");
-	crdma_info("Cleanup MTT bitmap \n");
-	crdma_info("Cleanup MAPT bitmap \n");
-	crdma_info("Cleanup UAR bitmap \n");
-	crdma_info("=== crdma_cleanup_maps done=== \n");
-#endif
 	return;
 }
 
@@ -792,10 +744,11 @@ static int crdma_init_port(struct crdma_ibdev *dev)
 	spin_lock_init(&port->table_lock);
 	memcpy(port->mac, port->netdev->dev_addr, ETH_ALEN);
 	crdma_init_smac_table(dev, 0);
-	crdma_info("dev[%s] default mtu is %d\n",
-			port->netdev->name, port->netdev->mtu);
 	crdma_set_port_mtu_cmd(dev, 0, port->netdev->mtu);
 	spin_lock_init(&port->qp1_lock);
+
+	crdma_dev_info(dev, "The default MTU of %s is %d\n",
+			port->netdev->name, port->netdev->mtu);
 	return 0;
 }
 
@@ -807,7 +760,6 @@ static int crdma_init_port(struct crdma_ibdev *dev)
  */
 static void crdma_cleanup_port(struct crdma_ibdev *dev)
 {
-	crdma_debug("Cleanup crdma port\n");
 	return;
 }
 
@@ -929,13 +881,6 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 	int i;
 	int j;
 
-	crdma_info("crdma_add_dev: info %p\n", info);
-
-	/* The following test is for initial bring-up only, then remove */
-	if (unlikely(!info)) {
-		crdma_err("Null NFP info passed\n");
-		return NULL;
-	}
 	size = sizeof(*info) + info->num_vectors *
 				sizeof(struct msix_entry);
 
@@ -965,25 +910,20 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 	}
 	memcpy(dev->nfp_info, info, size);
 
-	crdma_info("info->ndetdev = %p\n", dev->nfp_info->netdev);
-	crdma_info("info->num_vectors = %d\n", dev->nfp_info->num_vectors);
-	crdma_dev_info(dev, "NFP PCI device %p\n", dev->nfp_info->pdev);
-	crdma_info("PCIDev->dma_mask:0x%016llx\n",
-			dev->nfp_info->pdev->dma_mask);
-	crdma_info("PCIDev->msix_enabled:%d\n",
-			dev->nfp_info->pdev->msix_enabled);
-	crdma_info("PCIDev->msi_enabled:%d\n",
-			dev->nfp_info->pdev->msi_enabled);
-	crdma_info("PCIDev->irq:%d\n", dev->nfp_info->pdev->irq);
+	crdma_dev_info(dev, "Number of Vectors       %d\n",
+		dev->nfp_info->num_vectors);
+	crdma_dev_info(dev, "DMA Mask                0x%016llx\n",
+		dev->nfp_info->pdev->dma_mask);
+	crdma_dev_info(dev, "Configure IOMEM address %p\n",
+		dev->nfp_info->cmdif);
+	crdma_dev_info(dev, "Doorbell DMA address    0x%016llX\n",
+		dev->nfp_info->db_base);
 
 	dev->have_interrupts = have_interrupts;
 
 	dev->id = idr_alloc(&crdma_dev_id, NULL, 0, 0, GFP_KERNEL);
 	if (dev->id < 0)
 		goto err_free_info;
-
-	if (crdma_set_chip_details(dev, 0))
-		goto err_free_idr;
 
 	if (crdma_init_hca(dev))
 		goto err_free_idr;
@@ -1026,7 +966,7 @@ static void crdma_remove_dev(struct crdma_ibdev *dev)
 {
 	int i;
 
-	pr_info("crdma_remove_dev: dev %p\n", dev);
+	crdma_dev_info(dev, "netdev(%p) is removing.\n", dev->nfp_info->netdev);
 
 	for (i = 0; i < ARRAY_SIZE(crdma_class_attrs); i++)
 		device_remove_file(&dev->ibdev.dev, crdma_class_attrs[i]);
@@ -1037,6 +977,8 @@ static void crdma_remove_dev(struct crdma_ibdev *dev)
 	idr_remove(&crdma_dev_id, dev->id);
 	kfree(dev->nfp_info);
 	ib_dealloc_device(&dev->ibdev);
+
+	return;
 }
 
 /**
@@ -1068,7 +1010,7 @@ static int __init crdma_init(void)
 
 static void __exit crdma_cleanup(void)
 {
-	crdma_info("crdma_init: calling nfp_unregister_roce_driver\n");
+	crdma_info("crdma_cleanup: calling nfp_unregister_roce_driver\n");
 	nfp_unregister_roce_driver(&crdma_drv);
 	return;
 }

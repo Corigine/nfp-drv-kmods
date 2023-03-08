@@ -57,8 +57,13 @@
 /* Internal crdma provider ABI between user library and kernel driver */
 #define CRDMA_UVERBS_ABI_VERSION	1
 
-#define CRDMA_DETAIL_INFO_DEBUG_FLAG
-#define CRDMA_DEBUG_FLAG
+/*
+   All debug flags are off by default,
+   open these as you want in debugging mode.
+   All debug codes will be removed when upstreamed into community.
+*/
+//#define CRDMA_DEBUG_FLAG
+//#define CRDMA_DETAIL_INFO_DEBUG_FLAG
 
 /*
  * Maximum limits placed on IB resources by the driver.
@@ -250,33 +255,9 @@ struct crdma_qp {
 	u32			sq_offset;
 	u32			rq_offset;
 
-#if 1
 	/* Work queues, RQ only valid if QP is not attached to SRQ */
 	struct crdma_hw_workq   sq;
 	struct crdma_hw_workq   rq;
-#else
-
-	/* SQ control */
-	spinlock_t		sq_lock;
-	u64			*sq_wrid_map;
-	u32			sq_wqe_cnt;	/* Rounded up to power of 2 */
-	u32			sq_wqe_size;	/* Rounded up to power of 2 */
-	u32			sq_max_sg;
-	u32			sq_max_inline;
-	u32			sq_head;
-	u32			sq_tail;
-	u32			sq_length;
-
-	/* RQ control */
-	spinlock_t		rq_lock;
-	u64			*rq_wrid_map;
-	u32			rq_wqe_cnt;	/* Rounded up power of of 2 */
-	u32			rq_wqe_size;	/* Rounded up power of of 2 */
-	u32			rq_max_sg;
-	u32			rq_head;
-	u32			rq_tail;
-	u32			rq_length;
-#endif
 };
 
 struct crdma_mr {

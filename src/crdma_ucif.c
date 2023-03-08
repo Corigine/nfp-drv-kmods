@@ -486,10 +486,7 @@ static struct crdma_eqe *crdma_next_eqe(struct crdma_eq *eq)
 	if (!!(eqe->rsvd_owner & CRDMA_EQ_OWNER_BIT) ==
 			!!(eq->consumer_cnt & (1 << eq->num_eqe_log2)))
 		return NULL;
-#ifdef CRDMA_DEBUG_FLAG
-	print_hex_dump(KERN_DEBUG, "EQE(LE):", DUMP_PREFIX_OFFSET, 8, 1,
-			eqe, sizeof(*eqe), 0);
-#endif
+
 	/* No EQE reads should be issued prior to validation of EQE */
 	rmb();
 	return eqe;
@@ -510,7 +507,7 @@ static void crdma_qp_async_event(struct crdma_ibdev *dev,
 
 	qpn = le32_to_cpu(eqe->affiliated.obj_num & (dev->cap.ib.max_qp - 1));
 #ifdef CRDMA_DEBUG_FLAG
-	crdma_info("QPN %d, %s\n", qpn, crdma_event_to_str(eqe->type));
+	crdma_dev_info(dev, "QPN %d, %s\n", qpn, crdma_event_to_str(eqe->type));
 #endif
 
 	spin_lock(&dev->qp_lock);
@@ -609,7 +606,7 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 			ccq->arm_seqn++;
 			atomic_inc(&ccq->ref_cnt);
 #ifdef CRDMA_DEBUG_FLAG
-			crdma_info("CQN %d, %s\n", cqn,
+			crdma_dev_info(dev, "CQN %d, %s\n", cqn,
 					crdma_event_to_str(eqe->type));
 #endif
 			/*
@@ -632,7 +629,7 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 			ccq = dev->cq_table[cqn];
 			atomic_inc(&ccq->ref_cnt);
 #ifdef CRDMA_DEBUG_FLAG
-			crdma_info("CQN %d, %s\n", cqn,
+			crdma_dev_info(dev, "CQN %d, %s\n", cqn,
 					crdma_event_to_str(eqe->type));
 #endif
 			/*
@@ -747,17 +744,14 @@ int crdma_init_eq(struct crdma_ibdev *dev, int index, int entries_log2,
 	}
 
 #ifdef CRDMA_DEBUG_FLAG
-	pr_info("  EQN            %d\n", index);
-	pr_info("  Intr:          %d\n", intr);
-	pr_info("  Vector:        %d\n", vector);
-	pr_info("  Num EQE:       %d\n", 1 << entries_log2);
-	pr_info("  EQ memory size %d\n", eq->mem->tot_len);
-	pr_info("  EQ num allocs  %d\n", eq->mem->num_allocs);
-	pr_info("  EQ min order   %d\n", eq->mem->min_order);
-	pr_info("  EQ num SG      %d\n", eq->mem->num_sg);
-	pr_info("  EQ needs       %d MTT entry(s)\n", eq->mem->num_mtt);
-
-	pr_info(" crdma_mtt_write_sg \n");
+	crdma_dev_info(dev, "EQN                   %d\n", index);
+	crdma_dev_info(dev, "IRQ                   %03d/%03d\n", vector, intr);
+	crdma_dev_info(dev, "Number EQE            %d\n", 1 << entries_log2);
+	crdma_dev_info(dev, "Memory Size of EQ     %d\n", eq->mem->tot_len);
+	crdma_dev_info(dev, "Number allocs         %d\n", eq->mem->num_allocs);
+	crdma_dev_info(dev, "EQ min order          %d\n", eq->mem->min_order);
+	crdma_dev_info(dev, "EQ num SG             %d\n", eq->mem->num_sg);
+	crdma_dev_info(dev, "MTT num entry of EQ   %d\n", eq->mem->num_mtt);
 #endif
 	ret = crdma_mtt_write_sg(dev, eq->mem->alloc, eq->mem->num_sg,
 			eq->mem->base_mtt_ndx, eq->mem->num_mtt,
@@ -800,9 +794,6 @@ int crdma_init_eq(struct crdma_ibdev *dev, int index, int entries_log2,
 	}
 
 	if (dev->have_interrupts) {
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_dev_info(dev, "Request IRQ %d\n", eq->vector);
-#endif
 		ret = request_irq(eq->vector, crdma_interrupt, 0,
 				eq->irq_name, eq);
 		if (ret) {
@@ -943,42 +934,62 @@ free_mbox:
  */
 static void crdma_dump_query_dev_cap(struct crdma_dev_cap_param *cap)
 {
-	crdma_info("Dump of query_dev_cap results in default order\n");
-
 	pr_info("flags:                      0x%02X\n", cap->flags);
-	pr_info("ports_rsvd:                 0x%02X\n", cap->ports_rsvd);
-	pr_info("req_bs_size_mb:             0x%04X\n", le16_to_cpu(cap->req_bs_size_mb));
-	pr_info("max_qp_log2:                0x%02X\n", cap->max_qp_log2);
-	pr_info("max_qp_wr_log2:             0x%02X\n", cap->max_qp_wr_log2);
-	pr_info("max_sq_sge:                 0x%02X\n", cap->max_sq_sge);
-	pr_info("max_rq_sge:                 0x%02X\n", cap->max_rq_sge);
-	pr_info("max_swqe_size_log2:         0x%02X\n", cap->max_swqe_size_log2);
-	pr_info("max_rwqe_size_log2:         0x%02X\n", cap->max_rwqe_size_log2);
-	pr_info("rsvd_qp:                    0x%02X\n", cap->rsvd_qp);
-	pr_info("max_rdma_res_log2:          0x%02X\n", cap->max_rdma_res_log2);
-	pr_info("max_qp_req_res_log2:        0x%02X\n", cap->max_qp_req_res_log2);
-	pr_info("max_qp_rsp_res_log2:        0x%02X\n", cap->max_qp_rsp_res_log2);
-	pr_info("max_cq_log2:                0x%02X\n", cap->max_cq_log2);
-	pr_info("max_cqe_log2:               0x%02X\n", cap->max_cqe_log2);
-	pr_info("cqe_size_log2:              0x%02X\n", cap->cqe_size_log2);
-	pr_info("max_eq_log2:                0x%02X\n", cap->max_eq_log2);
-	pr_info("max_eqe_log2:               0x%02X\n", cap->max_eqe_log2);
-	pr_info("eqe_size_log2:              0x%02X\n", cap->eqe_size_log2);
-	pr_info("max_srq_log2:               0x%02X\n", cap->max_srq_log2);
-	pr_info("max_srq_wr_log2:            0x%02X\n", cap->max_srq_wr_log2);
-	pr_info("max_srq_rwqe_size_log2:     0x%02X\n",
+	pr_info("ports_rsvd:                 %d\n", cap->ports_rsvd);
+	pr_info("max_qp_log2:                %d\n", cap->max_qp_log2);
+	pr_info("max_qp:                     %d\n", 1 << cap->max_qp_log2);
+	pr_info("max_qp_wr_log2:             %d\n", cap->max_qp_wr_log2);
+	pr_info("max_qp_wr:                  %d\n", 1 << cap->max_qp_wr_log2);
+	pr_info("max_sq_sge:                 %d\n", cap->max_sq_sge);
+	pr_info("max_rq_sge:                 %d\n", cap->max_rq_sge);
+	pr_info("max_swqe_size_log2:         %d\n", cap->max_swqe_size_log2);
+        pr_info("max_swqe_size:              %d\n", 1 << cap->max_swqe_size_log2);
+	pr_info("max_rwqe_size_log2:         %d\n", cap->max_rwqe_size_log2);
+	pr_info("max_rwqe_size:              %d\n", 1 << cap->max_rwqe_size_log2);
+	pr_info("rsvd_qp:                    %d\n", cap->rsvd_qp);
+	pr_info("max_rdma_res_log2:          %d\n", cap->max_rdma_res_log2);
+	pr_info("max_rdma_res:               %d\n", 1 << cap->max_rdma_res_log2);
+	pr_info("max_qp_req_res_log2:        %d\n", cap->max_qp_req_res_log2);
+	pr_info("max_qp_req_res:             %d\n", 1 << cap->max_qp_req_res_log2);
+	pr_info("max_qp_rsp_res_log2:        %d\n", cap->max_qp_rsp_res_log2);
+	pr_info("max_qp_rsp_res:             %d\n", 1 << cap->max_qp_rsp_res_log2);
+	pr_info("max_cq_log2:                %d\n", cap->max_cq_log2);
+	pr_info("max_cq:                     %d\n", 1 << cap->max_cq_log2);
+	pr_info("max_cqe_log2:               %d\n", cap->max_cqe_log2);
+	pr_info("max_cqe:                    %d\n", 1 << cap->max_cqe_log2);
+	pr_info("cqe_size_log2:              %d\n", cap->cqe_size_log2);
+	pr_info("cqe_size:                   %d\n", 1 << cap->cqe_size_log2);
+	pr_info("max_eq_log2:                %d\n", cap->max_eq_log2);
+	pr_info("max_eq:                     %d\n", 1 << cap->max_eq_log2);
+	pr_info("max_eqe_log2:               %d\n", cap->max_eqe_log2);
+	pr_info("max_eqe:                    %d\n", 1 << cap->max_eqe_log2);
+	pr_info("eqe_size_log2:              %d\n", cap->eqe_size_log2);
+	pr_info("eqe_size:                   %d\n", 1 << cap->eqe_size_log2);
+	pr_info("max_srq_log2:               %d\n", cap->max_srq_log2);
+	pr_info("max_srq:                    %d\n", 1 << cap->max_srq_log2);
+	pr_info("max_srq_wr_log2:            %d\n", cap->max_srq_wr_log2);
+	pr_info("max_srq_wr:                 %d\n", 1 << cap->max_srq_wr_log2);
+	pr_info("max_srq_rwqe_size_log2:     %d\n",
 			cap->max_srq_rwqe_size_log2);
-	pr_info("max_mcg_log2:               0x%02X\n", cap->max_mcg_log2);
-	pr_info("max_mcg_qp_log2:            0x%02X\n", cap->max_mcg_qp_log2);
-	pr_info("max_mr_size_log2:           0x%02X\n", cap->max_mr_size_log2);
-	pr_info("vlan_table_size_log2:       0x%02X\n", cap->vlan_table_size_log2);
-	pr_info("smac_table_size:            0x%02X\n", cap->smac_table_size);
-	pr_info("sgid_table_size:            0x%02X\n", cap->sgid_table_size);
-	pr_info("max_uar_pages_log2:         0x%02X\n", cap->max_uar_pages_log2);
-	pr_info("min_page_size_log2:         0x%02X\n", cap->min_page_size_log2);
-	pr_info("max_inline_data:            0x%04X\n", le16_to_cpu(cap->max_inline_data));
-	pr_info("max_mpt:                    0x%08X\n", cap->max_mpt);
-	pr_info("max_mtt:                    0x%08X\n", cap->max_mtt);
+	pr_info("max_srq_rwqe_size:          %d\n",
+			1 << cap->max_srq_rwqe_size_log2);
+	pr_info("max_mcg_log2:               %d\n", cap->max_mcg_log2);
+	pr_info("max_mcg:                    %d\n", 1 << cap->max_mcg_log2);
+	pr_info("max_mcg_qp_log2:            %d\n", cap->max_mcg_qp_log2);
+	pr_info("max_mcg_qp:                 %d\n", 1 << cap->max_mcg_qp_log2);
+	pr_info("max_mr_size_log2:           %d\n", cap->max_mr_size_log2);
+	pr_info("max_mr_size:                %d\n", 1 << cap->max_mr_size_log2);
+	pr_info("vlan_table_size_log2:       %d\n", cap->vlan_table_size_log2);
+	pr_info("vlan_table_size:            %d\n", 1 << cap->vlan_table_size_log2);
+	pr_info("smac_table_size:            %d\n", cap->smac_table_size);
+	pr_info("sgid_table_size:            %d\n", cap->sgid_table_size);
+	pr_info("max_uar_pages_log2:         %d\n", cap->max_uar_pages_log2);
+	pr_info("max_uar_pages:              %d\n", 1 << cap->max_uar_pages_log2);
+	pr_info("min_page_size_log2:         %d\n", cap->min_page_size_log2);
+	pr_info("min_page_size:              %d\n", 1 << cap->min_page_size_log2);
+	pr_info("max_inline_data:            %d\n", le16_to_cpu(cap->max_inline_data));
+	pr_info("max_mpt:                    %d\n", cap->max_mpt);
+	pr_info("max_mtt:                    %d\n", cap->max_mtt);
 
 	return;
 }
@@ -1011,6 +1022,7 @@ int crdma_query_dev_cap(struct crdma_ibdev *dev,
 			out_mbox.buf, sizeof(*cap), 0);
 #endif
 #ifdef CRDMA_DEBUG_FLAG
+	crdma_dev_info(dev, "Dump crdma device cap information\n");
 	crdma_dump_query_dev_cap(cap);
 #endif
 free_mbox:
@@ -1031,12 +1043,7 @@ int crdma_query_nic(struct crdma_ibdev *dev, uint32_t *boardid)
 
 	status = crdma_cmd(dev, &cmd);
 	if (status == CRDMA_STS_OK) {
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_dev_info(dev, "cmd.output_param 0%016llx\n",
-			cmd.output_param);
 		*boardid = cmd.output_param & 0x0FFFFFFFFull;
-		crdma_dev_info(dev, "board_id 0%08x\n", *boardid);
-#endif
 	}
 
 	return status;
@@ -1095,7 +1102,7 @@ int __crdma_mtt_write(struct crdma_ibdev *dev, u32 base_mtt,
 	struct crdma_mtt_write_param *mtt_param = in_mbox->buf;
 	struct crdma_cmd cmd;
 	int status;
-#ifdef CRDMA_DEBUG_FLAG
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	int i;
 #endif
 	memset(&cmd, 0, sizeof(cmd));
@@ -1106,13 +1113,13 @@ int __crdma_mtt_write(struct crdma_ibdev *dev, u32 base_mtt,
 
 	mtt_param->rsvd = 0;
 	mtt_param->base_mtt_ndx = cpu_to_le32(base_mtt);
-#ifdef CRDMA_DEBUG_FLAG
 
-	pr_info("\n=== __crdma_mtt_write ===\n");
-	pr_info("  base MTT: 0x%08X\n", mtt_param->base_mtt_ndx);
-	pr_info("  MTT num:  %d\n", num_mtt);
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_dev_info(dev, "Dump Information\n");
+	crdma_dev_info(dev, "MTT ndx: 0x%08X\n", mtt_param->base_mtt_ndx);
+	crdma_dev_info(dev, "MTT num:  %d\n", num_mtt);
 	for (i = 0; i < num_mtt; i++)
-		pr_info("  LE paddr_h 0x%08X paddr_l 0x%08X\n",
+		crdma_dev_info(dev, "LE paddr_h 0x%08X paddr_l 0x%08X\n",
 				mtt_param->entry[i].paddr_h,
 				mtt_param->entry[i].paddr_l);
 #endif
@@ -1167,15 +1174,8 @@ int crdma_mtt_write_sg(struct crdma_ibdev *dev,
 		base_addr = sg_dma_address(sg);
 		length = sg_dma_len(sg);
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-		crdma_debug("New  SG 0x%016llx, len: %ld\n", base_addr, length);
-#endif
 		while (length && mtt_cnt < num_mtt) {
 			if (!(base_addr & comp_mask)) {
-#ifdef CRDMA_DEBUG_FLAG
-				crdma_debug("MTT Comp_Page  Addr 0x%016llx\n",
-						base_addr);
-#endif
 				mtt_param->entry[mtt_cnt].paddr_h =
 					cpu_to_le32(base_addr >> 32);
 				mtt_param->entry[mtt_cnt].paddr_l =
@@ -1209,9 +1209,7 @@ int crdma_mtt_write_sg(struct crdma_ibdev *dev,
 		if (status)
 			crdma_warn("MTT_WRITE failed %d\n", status);
 	}
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("MTT_WRITE %d MTT entries written\n", mtt_cnt);
-#endif
+
 	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
@@ -1244,22 +1242,6 @@ int crdma_eq_create_cmd(struct crdma_ibdev *dev, struct crdma_eq *eq)
 	param->mtt_index = cpu_to_le32(eq->mem->base_mtt_ndx);
 	param->time_mod  = 0;
 	param->event_mod = 0;
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("EQ_CREATE input values (LE)\n");
-	pr_info("  EQN:              %d\n", param->eqn);
-	pr_info("  Num EQE Log2:     %d", param->eqe_log2);
-	pr_info("  Device Interrupt: %d\n", param->intr);
-	pr_info("  Pg_Info_Word:     0x%08x", param->page_info);
-	pr_info("  MTT Index:        0x%08X\n", param->mtt_index);
-	pr_info("  Time:             0x%04X, Event: 0x%04X\n",
-			param->time_mod, param->event_mod);
-
-	crdma_info("EQ_CREATE Input Mailbox\n");
-#endif
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	print_hex_dump(KERN_DEBUG, "IN:",
-			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf, 16, 0);
-#endif
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = CRDMA_CMD_EQ_CREATE;
@@ -1329,12 +1311,7 @@ int crdma_init_event_cmdif(struct crdma_ibdev *dev)
 	while ((1 << (dev->max_cmds_log2 + 1)) <= dev->cap.max_cmds_out)
 		dev->max_cmds_log2++;
 	dev->max_cmds_out = 1 << dev->max_cmds_log2;
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "Max of %d concurrent commands\n",
-			dev->max_cmds_out);
-	crdma_dev_info(dev, "Command token mask 0x%04X\n",
-			dev->max_cmds_out - 1);
-#endif
+
 	/*
 	 * Allocate and initialize command queue used to maintain
 	 * state for microcode commands in progress.
@@ -1419,20 +1396,20 @@ int crdma_cq_create_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq,
 	pfn = crdma_uar_pfn(dev, uar);
 	param->uar_pfn_high = cpu_to_le32(pfn >> 32);
 	param->uar_pfn_low = cpu_to_le32((pfn & 0x0FFFFFFFFull) << PAGE_SHIFT);
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("CQ create values (LE)\n");
-	pr_info("  CQN:          %d\n", param->rsvd_cqn);
-	pr_info("  EQN:          %d\n", param->eqn);
-	pr_info("  Num CQE Log2: %d", param->cqe_log2);
-	pr_info("  Pg_Info_Word: 0x%08x", param->page_info);
-	pr_info("  MTT Index:    0x%08X\n", param->mtt_index);
-	pr_info("  Time:         0x%04X, Event: 0x%04X\n",
-			param->time_mod, param->event_mod);
-	pr_info("  CI addr high: 0x%08X\n", param->ci_addr_high);
-	pr_info("  CI addr low:  0x%08X\n", param->ci_addr_low);
-	pr_info("  UAR PFN high: 0x%08X\n", param->uar_pfn_high);
-	pr_info("  UAR PFN low:  0x%08X\n", param->uar_pfn_low);
+
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_dev_info(dev, "CQ create values (LE)\n");
+	crdma_dev_info(dev, "CQN:          %d\n", param->rsvd_cqn);
+	crdma_dev_info(dev, "EQN:          %d\n", param->eqn);
+	crdma_dev_info(dev, "Num CQE:      %d\n", 1 << param->cqe_log2);
+	crdma_dev_info(dev, "Pg_Info_Word: 0x%08x", param->page_info);
+	crdma_dev_info(dev, "MTT Index:    0x%08X\n", param->mtt_index);
+	crdma_dev_info(dev, "CI addr high: 0x%08X\n", param->ci_addr_high);
+	crdma_dev_info(dev, "CI addr low:  0x%08X\n", param->ci_addr_low);
+	crdma_dev_info(dev, "UAR PFN high: 0x%08X\n", param->uar_pfn_high);
+	crdma_dev_info(dev, "UAR PFN low:  0x%08X\n", param->uar_pfn_low);
 #endif
+
 #ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	print_hex_dump(KERN_DEBUG, "IN:",
 			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf, 16, 0);
@@ -1471,17 +1448,6 @@ int crdma_cq_resize_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq)
 	param->cq_log2_pg_sz = cq->mem->min_order + PAGE_SHIFT;
 	param->cq_page_offset = 0;
 	param->cq_mtt_index = cpu_to_le32(cq->mem->base_mtt_ndx);
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("CQ resize values (LE)\n");
-	pr_info("  Num CQE Log2: %d", param->cqe_log2);
-	pr_info("  Pg_Sz log2: 0x%08x", param->cq_log2_pg_sz);
-	pr_info("  MTT Index:    0x%08X\n", param->cq_mtt_index);
-#endif	
-
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	print_hex_dump(KERN_DEBUG, "IN:",
-			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf, 16, 0);
-#endif
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = CRDMA_CMD_CQ_RESIZE;
@@ -1566,10 +1532,10 @@ static void crdma_set_qp_ctrl(struct crdma_ibdev *dev,
 	ctrl->uar_pfn_low = cpu_to_le32((pfn & 0x0FFFFFFFFull) <<
 					PAGE_SHIFT);
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("QP MODIFY control object values (LE)\n");
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_dev_info(dev, "QP MODIFY control object values (LE)\n");
 	if (unlikely(qp->ib_qp.qp_type == IB_QPT_GSI))
-		pr_debug("       GSI QP: physical port %d, control object %d\n",
+		pr_info("       GSI QP: physical port %d, control object %d\n",
 					qp->qp1_port, qp->qp1_port);
 	pr_info("          QPN: 0x%08x\n", qp->qp_index);
 	pr_info("    flags_qpn: 0x%08X\n", ctrl->flags_qpn);
@@ -1670,64 +1636,6 @@ static int crdma_set_qp_attr(struct crdma_ibdev *dev,
 		attr->dest_qpn = cpu_to_le32(ib_attr->dest_qp_num &
 					CRDMA_QP_ATTR_QPN_MASK);
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("QP MODIFY attribute values (LE)\n");
-	if (ib_attr_mask & IB_QP_STATE)
-		pr_debug("        state: %d\n", attr->qp_state);
-	if (ib_attr_mask & IB_QP_EN_SQD_ASYNC_NOTIFY)
-		pr_debug("   SQD Nofity: Requested\n");
-	if (ib_attr_mask & IB_QP_ACCESS_FLAGS)
-		pr_debug(" access flags: 0x%X\n", attr->mtu_access);
-	if (ib_attr_mask & IB_QP_PKEY_INDEX)
-		pr_debug("   pkey_index: %d\n", attr->pkey_index);
-	if (ib_attr_mask & IB_QP_PORT)
-		pr_debug("    phys port: %d\n", attr->phys_port_num);
-	if (ib_attr_mask & IB_QP_QKEY)
-		pr_debug("         qkey: 0x%08X\n", attr->qkey);
-	if (ib_attr_mask & IB_QP_AV) {
-		pr_debug("     av.d_mac:%02X:%02X:%02X:%02X:%02X:%02X\n",
-				attr->av.d_mac[0], attr->av.d_mac[1],
-				attr->av.d_mac[2], attr->av.d_mac[3],
-				attr->av.d_mac[4], attr->av.d_mac[5]);
-		pr_debug("      av.vlan:0x%04X\n", attr->av.vlan);
-		pr_debug("  av.port_num:%d\n", attr->av.port);
-		pr_debug("  av.gid_type:%d\n", attr->av.gid_type);
-		pr_debug(" av.s_mac_ndx:%d\n", attr->av.s_mac_ndx);
-		pr_debug("      av.v_id:0x%08X\n", attr->av.v_id);
-		pr_debug("   av.t_class:0x%08X\n", attr->av.traffic_class);
-		pr_debug(" av.hop_limit:%d\n", attr->av.hop_limit);
-		pr_debug(" av.s_gid_ndx:%d\n", attr->av.s_gid_ndx);
-		pr_debug("        av.sl:0x%02X\n", attr->av.service_level);
-		pr_debug("av.flow_label:0x%08X\n", attr->av.flow_label);
-		pr_debug("     av.d_gid:0x:%016llX:%016llX\n",
-			*(u64 *)(attr->av.d_gid),
-			*((u64 *)(attr->av.d_gid) + 1));
-		/* TODO: convert SR to IPD? */
-		pr_debug("av.ib_sr_ipd:0x%02X\n", attr->av.ib_sr_ipd);
-	}
-	if (ib_attr_mask & IB_QP_PATH_MTU)
-		pr_debug("   mtu_access: 0x%02X\n", attr->mtu_access);
-	if (ib_attr_mask & IB_QP_TIMEOUT)
-		pr_debug("       timeout: %d\n", attr->timeout);
-	if (ib_attr_mask & IB_QP_RETRY_CNT)
-		pr_debug("   retry_count: %d\n", attr->retry_count);
-	if (ib_attr_mask & IB_QP_RNR_RETRY)
-		pr_debug("     rnr_retry: %d\n", attr->rnr_retry);
-	if (ib_attr_mask & IB_QP_RQ_PSN)
-		pr_debug("        rq_psn: 0x%08x\n", attr->rq_psn);
-	if (ib_attr_mask & IB_QP_MAX_QP_RD_ATOMIC)
-		pr_debug("rdma_init_deptth: %d\n", attr->rdma_init_depth);
-	if (ib_attr_mask & IB_QP_SQ_PSN)
-		pr_debug("       SQ PSN: 0x%08x\n", attr->sq_psn);
-	if (ib_attr_mask & IB_QP_MAX_DEST_RD_ATOMIC)
-		pr_debug(" rdma_rsp_res: %d\n", attr->rdma_rsp_res);
-	if (ib_attr_mask & IB_QP_PATH_MIG_STATE)
-		/* Not supported */;
-	if (ib_attr_mask & IB_QP_CAP)
-		/* TODO: */;
-	if (ib_attr_mask & IB_QP_DEST_QPN)
-		pr_debug("     dest_qpn: 0x%08X\n", attr->dest_qpn);
-#endif
 	/* Our attribute mask matches IB attribute mask bits */
 	*attr_mask = cpu_to_le32(ib_attr_mask);
 	return 0;
@@ -1772,7 +1680,7 @@ int crdma_qp_modify_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 		status = -EINVAL;
 		goto out;
 	}
-#ifdef CRDMA_DEBUG_FLAG
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	print_hex_dump(KERN_DEBUG, "IN:", DUMP_PREFIX_OFFSET, 8, 1,
 			in_mbox.buf, sizeof(*param), 0);
 #endif
@@ -1803,9 +1711,6 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 	struct crdma_qp_attr_params *param;
 	struct crdma_cmd_mbox out_mbox;
 	struct crdma_cmd cmd;
-#ifdef CRDMA_DEBUG_FLAG
-	const struct ib_global_route *grh = rdma_ah_read_grh(&qp_attr->ah_attr);
-#endif
 	union ib_gid *dgid;
 	int status;
 
@@ -1838,29 +1743,9 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 							CRDMA_QP_ATTR_QPN_MASK;
 	qp_attr->max_rd_atomic = param->rdma_init_depth;
 	qp_attr->max_dest_rd_atomic = param->rdma_rsp_res;
-	qp_attr->qp_access_flags = param->mtu_access &
-							CRDMA_QP_ATTR_ACCESS_MASK;
-	qp_attr->path_mtu = (param->mtu_access >>
-									CRDMA_QP_ATTR_MTU_SHIFT) - 7;
+	qp_attr->qp_access_flags = param->mtu_access & CRDMA_QP_ATTR_ACCESS_MASK;
+	qp_attr->path_mtu = (param->mtu_access >> CRDMA_QP_ATTR_MTU_SHIFT) - 7;
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("QP query attribute values\n");
-	pr_debug("        state: %d\n", qp_attr->qp_state);
-	pr_debug("         port: %d\n", qp_attr->port_num);
-	pr_debug("   pkey_index: %d\n", qp_attr->pkey_index);
-	pr_debug("       SQ PSN: %d\n", qp_attr->sq_psn);
-	pr_debug("       RQ PSN: %d\n", qp_attr->rq_psn);
-	pr_debug("min_rnr_timer: %d\n", qp_attr->min_rnr_timer);
-	pr_debug("    rnr_retry: %d\n", qp_attr->rnr_retry);
-	pr_debug("    retry_cnt: %d\n", qp_attr->retry_cnt);
-	pr_debug("      timeout: %d\n", qp_attr->timeout);
-	pr_debug("  dest_qp_num: 0x%08X\n", qp_attr->dest_qp_num);
-	pr_debug("  max_rd_atomic(init depth): %d\n", qp_attr->max_rd_atomic);
-	pr_debug("max_dest_rd_atomic(rsp res): %d\n",
-					qp_attr->max_dest_rd_atomic);
-	pr_debug(" access_flags: 0x%02X\n", qp_attr->qp_access_flags);
-	pr_debug("     path_mtu: 0x%02X\n", qp_attr->path_mtu);
-#endif
 	if (qp_attr_mask & IB_QP_AV) {
 		qp_attr->ah_attr.roce.dmac[3] = param->av.d_mac[0];
 		qp_attr->ah_attr.roce.dmac[2] = param->av.d_mac[1];
@@ -1888,29 +1773,6 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 
 		/* XXX: We only allow full rate for now */
 		rdma_ah_set_static_rate(&qp_attr->ah_attr, 0);
-
-#ifdef CRDMA_DEBUG_FLAG
-		pr_debug("         dmac:%02X:%02X:%02X:%02X:%02X:%02X\n",
-				qp_attr->ah_attr.roce.dmac[0],
-				qp_attr->ah_attr.roce.dmac[1],
-				qp_attr->ah_attr.roce.dmac[2],
-				qp_attr->ah_attr.roce.dmac[3],
-				qp_attr->ah_attr.roce.dmac[4],
-				qp_attr->ah_attr.roce.dmac[5]);
-		//pr_debug("      vlan_id:0x%04X\n", qp_attr->ah_attr.vlan_id);
-		pr_debug("     port_num:%d\n",
-			       rdma_ah_get_port_num(&qp_attr->ah_attr));
-		pr_debug("     t_class:0x%08X\n", grh->traffic_class);
-		pr_debug("     hop_limit:%d\n", grh->hop_limit);
-		pr_debug("     s_gid_ndx:%d\n", grh->sgid_index);
-		pr_debug("     sl:0x%02X\n", rdma_ah_get_sl(&qp_attr->ah_attr));
-		pr_debug("     flow_label:0x%08X\n", grh->flow_label);
-		pr_debug("     d_gid:0x:%016llX:%016llX\n",
-			       grh->dgid.global.subnet_prefix,
-			       grh->dgid.global.interface_id);
-		pr_debug("     static rate:0x%02X\n",
-			       rdma_ah_get_static_rate(&qp_attr->ah_attr));
-#endif
 	}
 
 free_mbox:
@@ -2024,22 +1886,6 @@ int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 	param->frmr_entries = 0;
 	param->reserved = 0;
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("MPT_CREATE input values (LE)\n");
-	pr_debug("         Key: 0x%08X\n", param->key);
-	pr_debug("   Flags/PDN: 0x%08X\n", param->flags_pd);
-	pr_debug("   IO Addr_h: 0x%08X\n", param->io_addr_h);
-	pr_debug("   IO Addr_l: 0x%08X\n", param->io_addr_l);
-	pr_debug("      Length: %d\n", param->length);
-	pr_debug("Pg_Info_Word: 0x%08X\n", param->page_info);
-	pr_debug("   MTT Index: 0x%08X\n", param->mtt_index);
-	pr_debug("FRMR Entries: 0x%08X\n", param->frmr_entries);
-	pr_debug("    reserved: 0x%08X\n", param->reserved);
-
-	crdma_info("MPT_CREATE Input Mailbox\n");
-	print_hex_dump(KERN_DEBUG, "IN:",
-			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf, 32, 0);
-#endif
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = CRDMA_CMD_MPT_CREATE;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
@@ -2124,21 +1970,6 @@ int crdma_mpt_query_cmd(struct crdma_ibdev *dev, u32 mpt_index,
 	status = crdma_cmd(dev, &cmd);
 	if (status == CRDMA_STS_OK) {
 		memcpy(param, out_mbox.buf, sizeof(*param));
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_debug("MPT_QUERY returned values (LE)\n");
-		pr_debug("         Key: 0x%08X\n", param->key);
-		pr_debug("   Flags/PDN: 0x%08X\n", param->flags_pd);
-		pr_debug("   IO Addr_h: 0x%08X\n", param->io_addr_h);
-		pr_debug("   IO Addr_l: 0x%08X\n", param->io_addr_l);
-		pr_debug("      Length: %d\n", param->length);
-		pr_debug("Pg_Info_Word: 0x%08X\n", param->page_info);
-		pr_debug("   MTT Index: 0x%08X\n", param->mtt_index);
-		pr_debug("FRMR Entries: 0x%08X\n", param->frmr_entries);
-
-		crdma_info("MPT_QUERY Output Mailbox\n");
-		print_hex_dump(KERN_DEBUG, "OUT:",
-				DUMP_PREFIX_OFFSET, 8, 1, out_mbox.buf, 32, 0);
-#endif
 	}
 	crdma_cleanup_mailbox(dev, &out_mbox);
 	return status;
@@ -2188,14 +2019,7 @@ int crdma_write_sgid_table(struct crdma_ibdev *dev,
 	port_gid_cnt = (port_num << CRDMA_SGID_PARAM_PORT_NUM_SHIFT) |
 			((num_entries & CRDMA_SGID_PARAM_COUNT_MASK) <<
 			 CRDMA_SGID_PARAM_COUNT_SHIFT);
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("SET_PORT_GID_TABLE port_gid_cnt 0x%08X (LE)\n",
-			cpu_to_le32(port_gid_cnt));
-	crdma_debug("SET_PORT_GID_TABLE input entries\n");
-	print_hex_dump(KERN_DEBUG, "IN:",
-			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf,
-			num_entries * 20, 0);
-#endif
+
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = CRDMA_CMD_SET_PORT_GID_TABLE;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
@@ -2303,14 +2127,7 @@ int crdma_write_smac_table(struct crdma_ibdev *dev,
 	port_mac_cnt = (port_num << CRDMA_SMAC_PARAM_PORT_NUM_SHIFT) |
 			((num_entries & CRDMA_SMAC_PARAM_COUNT_MASK) <<
 			 CRDMA_SMAC_PARAM_COUNT_SHIFT);
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_debug("SET_PORT_MAC_TABLE port_mac_cnt 0x%08X (LE)\n",
-			cpu_to_le32(port_mac_cnt));
-	crdma_debug("SET_PORT_MAC_TABLE input entries\n");
-	print_hex_dump(KERN_DEBUG, "IN:",
-			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf,
-			num_entries * 8, 0);
-#endif
+
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = CRDMA_CMD_SET_PORT_MAC_TABLE;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
