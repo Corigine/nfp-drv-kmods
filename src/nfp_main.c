@@ -644,6 +644,30 @@ nfp_get_fw_policy_value(struct pci_dev *pdev, struct nfp_nsp *nsp,
 	return err;
 }
 
+static bool
+nfp_skip_fw_load(struct nfp_pf *pf, struct nfp_nsp *nsp)
+{
+	const struct nfp_mip *mip;
+
+	if (!pf->multi_pf_support || nfp_nsp_fw_loaded(nsp) <= 0)
+		return false;
+
+	mip = nfp_mip_open(pf->cpp);
+	if (!mip)
+		return false;
+
+	/* For the case that system boots from pxe, we need
+	 * reload FW if pxe FW is running.
+	 */
+	if (!strncmp(nfp_mip_name(mip), "pxe", 3)) {
+		nfp_mip_close(mip);
+		return false;
+	}
+
+	pf->mip = mip;
+	return true;
+}
+
 /**
  * nfp_fw_load() - Load the firmware image
  * @pdev:       PCI Device structure
@@ -703,8 +727,7 @@ nfp_fw_load(struct pci_dev *pdev, struct nfp_pf *pf, struct nfp_nsp *nsp)
 	if (err)
 		return err;
 
-	/* Skip firmware loading in multi-PF setup if firmware is loaded. */
-	if (pf->multi_pf_support && nfp_nsp_fw_loaded(nsp)) {
+	if (nfp_skip_fw_load(pf, nsp)) {
 		fw_loaded = true;
 		goto end;
 	}
@@ -1070,7 +1093,8 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_sriov_remove;
 
-	pf->mip = nfp_mip_open(pf->cpp);
+	if (!pf->mip)
+		pf->mip = nfp_mip_open(pf->cpp);
 	pf->rtbl = __nfp_rtsym_table_read(pf->cpp, pf->mip);
 
 	err = nfp_pf_find_rtsyms(pf);
