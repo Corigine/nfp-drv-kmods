@@ -303,6 +303,7 @@ done:
 static struct crdma_eqe *crdma_next_eqe(struct crdma_eq *eq);
 static irqreturn_t crdma_interrupt(int irq, void *eq_ptr);
 
+#ifdef CRDMA_EVENT_CMDS
 /**
  * Issue a micro-code command in an event driven mode. Command status/results
  * will be indicated via an EQ completion notification. The driver limits
@@ -365,6 +366,7 @@ done:
 	up(&dev->event_sem);
 	return ret;
 }
+#endif
 
 /**
  * Process waited command completion.
@@ -416,9 +418,11 @@ static int crdma_cmd(struct crdma_ibdev *dev, struct crdma_cmd *cmd)
 	if (pci_channel_offline(dev->nfp_info->pdev))
 		return -EIO;
 
+#ifdef CRDMA_EVENT_CMDS
 	if (dev->use_event_cmds)
 		err = crdma_waited_cmd(dev, cmd);
 	else
+#endif
 		err = crdma_polled_cmd(dev, cmd);
 
 	if (!err && cmd->status)
@@ -1593,7 +1597,7 @@ static int crdma_set_qp_attr(struct crdma_ibdev *dev,
 
 	if (ib_attr_mask & IB_QP_AV) {
 		crdma_set_av(qp->ib_qp.pd, &attr->av, &ib_attr->ah_attr);
-	}	
+	}
 
 	if (ib_attr_mask & IB_QP_PATH_MTU)
 		attr->mtu_access |= (ib_attr->path_mtu + 7) <<
