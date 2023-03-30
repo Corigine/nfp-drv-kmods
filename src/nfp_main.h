@@ -98,6 +98,7 @@ struct nfp_dumpspec {
  * @multi_pf:		Used in multi-PF setup
  * @multi_pf.en:	Is multi-PF setup?
  * @multi_pf.id:	PF index
+ * @multi_pf.vf_fid:	Id of first VF that belongs to this PF
  * @multi_pf.beat_timer:Timer for beat to keepalive
  * @multi_pf.beat_area:	Pointer to CPP area for beat to keepalive
  * @multi_pf.beat_addr:	Pointer to mapped beat address used for keepalive
@@ -169,6 +170,7 @@ struct nfp_pf {
 	struct {
 		bool en;
 		u8 id;
+		u8 vf_fid;
 		struct timer_list beat_timer;
 		struct nfp_cpp_area *beat_area;
 		u8 __iomem *beat_addr;

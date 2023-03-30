@@ -22,6 +22,7 @@
 #define   NFP_NET_VF_CFG_MB_CAP_VLAN_PROTO		  (0x1 << 5)
 #define   NFP_NET_VF_CFG_MB_CAP_RATE			  (0x1 << 6)
 #define   NFP_NET_VF_CFG_MB_CAP_QUEUE_CONFIG		  (0x1 << 7)
+#define   NFP_NET_VF_CFG_MB_CAP_SPLIT			  (0x1 << 8)
 #define NFP_NET_VF_CFG_MB_RET				0x2
 #define NFP_NET_VF_CFG_MB_UPD				0x4
 #define   NFP_NET_VF_CFG_MB_UPD_MAC			  (0x1 << 0)
@@ -32,6 +33,8 @@
 #define   NFP_NET_VF_CFG_MB_UPD_VLAN_PROTO		  (0x1 << 5)
 #define   NFP_NET_VF_CFG_MB_UPD_RATE			  (0x1 << 6)
 #define   NFP_NET_VF_CFG_MB_UPD_QUEUE_CONFIG		  (0x1 << 7)
+#define   NFP_NET_VF_CFG_MB_UPD_SPLIT			  (0x1 << 8)
+#define NFP_NET_VF_CFG_MB_VF_CNT			0x6
 #define NFP_NET_VF_CFG_MB_VF_NUM			0x7
 
 /* VF config entry
@@ -74,5 +77,7 @@ int nfp_app_set_vf_link_state(struct net_device *netdev, int vf,
 int nfp_app_get_vf_config(struct net_device *netdev, int vf,
 			  struct ifla_vf_info *ivi);
 int nfp_vf_queues_config(struct nfp_pf *pf, int num_vfs);
+
+int nfp_net_pf_init_sriov(struct nfp_pf *pf);
 
 #endif /* _NFP_NET_SRIOV_H_ */

@@ -18,8 +18,9 @@
 #include "nfp_net.h"
 #include "nfp_net_sriov.h"
 
-/* capability of VF pre-configuration */
-#define NFP_NET_VF_PRE_CONFIG	NFP_NET_VF_CFG_MB_CAP_QUEUE_CONFIG
+/* The configurations that precede VF creating. */
+#define NFP_NET_VF_PRE_CONFIG	(NFP_NET_VF_CFG_MB_CAP_QUEUE_CONFIG |	\
+				 NFP_NET_VF_CFG_MB_CAP_SPLIT)
 
 static int
 nfp_net_sriov_check(struct nfp_app *app, int vf, u16 cap, const char *msg, bool warn)
@@ -36,7 +37,7 @@ nfp_net_sriov_check(struct nfp_app *app, int vf, u16 cap, const char *msg, bool 
 		return -EOPNOTSUPP;
 	}
 
-	/* This capability judgement is for VF pre configuration */
+	/* No need to check vf for the pre-configurations. */
 	if (cap & NFP_NET_VF_PRE_CONFIG)
 		return 0;
 
@@ -392,4 +393,22 @@ int nfp_vf_queues_config(struct nfp_pf *pf, int num_vfs)
 	}
 
 	return 0;
+}
+
+int nfp_net_pf_init_sriov(struct nfp_pf *pf)
+{
+	int err;
+
+	if (!pf->multi_pf.en || !pf->limit_vfs)
+		return 0;
+
+	err = nfp_net_sriov_check(pf->app, 0, NFP_NET_VF_CFG_MB_CAP_SPLIT, "split", true);
+	if (err)
+		return err;
+
+	writeb(pf->limit_vfs, pf->vfcfg_tbl2 + NFP_NET_VF_CFG_MB_VF_CNT);
+
+	/* Reuse NFP_NET_VF_CFG_MB_VF_NUM to pass vf_fid to FW. */
+	return nfp_net_sriov_update(pf->app, pf->multi_pf.vf_fid,
+				    NFP_NET_VF_CFG_MB_UPD_SPLIT, "split");
 }
