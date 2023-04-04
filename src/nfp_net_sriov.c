@@ -77,7 +77,7 @@ int nfp_app_set_vf_mac(struct net_device *netdev, int vf, u8 *mac)
 {
 	struct nfp_app *app = nfp_app_from_netdev(netdev);
 	unsigned int vf_offset;
-	int err;
+	int err, abs_vf;
 
 	err = nfp_net_sriov_check(app, vf, NFP_NET_VF_CFG_MB_CAP_MAC, "mac", true);
 	if (err)
@@ -90,13 +90,14 @@ int nfp_app_set_vf_mac(struct net_device *netdev, int vf, u8 *mac)
 		return -EINVAL;
 	}
 
+	abs_vf = vf + app->pf->multi_pf.vf_fid;
 	/* Write MAC to VF entry in VF config symbol */
-	vf_offset = NFP_NET_VF_CFG_MB_SZ + vf * NFP_NET_VF_CFG_SZ;
+	vf_offset = NFP_NET_VF_CFG_MB_SZ + abs_vf * NFP_NET_VF_CFG_SZ;
 	writel(get_unaligned_be32(mac), app->pf->vfcfg_tbl2 + vf_offset);
 	writew(get_unaligned_be16(mac + 4),
 	       app->pf->vfcfg_tbl2 + vf_offset + NFP_NET_VF_CFG_MAC_LO);
 
-	err = nfp_net_sriov_update(app, vf, NFP_NET_VF_CFG_MB_UPD_MAC, "MAC");
+	err = nfp_net_sriov_update(app, abs_vf, NFP_NET_VF_CFG_MB_UPD_MAC, "MAC");
 	if (!err)
 		nfp_info(app->pf->cpp,
 			 "MAC %pM set on VF %d, reload the VF driver to make this change effective.\n",
@@ -162,6 +163,7 @@ int nfp_app_set_vf_vlan(struct net_device *netdev, int vf, u16 vlan, u8 qos,
 		vlan_tag |= FIELD_PREP(NFP_NET_VF_CFG_VLAN_PROT, ntohs(vlan_proto));
 #endif
 
+	vf += app->pf->multi_pf.vf_fid;
 	vf_offset = NFP_NET_VF_CFG_MB_SZ + vf * NFP_NET_VF_CFG_SZ;
 	writel(vlan_tag, app->pf->vfcfg_tbl2 + vf_offset + NFP_NET_VF_CFG_VLAN);
 
@@ -181,6 +183,7 @@ int nfp_app_set_vf_spoofchk(struct net_device *netdev, int vf, bool enable)
 		return err;
 
 	/* Write spoof check control bit to VF entry in VF config symbol */
+	vf += app->pf->multi_pf.vf_fid;
 	vf_offset = NFP_NET_VF_CFG_MB_SZ + vf * NFP_NET_VF_CFG_SZ +
 		NFP_NET_VF_CFG_CTRL;
 	vf_ctrl = readb(app->pf->vfcfg_tbl2 + vf_offset);
@@ -217,6 +220,7 @@ int nfp_app_set_vf_rate(struct net_device *netdev, int vf,
 	}
 #endif
 
+	vf += app->pf->multi_pf.vf_fid;
 	vf_offset = NFP_NET_VF_CFG_MB_SZ + vf * NFP_NET_VF_CFG_SZ;
 	ratevalue = FIELD_PREP(NFP_NET_VF_CFG_MAX_RATE,
 			       max_tx_rate ? max_tx_rate :
@@ -243,6 +247,7 @@ int nfp_app_set_vf_trust(struct net_device *netdev, int vf, bool enable)
 		return err;
 
 	/* Write trust control bit to VF entry in VF config symbol */
+	vf += app->pf->multi_pf.vf_fid;
 	vf_offset = NFP_NET_VF_CFG_MB_SZ + vf * NFP_NET_VF_CFG_SZ +
 		NFP_NET_VF_CFG_CTRL;
 	vf_ctrl = readb(app->pf->vfcfg_tbl2 + vf_offset);
@@ -277,6 +282,7 @@ int nfp_app_set_vf_link_state(struct net_device *netdev, int vf,
 	}
 
 	/* Write link state to VF entry in VF config symbol */
+	vf += app->pf->multi_pf.vf_fid;
 	vf_offset = NFP_NET_VF_CFG_MB_SZ + vf * NFP_NET_VF_CFG_SZ +
 		NFP_NET_VF_CFG_CTRL;
 	vf_ctrl = readb(app->pf->vfcfg_tbl2 + vf_offset);
@@ -307,7 +313,7 @@ int nfp_app_get_vf_config(struct net_device *netdev, int vf,
 	if (err)
 		return err;
 
-	vf_offset = NFP_NET_VF_CFG_MB_SZ + vf * NFP_NET_VF_CFG_SZ;
+	vf_offset = NFP_NET_VF_CFG_MB_SZ + (vf + app->pf->multi_pf.vf_fid) * NFP_NET_VF_CFG_SZ;
 
 	mac_hi = readl(app->pf->vfcfg_tbl2 + vf_offset);
 	mac_lo = readw(app->pf->vfcfg_tbl2 + vf_offset + NFP_NET_VF_CFG_MAC_LO);
