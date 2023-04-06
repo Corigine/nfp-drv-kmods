@@ -546,9 +546,8 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 	port_attr->bad_pkey_cntr = 0;
 	port_attr->qkey_viol_cntr = 0;
 
-	/* TODO:  We will really need a way to determine actual link speed  */
-	port_attr->active_speed	= IB_SPEED_QDR;
-	port_attr->active_width	= IB_WIDTH_4X;
+	ib_get_eth_speed(ibdev, port_num, &port_attr->active_speed,
+			&port_attr->active_width);
 
 	port_attr->max_msg_sz	= CRDMA_MAX_MSG_SIZE;
 
