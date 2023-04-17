@@ -335,6 +335,7 @@ static int nfp_pcie_sriov_read_nfd_limit(struct nfp_pf *pf)
 		return err;
 	}
 
+	pf->max_vfs = limit_vfs_rtsym;
 	pf->limit_vfs = nfp_pf_get_limit_vfs(pf, limit_vfs_rtsym);
 	if (pci_sriov_get_totalvfs(pf->pdev) != pf->limit_vfs) {
 		err = pci_sriov_set_totalvfs(pf->pdev, pf->limit_vfs);

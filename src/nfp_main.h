@@ -70,6 +70,7 @@ struct nfp_dumpspec {
  * @mbox:		RTSym of per-PCI PF mailbox (under devlink lock)
  * @irq_entries:	Array of MSI-X entries for all vNICs
  * @msix:		Single MSI-X entry for non-netdev mode event monitor
+ * @max_vfs:		Number of VFs supported by firmware shared by all PFs
  * @limit_vfs:		Number of VFs supported by firmware (~0 for PCI limit)
  * @num_vfs:		Number of SR-IOV VFs enabled
  * @max_vf_queues:	number of queues can be allocated to VFs
@@ -132,6 +133,7 @@ struct nfp_pf {
 
 	struct msix_entry msix;
 
+	unsigned int max_vfs;
 	unsigned int limit_vfs;
 	unsigned int num_vfs;
 	unsigned int max_vf_queues;

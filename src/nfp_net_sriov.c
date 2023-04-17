@@ -363,23 +363,19 @@ int nfp_vf_queues_config(struct nfp_pf *pf, int num_vfs)
 {
 	unsigned int i, offset, num_queues_vfs_evenly;
 	struct nfp_net *nn;
-	u32 raw;
 	int err;
 
 	if (nfp_net_sriov_check(pf->app, 0, NFP_NET_VF_CFG_MB_CAP_QUEUE_CONFIG, "max_queue", true))
 		return 0;
 
-	raw = 0;
 	num_queues_vfs_evenly = pf->max_vf_queues / num_vfs;
-	offset = NFP_NET_VF_CFG_MB_SZ + pf->limit_vfs * NFP_NET_VF_CFG_SZ;
-	for (i = 0; i < num_vfs; i++) {
-		raw |= num_queues_vfs_evenly << ((i % sizeof(raw)) * BITS_PER_BYTE);
-		if ((i + 1) % sizeof(raw) == 0 || i + 1 == num_vfs) {
-			writel(raw, pf->vfcfg_tbl2 + offset);
-			offset += sizeof(raw);
-			raw = 0;
-		}
-	}
+	offset = NFP_NET_VF_CFG_MB_SZ + pf->max_vfs * NFP_NET_VF_CFG_SZ;
+	for (i = pf->multi_pf.vf_fid; i < num_vfs + pf->multi_pf.vf_fid; i++)
+		writeb(num_queues_vfs_evenly, pf->vfcfg_tbl2 + offset + i);
+
+	/* Clear those not-used area. */
+	for (; i < pf->limit_vfs + pf->multi_pf.vf_fid; i++)
+		writeb(0, pf->vfcfg_tbl2 + offset + i);
 
 	writew(NFP_NET_VF_CFG_MB_UPD_QUEUE_CONFIG, pf->vfcfg_tbl2 + NFP_NET_VF_CFG_MB_UPD);
 
