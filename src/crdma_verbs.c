@@ -446,16 +446,7 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 		wc->wc_flags |= cqe->flags & CRDMA_CQE_GRH_FLAG_BIT ?
 					IB_WC_GRH : 0;
 		if ((*last_qp)->ib_qp.qp_type != IB_QPT_RC) {
-#if 0 /* Don't turn on until verified operation */
 			crdma_mac_swap(wc->smac, cqe->smac);
-#else
-			wc->smac[0] = cqe->smac[3];
-			wc->smac[1] = cqe->smac[2];
-			wc->smac[2] = cqe->smac[1];
-			wc->smac[3] = cqe->smac[0];
-			wc->smac[4] = cqe->smac[5];
-			wc->smac[5] = cqe->smac[4];
-#endif
 			/* No VLAN support yet, otherwise pull from sl_vid */
 			wc->vlan_id = 0xFFFF;
 			wc->wc_flags |= IB_WC_WITH_VLAN | IB_WC_WITH_SMAC;
