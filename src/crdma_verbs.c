@@ -499,6 +499,16 @@ static int crdma_query_device(struct ib_device *ibdev,
 	return 0;
 }
 
+int crdma_modify_port(struct ib_device *ibdev, u8 port, int mask,
+		       struct ib_port_modify *props)
+{
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_info("ibdev=%p,  port=%d, mask=0x%x, set_mask=0x%x\n",
+		ibdev, port, mask, props->set_port_cap_mask);
+#endif
+	return 0;
+}
+
 static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 			struct ib_port_attr *port_attr)
 {
@@ -2879,6 +2889,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.query_gid            = crdma_query_gid;
 	dev->ibdev.query_pkey           = crdma_query_pkey;
 	dev->ibdev.query_port           = crdma_query_port;
+	dev->ibdev.modify_port          = crdma_modify_port;
 	dev->ibdev.query_qp             = crdma_query_qp;
 	dev->ibdev.reg_user_mr          = crdma_reg_user_mr;
 	dev->ibdev.req_notify_cq        = crdma_req_notify_cq;
