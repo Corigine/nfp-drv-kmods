@@ -2738,6 +2738,54 @@ free_mbox:
 }
 
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
+                    const struct ib_wc *in_wc, const struct ib_grh *in_grh,
+                    const struct ib_mad *in_mad, struct ib_mad *out_mad,
+		    size_t *out_mad_size, u16 *out_mad_pkey_index)
+{
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	const struct ib_mad_hdr *in_mad_hdr = &in_mad->mad_hdr;
+
+	crdma_info("Dump MAD information\n");
+	crdma_info("base_version=0x%x mgmt_class=0x%x\n",
+		in_mad_hdr->base_version, in_mad_hdr->mgmt_class);
+	crdma_info("class_version=0x%x method=0x%x\n",
+		in_mad_hdr->class_version, in_mad_hdr->method);
+	crdma_info("status=0x%x class_specific=0x%x\n",
+		in_mad_hdr->status, in_mad_hdr->class_specific);
+	crdma_info("tid=0x%llx attr_id=0x%x\n",
+		in_mad_hdr->tid, in_mad_hdr->attr_id);
+	crdma_info("attr_mod=0x%x\n", in_mad_hdr->attr_mod);
+#endif
+
+       return IB_MAD_RESULT_SUCCESS;
+}
+
+#else
+int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
+                    const struct ib_wc *in_wc, const struct ib_grh *in_grh,
+                    const struct ib_mad_hdr *in_mad_hdr, size_t in_mad_size,
+                    struct ib_mad_hdr *out_mad_hdr, size_t *out_mad_size,
+                    u16 *out_mad_pkey_index)
+{
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	crdma_info("Dump MAD information\n");
+	crdma_info("base_version=0x%x mgmt_class=0x%x\n",
+		in_mad_hdr->base_version, in_mad_hdr->mgmt_class);
+	crdma_info("class_version=0x%x method=0x%x\n",
+		in_mad_hdr->class_version, in_mad_hdr->method);
+	crdma_info("status=0x%x class_specific=0x%x\n",
+		in_mad_hdr->status, in_mad_hdr->class_specific);
+	crdma_info("tid=0x%llx attr_id=0x%x\n",
+		in_mad_hdr->tid, in_mad_hdr->attr_id);
+	crdma_info("attr_mod=0x%x\n", in_mad_hdr->attr_mod);
+#endif
+
+       return IB_MAD_RESULT_SUCCESS;
+}
+#endif
+
+#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
 static const struct ib_device_ops crdma_dev_ops = {
     .owner              = THIS_MODULE,
     .driver_id          = RDMA_DRIVER_CRDMA,
@@ -2782,6 +2830,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     .reg_user_mr        = crdma_reg_user_mr,
     .req_notify_cq      = crdma_req_notify_cq,
     .resize_cq          = crdma_resize_cq,
+    .process_mad        = crdma_process_mad,
 
     INIT_RDMA_OBJ_SIZE(ib_pd, crdma_pd, ib_pd),
     INIT_RDMA_OBJ_SIZE(ib_cq, crdma_cq, ib_cq),
@@ -2885,6 +2934,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.reg_user_mr          = crdma_reg_user_mr;
 	dev->ibdev.req_notify_cq        = crdma_req_notify_cq;
 	dev->ibdev.resize_cq            = crdma_resize_cq;
+	dev->ibdev.process_mad          = crdma_process_mad;
 #endif
 
 #if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))
