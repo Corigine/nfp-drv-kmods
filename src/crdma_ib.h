@@ -316,26 +316,6 @@ struct crdma_port {
 	u8                      mac[ETH_ALEN];
 
 	/*
-		* General Services Interface QP specific information indicating
-		* if the special QP has been created. If so, the microcode
-		* QP control object will be the number of this port zero based.
-		*/
-	spinlock_t              qp1_lock;
-	bool                    qp1_created;
-
-	/*
-		* XXX: For test purposes only, while event notification is not
-		* available in microcode we periodically initiate a notification
-		* to keep event driven MAD driver code from hanging. This work
-		* around is controlled by the "mad_cq_event_wa" module parameter.
-		* NOTE that while the qp1_created is true, the associated CQ must
-		* exist.
-		*/
-	struct delayed_work     qp1_cq_dwork;
-	struct crdma_cq         *qp1_send_ccq;
-	struct crdma_cq         *qp1_recv_ccq;
-
-	/*
 		* Ports in host memory Ethernet source addressing information.
 		* Much of this function is common across RoCE providers with
 		* respect to the management of the GIDs and MAC addresses.

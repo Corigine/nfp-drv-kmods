@@ -1193,133 +1193,6 @@ static void crdma_init_wq_ownership(struct crdma_mem *mem, u32 offset,
 	return;
 }
 
-/**
- * Temporary work around to periodically kick start special QP1
- * CQ event notification. This is only to support testing of
- * QP1 via MAD sub-system prior to support of CQ notification
- * interrupts by microcode.
- */
-static void crdma_qp1_work(struct work_struct *work)
-{
-	struct delayed_work *delay = to_delayed_work(work);
-	struct crdma_port *port;
-	struct crdma_cq *ccq;
-	unsigned long flags;
-
-	if (!mad_cq_event_wa) {
-		crdma_warn("QP1 work around, should not be called\n");
-		return;
-	}
-
-	port = container_of(delay, typeof(*port), qp1_cq_dwork);
-	if (!port) {
-		crdma_warn("QP1 work around, invalid port\n");
-		return;
-	}
-
-	if (!port->qp1_send_ccq || !port->qp1_recv_ccq) {
-		crdma_warn("QP1 work around, CQ not defined\n");
-		return;
-	}
-
-	ccq = port->qp1_send_ccq;
-
-	ccq->arm_seqn++;
-	atomic_inc(&ccq->ref_cnt);
-	if (ccq->ib_cq.comp_handler)
-		ccq->ib_cq.comp_handler(&ccq->ib_cq, ccq->ib_cq.cq_context);
-
-	if (ccq != port->qp1_recv_ccq) {
-		if (atomic_dec_and_test(&ccq->ref_cnt))
-			complete(&ccq->free);
-
-		ccq = port->qp1_recv_ccq;
-		ccq->arm_seqn++;
-		atomic_inc(&ccq->ref_cnt);
-
-		if (ccq->ib_cq.comp_handler)
-			ccq->ib_cq.comp_handler(&ccq->ib_cq,
-					ccq->ib_cq.cq_context);
-	}
-
-	if (atomic_dec_and_test(&ccq->ref_cnt))
-		complete(&ccq->free);
-
-	spin_lock_irqsave(&port->qp1_lock, flags);
-	if (port->qp1_created) {
-		INIT_DELAYED_WORK(&port->qp1_cq_dwork, crdma_qp1_work);
-		schedule_delayed_work(&port->qp1_cq_dwork,
-				msecs_to_jiffies(100));
-	}
-	spin_unlock_irqrestore(&port->qp1_lock, flags);
-
-	return;
-}
-
-/**
- * Verify the QP1 port is unused, initialize and update.
- *
- * @dev: The RoCEE IB device.
- * @cqp: The crdma QP associated with the QP1.
- * @port_num: The physical port number to be associated with this QP1 (0 based).
- *
- * Returns 0 on success, otherwise an error if it can not be set.
- */
-static int crdma_set_qp1_port(struct crdma_ibdev *dev, struct crdma_qp *cqp,
-				int port_num)
-{
-	struct crdma_port *port = &dev->port;
-	unsigned long flags;
-
-
-	spin_lock_irqsave(&port->qp1_lock, flags);
-	if (port->qp1_created) {
-		spin_unlock_irqrestore(&port->qp1_lock, flags);
-
-		return -EINVAL;
-	}
-	cqp->qp1_port = port_num;
-	port->qp1_created = true;
-
-	/* XXX: Temporary work around to enable testing */
-	if (mad_cq_event_wa) {
-		port->qp1_send_ccq = dev->cq_table[cqp->send_cqn];
-		port->qp1_recv_ccq = dev->cq_table[cqp->recv_cqn];
-		INIT_DELAYED_WORK(&port->qp1_cq_dwork, crdma_qp1_work);
-		schedule_delayed_work(&port->qp1_cq_dwork,
-					msecs_to_jiffies(100));
-	}
-	spin_unlock_irqrestore(&port->qp1_lock, flags);
-
-	return 0;
-}
-
-/**
- * Indicate that QP1 is not in use for a physical port.
- *
- * @dev: The RoCEE IB device.
- * @port_num: The physical port number associated with this QP1 (0 based).
- */
-static void crdma_clear_qp1_port(struct crdma_ibdev *dev, int port_num)
-{
-	struct crdma_port *port = &dev->port;
-	unsigned long flags;
-
-	spin_lock_irqsave(&port->qp1_lock, flags);
-	if (port->qp1_created) {
-		port->qp1_created = false;
-		spin_unlock_irqrestore(&port->qp1_lock, flags);
-
-		if (mad_cq_event_wa) {
-			cancel_delayed_work_sync(&port->qp1_cq_dwork);
-			port->qp1_send_ccq = NULL;
-			port->qp1_recv_ccq = NULL;
-		}
-	} else
-		spin_unlock_irqrestore(&port->qp1_lock, flags);
-	return;
-}
-
 #define CRDMA_QP1_INDEX   1
 
 static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
@@ -1366,22 +1239,11 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 
 	cqp->sq_sig_type = qp_init_attr->sq_sig_type;
 
-	/* Handle speical QP1 requirements */
-	if (qp_init_attr->qp_type == IB_QPT_GSI) {
-		err = crdma_set_qp1_port(dev, cqp,
-				qp_init_attr->port_num - 1);
-		if (err) {
-			crdma_err("Error %d setting QP1 port number\n", err);
-			err = -EINVAL;
-			goto free_mem;
-		}
-	}
-
 	/* Set the actual number and sizes of the QP work requests */
 	err = crdma_qp_set_wq_sizes(dev, cqp, qp_init_attr);
 	if (err) {
 		err = -EINVAL;
-		goto clear_port;
+		goto free_mem;
 	}
 
 	/* Allocate resource index for the QP control object */
@@ -1390,7 +1252,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 	if (cqp->qp_index < 0) {
 		crdma_warn("No QP index available\n");
 		err = -ENOMEM;
-		goto clear_port;
+		goto free_mem;
 	}
 
 	/* Kernel always allocates QP memory, user contexts will mmap it */
@@ -1495,9 +1357,6 @@ free_dma_memory:
 free_qp_index:
 	if (qp_init_attr->qp_type != IB_QPT_GSI)
 		crdma_free_bitmap_index(&dev->qp_map, cqp->qp_index);
-clear_port:
-	if (qp_init_attr->qp_type == IB_QPT_GSI)
-		crdma_clear_qp1_port(dev, cqp->qp_index);
 free_mem:
 	kfree(cqp);
 
@@ -1707,8 +1566,6 @@ static int crdma_destroy_qp(struct ib_qp *qp)
 	crdma_free_hw_queue(dev, cqp->mem);
 	if (cqp->ib_qp.qp_type != IB_QPT_GSI)
 		crdma_free_bitmap_index(&dev->qp_map, cqp->qp_index);
-	else
-		crdma_clear_qp1_port(dev, cqp->qp_index);
 	kfree(cqp);
 	return 0;
 }
