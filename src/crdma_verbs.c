@@ -229,7 +229,12 @@ static void crdma_compound_order(struct ib_umem *umem, u64 start,
 	 * Go through the memory reducing the alignment to the smallest
 	 * order found in the region.
 	 */
+#if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,365,0,0))
+	for_each_sg(umem->sgt_append.sgt.sgl, sg, umem->sgt_append.sgt.nents,
+		    entry) {
+#else
 	for_each_sg(umem->sg_head.sgl, sg, umem->nmap, entry) {
+#endif
 		pages = sg_dma_len(sg) >> page_shift;
 		pfn = sg_dma_address(sg) >> page_shift;
 
@@ -500,8 +505,13 @@ int crdma_modify_port(struct ib_device *ibdev, u8 port, int mask,
 	return 0;
 }
 
+#if (VER_NON_RHEL_GE(5,13) || RHEL_RELEASE_GE(8,365,0,0))
+static int crdma_query_port(struct ib_device *ibdev, u32 port_num,
+			    struct ib_port_attr *port_attr)
+#else
 static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
-			struct ib_port_attr *port_attr)
+			    struct ib_port_attr *port_attr)
+#endif
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 	struct net_device *netdev;
@@ -577,8 +587,14 @@ struct net_device *crdma_get_netdev(struct ib_device *ibdev, u8 port_num)
 	return netdev;
 }
 #endif
+
+#if (VER_NON_RHEL_GE(5,13) || RHEL_RELEASE_GE(8,365,0,0))
+int crdma_get_port_immutable(struct ib_device *ibdev, u32 port_num,
+			     struct ib_port_immutable *immutable)
+#else
 int crdma_get_port_immutable(struct ib_device *ibdev, u8 port_num,
-			       struct ib_port_immutable *immutable)
+			     struct ib_port_immutable *immutable)
+#endif
 {
 	struct ib_port_attr port_attr;
 
@@ -603,11 +619,19 @@ void crdma_get_dev_fw_str(struct ib_device *ibdev, char *str)
 	return;
 }
 
+#if (VER_NON_RHEL_GE(5,13) || RHEL_RELEASE_GE(8,365,0,0))
+static enum rdma_link_layer crdma_get_link_layer(
+			struct ib_device *ibdev, u32 port_num)
+{
+	return IB_LINK_LAYER_ETHERNET;
+}
+#else
 static enum rdma_link_layer crdma_get_link_layer(
 			struct ib_device *ibdev, u8 port_num)
 {
 	return IB_LINK_LAYER_ETHERNET;
 }
+#endif
 
 static int crdma_add_gid(const struct ib_gid_attr *attr, void **context)
 {
@@ -680,16 +704,26 @@ static int crdma_del_gid(const struct ib_gid_attr *attr, void **context)
 	return 0;
 }
 
+#if (VER_NON_RHEL_GE(5,13) || RHEL_RELEASE_GE(8,365,0,0))
+static int crdma_query_gid(struct ib_device *ibdev, u32 port_num,
+			   int index, union ib_gid *gid)
+#else
 static int crdma_query_gid(struct ib_device *ibdev, u8 port_num,
-			int index, union ib_gid *gid)
+			   int index, union ib_gid *gid)
+#endif
 {
 	/* CRDMA HCA only support RoCEv2, so do nothing in this function */
 	crdma_info("CRDMA HCA only support RoCEv2, it is no-op here.\n");
 	return 0;
 }
 
+#if (VER_NON_RHEL_GE(5,13) || RHEL_RELEASE_GE(8,365,0,0))
+static int crdma_query_pkey(struct ib_device *ibdev, u32 port_num,
+			    u16 index, u16 *pkey)
+#else
 static int crdma_query_pkey(struct ib_device *ibdev, u8 port_num,
-			u16 index, u16 *pkey)
+			    u16 index, u16 *pkey)
+#endif
 {
 
 	if (index >= CRDMA_IB_MAX_PKEY_TABLE_SIZE)
@@ -1196,6 +1230,178 @@ static void crdma_init_wq_ownership(struct crdma_mem *mem, u32 offset,
 
 #define CRDMA_QP1_INDEX   1
 
+#if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,394,0,0))
+static int crdma_create_qp(struct ib_qp *qp,
+			   struct ib_qp_init_attr *qp_init_attr,
+			   struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(qp->device);
+	struct crdma_qp *cqp = to_crdma_qp(qp);
+	struct ib_pd *pd = qp->pd;
+	int err;
+
+	if (qp_init_attr->qp_type != IB_QPT_UD &&
+			qp_init_attr->qp_type != IB_QPT_RC &&
+			qp_init_attr->qp_type != IB_QPT_GSI) {
+		crdma_warn("Unsupported QP type %d\n", qp_init_attr->qp_type);
+		return -EINVAL;
+	}
+
+	if (udata && qp_init_attr->qp_type == IB_QPT_GSI) {
+		crdma_warn("QP1 create restricted to kernel\n");
+		return -EINVAL;
+	}
+
+	if (crdma_qp_val_check(dev, &qp_init_attr->cap,
+				qp_init_attr->srq != NULL)) {
+		crdma_warn("QP init attribute validation failed\n");
+		return -EINVAL;
+	}
+
+	mutex_init(&cqp->mutex);
+	spin_lock_init(&cqp->sq.lock);
+	spin_lock_init(&cqp->rq.lock);
+	cqp->qp_state = IB_QPS_RESET;
+	cqp->pdn = pd ? to_crdma_pd(pd)->pd_index : 0;
+	cqp->send_cqn = qp_init_attr->send_cq ?
+		to_crdma_cq(qp_init_attr->send_cq)->cqn : 0;
+	cqp->recv_cqn = qp_init_attr->recv_cq ?
+		to_crdma_cq(qp_init_attr->recv_cq)->cqn : 0;
+	cqp->srqn = qp_init_attr->srq ?
+		to_crdma_srq(qp_init_attr->srq)->srq_index : 0;
+
+	cqp->sq_sig_type = qp_init_attr->sq_sig_type;
+
+	/* Set the actual number and sizes of the QP work requests */
+	err = crdma_qp_set_wq_sizes(dev, cqp, qp_init_attr);
+	if (err) {
+		err = -EINVAL;
+		goto free_mem;
+	}
+
+	/* Allocate resource index for the QP control object */
+	cqp->qp_index = qp_init_attr->qp_type == IB_QPT_GSI ?
+		CRDMA_QP1_INDEX : crdma_alloc_bitmap_index(&dev->qp_map);
+	if (cqp->qp_index < 0) {
+		crdma_warn("No QP index available\n");
+		err = -ENOMEM;
+		goto free_mem;
+	}
+
+	/* Kernel always allocates QP memory, user contexts will mmap it */
+	cqp->mem = crdma_alloc_hw_queue(dev, cqp->sq.length + cqp->rq.length);
+	if (IS_ERR(cqp->mem)) {
+		crdma_dev_err(dev, "Unable to allocate QP HW queue\n");
+		err = -ENOMEM;
+		goto free_qp_index;
+	}
+
+	crdma_init_wq_ownership(cqp->mem, cqp->sq_offset,
+				cqp->sq.wqe_cnt, cqp->sq.wqe_size);
+	crdma_init_wq_ownership(cqp->mem, cqp->rq_offset,
+				cqp->rq.wqe_cnt, cqp->rq.wqe_size);
+
+	/* Add to Radix tree for lookups */
+	spin_lock_irq(&dev->qp_lock);
+	err = radix_tree_insert(&dev->qp_tree, cqp->qp_index, cqp);
+	spin_unlock_irq(&dev->qp_lock);
+	if (err) {
+		crdma_dev_err(dev, "Unable to insert QP tree\n");
+		goto free_dma_memory;
+	}
+
+	cqp->ib_qp.qp_num = qp_init_attr->qp_type == IB_QPT_GSI ?
+			1 : cqp->qp_index;
+
+	/* return response */
+	if (udata) {
+		struct crdma_ucontext *crdma_uctxt =
+				to_crdma_uctxt(pd->uobject->context);
+		struct crdma_ib_create_qp_resp resp;
+
+		resp.wq_base_addr = sg_dma_address(cqp->mem->alloc);
+		resp.wq_size = cqp->mem->tot_len;
+		if (cqp->sq.length >= cqp->rq.length) {
+			resp.sq_offset = 0;
+			resp.rq_offset = cqp->sq.length;
+		} else {
+			resp.rq_offset = 0;
+			resp.sq_offset = cqp->rq.length;
+		}
+		resp.swqe_size = cqp->sq.wqe_size;
+		resp.num_swqe = cqp->sq.wqe_cnt;
+		resp.rwqe_size = cqp->rq.wqe_size;
+		resp.num_rwqe = cqp->rq.wqe_cnt;
+		resp.spares = CRDMA_WQ_WQE_SPARES;
+
+		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
+		if (err) {
+			crdma_warn("Copy of UDATA failed, %d\n", err);
+			goto delete_qp;
+		}
+
+		err = crdma_add_mmap_req(crdma_uctxt, resp.wq_base_addr,
+				cqp->mem->tot_len);
+		if (err) {
+			crdma_warn("Failed to add pending mmap, %d\n", err);
+			goto delete_qp;
+		}
+	} else {
+		if (qp_init_attr->qp_type != IB_QPT_GSI) {
+			crdma_warn("Only Kernel QP1 supported now\n");
+			err = -ENOMEM;
+			goto delete_qp;
+		}
+		cqp->sq.buf = sg_virt(cqp->mem->alloc) + cqp->sq_offset;
+		cqp->sq.mask = cqp->sq.wqe_cnt - 1;
+		cqp->sq.wqe_size_log2 = ilog2(cqp->sq.wqe_size);
+
+		cqp->sq.wrid_map = kcalloc(cqp->sq.wqe_cnt, sizeof(u64),
+						GFP_KERNEL);
+		if (!cqp->sq.wrid_map) {
+			crdma_warn("Could not allocate SQ WRID map\n");
+			err = -ENOMEM;
+			goto delete_qp;
+		}
+
+		cqp->rq.buf = sg_virt(cqp->mem->alloc) + cqp->rq_offset;
+		cqp->rq.mask = cqp->rq.wqe_cnt - 1;
+		cqp->rq.wqe_size_log2 = ilog2(cqp->rq.wqe_size);
+
+		cqp->rq.wrid_map = kcalloc(cqp->rq.wqe_cnt, sizeof(u64),
+						GFP_KERNEL);
+		if (!cqp->rq.wrid_map) {
+			crdma_warn("Could not allocate RQ WRID map\n");
+			err = -ENOMEM;
+			kfree(cqp->sq.wrid_map);
+			goto delete_qp;
+		}
+	}
+	atomic_set(&cqp->ref_cnt, 1);
+	init_completion(&cqp->free);
+	return 0;
+
+delete_qp:
+	spin_lock_irq(&dev->qp_lock);
+	radix_tree_delete(&dev->qp_tree, cqp->qp_index);
+	spin_unlock_irq(&dev->qp_lock);
+free_dma_memory:
+	crdma_free_hw_queue(dev, cqp->mem);
+free_qp_index:
+	if (qp_init_attr->qp_type != IB_QPT_GSI)
+		crdma_free_bitmap_index(&dev->qp_map, cqp->qp_index);
+free_mem:
+	/*
+	 * XXX: For development only to catch error codes that are not
+     * set properly. This should be removed ultimately.
+     */
+	if (err >= 0) {
+		crdma_warn("Error not set correctly, %d\n", err);
+		err = -ENOMEM;
+	}
+	return err;
+}
+#else
 static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 			struct ib_qp_init_attr *qp_init_attr,
 			struct ib_udata *udata)
@@ -1371,6 +1577,7 @@ free_mem:
 	}
 	return ERR_PTR(err);
 }
+#endif
 
 static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 			int qp_attr_mask, struct ib_udata *udata)
@@ -2737,11 +2944,34 @@ free_mbox:
 	return ret;
 }
 
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_GE(5,13) || RHEL_RELEASE_GE(8,365,0,0))
+int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u32 port,
+                      const struct ib_wc *in_wc, const struct ib_grh *in_grh,
+                      const struct ib_mad *in_mad, struct ib_mad *out_mad,
+                      size_t *out_mad_size, u16 *out_mad_pkey_index)
+{
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
+	const struct ib_mad_hdr *in_mad_hdr = &in_mad->mad_hdr;
+
+	crdma_info("Dump MAD information\n");
+	crdma_info("base_version=0x%x mgmt_class=0x%x\n",
+		in_mad_hdr->base_version, in_mad_hdr->mgmt_class);
+	crdma_info("class_version=0x%x method=0x%x\n",
+		in_mad_hdr->class_version, in_mad_hdr->method);
+	crdma_info("status=0x%x class_specific=0x%x\n",
+		in_mad_hdr->status, in_mad_hdr->class_specific);
+	crdma_info("tid=0x%llx attr_id=0x%x\n",
+		in_mad_hdr->tid, in_mad_hdr->attr_id);
+	crdma_info("attr_mod=0x%x\n", in_mad_hdr->attr_mod);
+#endif
+
+       return IB_MAD_RESULT_SUCCESS;
+}
+#elif (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
 int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
-                    const struct ib_wc *in_wc, const struct ib_grh *in_grh,
-                    const struct ib_mad *in_mad, struct ib_mad *out_mad,
-		    size_t *out_mad_size, u16 *out_mad_pkey_index)
+                      const struct ib_wc *in_wc, const struct ib_grh *in_grh,
+                      const struct ib_mad *in_mad, struct ib_mad *out_mad,
+		      size_t *out_mad_size, u16 *out_mad_pkey_index)
 {
 #ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	const struct ib_mad_hdr *in_mad_hdr = &in_mad->mad_hdr;
@@ -2836,6 +3066,9 @@ static const struct ib_device_ops crdma_dev_ops = {
     INIT_RDMA_OBJ_SIZE(ib_cq, crdma_cq, ib_cq),
     INIT_RDMA_OBJ_SIZE(ib_ucontext, crdma_ucontext, ib_uctxt),
     INIT_RDMA_OBJ_SIZE(ib_ah, crdma_ah, ib_ah),
+#if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,394,0,0))
+    INIT_RDMA_OBJ_SIZE(ib_qp, crdma_qp, ib_qp),
+#endif
 };
 #endif
 

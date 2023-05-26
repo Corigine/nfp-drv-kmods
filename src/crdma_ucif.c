@@ -1914,14 +1914,20 @@ int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr,
 		if (cmr->base_mtt < 0)
 			return -ENOMEM;
 
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,365,0,0))
+		ret = crdma_mtt_write_sg(dev, umem->sgt_append.sgt.sgl,
+					 umem->sgt_append.sgt.nents,
+					 cmr->base_mtt, cmr->num_mtt,
+					 PAGE_SHIFT, comp_pages, comp_order);
+#elif (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
 		ret = crdma_mtt_write_sg(dev, umem->sg_head.sgl, umem->nmap,
-				cmr->base_mtt, cmr->num_mtt, PAGE_SHIFT,
-				comp_pages, comp_order);
+					 cmr->base_mtt, cmr->num_mtt,
+					 PAGE_SHIFT, comp_pages, comp_order);
 #else
 		ret = crdma_mtt_write_sg(dev, umem->sg_head.sgl, umem->nmap,
-				cmr->base_mtt, cmr->num_mtt, umem->page_shift,
-				comp_pages, comp_order);
+					 cmr->base_mtt, cmr->num_mtt,
+					 umem->page_shift, comp_pages,
+					 comp_order);
 #endif
 		if (ret) {
 			crdma_err("Error writing MTT entries %d\n", ret);

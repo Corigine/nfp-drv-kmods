@@ -240,8 +240,13 @@ static int __crdma_alloc_mem_pages(struct crdma_ibdev *dev,
 		goto alloc_err;
 	}
 
+#if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,394,0,0))
+	mem->num_sg = dma_map_sg(&dev->nfp_info->pdev->dev, mem->alloc,
+				 mem->num_allocs, DMA_BIDIRECTIONAL);
+#else
 	mem->num_sg = pci_map_sg(dev->nfp_info->pdev, mem->alloc,
-				mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
+				 mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
+#endif
 	mem->num_mtt = mem->tot_len >> (mem->min_order + PAGE_SHIFT);
 	mem->base_mtt_ndx = crdma_alloc_bitmap_area(&dev->mtt_map,
 					mem->num_mtt);
@@ -305,8 +310,13 @@ void crdma_free_dma_mem(struct crdma_ibdev *dev, struct crdma_mem *mem)
 				sg_dma_address(mem->alloc));
 	} else {
 		if (mem->num_sg)
+#if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,394,0,0))
+			dma_unmap_sg(&dev->nfp_info->pdev->dev, mem->alloc,
+				     mem->num_allocs, DMA_BIDIRECTIONAL);
+#else
 			pci_unmap_sg(dev->nfp_info->pdev, mem->alloc,
-					mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
+				     mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
+#endif
 
 		for (i = 0; i < mem->num_allocs; i++)
 			__free_pages(sg_page(&mem->alloc[i]),
