@@ -406,12 +406,22 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 		case CRDMA_WQE_RDMA_WRITE_OP:
 			wc->opcode = IB_WC_RDMA_WRITE;
 			break;
-
+		case CRDMA_WQE_LOCAL_INVAL_OP:
+			wc->opcode = IB_WC_LOCAL_INV;
+			wc->wc_flags |= IB_WC_WITH_INVALIDATE;
+			break;
+		case CRDMA_WQE_FAST_REG_MR_OP:
+			wc->opcode = IB_WC_REG_MR;
+			break;
 		case CRDMA_WQE_RDMA_READ_OP:
 			wc->opcode = IB_WC_RDMA_READ;
 			wc->byte_len = le32_to_cpu(cqe->byte_count);
 			break;
-
+		case CRDMA_WQE_SEND_WITH_INVAL_OP:
+			wc->opcode = IB_WC_SEND;
+			wc->wc_flags |= IB_WC_WITH_INVALIDATE;
+			wc->ex.invalidate_rkey = le32_to_cpu(cqe->imm_inval);
+			break;
 		case CRDMA_WQE_SEND_WITH_IMM_OP:
 			wc->wc_flags |= IB_WC_WITH_IMM;
 			/* Fall through */
@@ -431,7 +441,11 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 			/* Swap immediate data to undo hardware swap */
 			wc->ex.imm_data = __swab32(cqe->imm_inval);
 			break;
-
+		case CRDMA_WQE_SEND_WITH_INVAL_OP:
+			wc->opcode = IB_WC_SEND;
+			wc->wc_flags |= IB_WC_WITH_INVALIDATE;
+			wc->ex.invalidate_rkey = le32_to_cpu(cqe->imm_inval);
+			break;
 		case CRDMA_WQE_SEND_WITH_IMM_OP:
 			wc->wc_flags |= IB_WC_WITH_IMM;
 			/* Swap immediate data to undo hardware swap */
@@ -1347,11 +1361,6 @@ static int crdma_create_qp(struct ib_qp *qp,
 			goto delete_qp;
 		}
 	} else {
-		if (qp_init_attr->qp_type != IB_QPT_GSI) {
-			crdma_warn("Only Kernel QP1 supported now\n");
-			err = -ENOMEM;
-			goto delete_qp;
-		}
 		cqp->sq.buf = sg_virt(cqp->mem->alloc) + cqp->sq_offset;
 		cqp->sq.mask = cqp->sq.wqe_cnt - 1;
 		cqp->sq.wqe_size_log2 = ilog2(cqp->sq.wqe_size);
@@ -1521,11 +1530,6 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 			goto delete_qp;
 		}
 	} else {
-		if (qp_init_attr->qp_type != IB_QPT_GSI) {
-			crdma_warn("Only Kernel QP1 supported now\n");
-			err = -ENOMEM;
-			goto delete_qp;
-		}
 		cqp->sq.buf = sg_virt(cqp->mem->alloc) + cqp->sq_offset;
 		cqp->sq.mask = cqp->sq.wqe_cnt - 1;
 		cqp->sq.wqe_size_log2 = ilog2(cqp->sq.wqe_size);
@@ -1824,6 +1828,30 @@ static inline int crdma_copy_inline(struct crdma_swqe_inline *data,
 	return 0;
 }
 
+static void set_reg_seg(struct crdma_swqe_frmr *fseg,
+			const struct ib_reg_wr *wr)
+{
+	struct crdma_mr *cmr = to_crdma_mr(wr->mr);
+
+	fseg->flags		= cpu_to_le32((wr->access & IB_ACCESS_REMOTE_ATOMIC ?
+		CRDMA_MR_ACCESS_FLAGS_ATOMIC_EN       : 0) |
+	       (wr->access & IB_ACCESS_REMOTE_WRITE  ?
+		CRDMA_MR_ACCESS_FLAGS_R_WRITE_EN : 0) |
+	       (wr->access & IB_ACCESS_REMOTE_READ   ?
+		CRDMA_MR_ACCESS_FLAGS_R_READ_EN  : 0) |
+	       (wr->access & IB_ACCESS_LOCAL_WRITE   ?
+	       CRDMA_MR_ACCESS_FLAGS_L_WRITE_EN  : 0) |
+		CRDMA_MR_ACCESS_FLAGS_L_READ_EN | CRDMA_MR_ACCESS_FLAGS_INVAL_EN);
+	fseg->key		= cpu_to_le32(wr->key);
+	fseg->page_list_paddr_h	= cpu_to_le32(cmr->page_shift >> 32);
+	fseg->page_list_paddr_l = cpu_to_le32(cmr->page_shift & 0x0FFFFFFFFull);
+	fseg->io_addr_h		= cpu_to_le32(cmr->io_vaddr >> 32);
+	fseg->io_addr_l 	= cpu_to_le32(cmr->io_vaddr & 0x0FFFFFFFFull);
+	fseg->length 		= cpu_to_le32(cmr->len & 0x0FFFFFFFFull);
+	fseg->offset		= 0;
+	fseg->page_size		= cpu_to_le32(ilog2(cmr->ib_mr.page_size));
+}
+
 /**
  * Set WQE SGE data.
  *
@@ -1962,7 +1990,13 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 					cpu_to_le32(rdma_wr(wr)->rkey);
 				swqe->rc.rem_addr.rsvd = 0;
 				break;
-
+			case IB_WR_REG_MR:
+				set_reg_seg(&swqe->rc.frmr, reg_wr(wr));
+				break;
+			case IB_WR_LOCAL_INV:
+			case IB_WR_SEND_WITH_INV:
+				swqe->ctrl.imm_inval = cpu_to_le32(wr->ex.invalidate_rkey);
+				break;
 			default:
 				break;
 			}
@@ -2144,6 +2178,14 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 
 	return ret;
 
+}
+
+static void crdma_drain_rq(struct ib_qp *qp)
+{
+#ifdef CRDMA_DEBUG_FLAG
+	crdma_info("crdma_drain_rq \n");
+#endif
+	return;
 }
 
 #if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
@@ -3061,6 +3103,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     .req_notify_cq      = crdma_req_notify_cq,
     .resize_cq          = crdma_resize_cq,
     .process_mad        = crdma_process_mad,
+    .drain_rq		 = crdma_drain_rq,
 
     INIT_RDMA_OBJ_SIZE(ib_pd, crdma_pd, ib_pd),
     INIT_RDMA_OBJ_SIZE(ib_cq, crdma_cq, ib_cq),
@@ -3168,6 +3211,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.req_notify_cq        = crdma_req_notify_cq;
 	dev->ibdev.resize_cq            = crdma_resize_cq;
 	dev->ibdev.process_mad          = crdma_process_mad;
+	dev->ibdev.drain_rq		= crdma_drain_rq;
 #endif
 
 #if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))

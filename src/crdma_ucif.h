@@ -216,12 +216,11 @@ enum {
 	CRDMA_WQE_RDMA_WRITE_WITH_IMM_OP	= 1,
 	CRDMA_WQE_SEND_OP			= 2,
 	CRDMA_WQE_SEND_WITH_IMM_OP		= 3,
-	CRDMA_WQE_RDMA_READ_OP			= 4
-#if 0 /* The following are required, but not yet used */
-	CRDMA_WQE_SEND_WITH_INVAL_OP		= 8,
-	CRDMA_WQE_LOCAL_INVAL_OP		= 10,
-	CRDMA_WQE_FAST_REG_MR_OP		= 11
-#endif
+	CRDMA_WQE_RDMA_READ_OP			= 4,
+	CRDMA_WQE_LOCAL_INVAL_OP		= 7,
+	CRDMA_WQE_SEND_WITH_INVAL_OP		= 9,
+/* The value comes from ib_wr_opcode */
+	CRDMA_WQE_FAST_REG_MR_OP		= 32
 };
 
 enum {
@@ -290,25 +289,23 @@ struct crdma_swqe_inline {
 };
 
 /* Send WQE Fast Register Memory Region */
-#if 0 /* The following are required, but not yet used */
 enum {
-	CRDMA_SWQE_FRMR_FLAGS_L_WRITE_EN	= 0,
-	CRDMA_SWQE_FRMR_FLAGS_R_READ_EN		= 1,
-	CRDMA_SWQE_FRMR_FLAGS_R_WRITE_EN	= 2,
-	CRDMA_SWQE_FRMR_FLAGS_ATOMIC_EN		= 3,
-	CRDMA_SWQE_FRMR_FLAGS_INVAL_EN		= 5
+	CRDMA_MR_ACCESS_FLAGS_L_WRITE_EN	= 1 << 0,
+	CRDMA_MR_ACCESS_FLAGS_R_READ_EN		= 1 << 1,
+	CRDMA_MR_ACCESS_FLAGS_R_WRITE_EN	= 1 << 2,
+	CRDMA_MR_ACCESS_FLAGS_ATOMIC_EN		= 1 << 3,
+	CRDMA_MR_ACCESS_FLAGS_L_READ_EN		= 1 << 4,
+	CRDMA_MR_ACCESS_FLAGS_INVAL_EN		= 1 << 5
 };
-#endif
 
 struct crdma_swqe_frmr {
-	u8              flags;
-	u8              rsvd[3];
+	__le32          flags;
 	__le32		key;
 	__le32		page_list_paddr_h;
 	__le32		page_list_paddr_l;
 	__le32		io_addr_h;
 	__le32		io_addr_l;
-	__le32		rsvd2;
+	__le32		rsvd;
 	__le32		length;
 	__le32		offset;
 	__le32		page_size;

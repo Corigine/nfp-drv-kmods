@@ -269,7 +269,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	 * we remove these. In future, the capacity supported will be added
 	 * one by one.
 	 */
-	dev->cap.ib.device_cap_flags = 0;
+	dev->cap.ib.device_cap_flags = IB_DEVICE_MEM_MGT_EXTENSIONS;
 
 	dev->cap.ib.max_qp = 1 << cap->max_qp_log2;
 	dev->cap.ib.max_qp_wr = 1 << cap->max_qp_wr_log2;
