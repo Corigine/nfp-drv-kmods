@@ -190,6 +190,8 @@ enum nfp_ethtool_link_mode_list {
  * @ports.tx_enabled:	is TX enabled?
  * @ports.rx_enabled:	is RX enabled?
  * @ports.override_changed: is media reconfig pending?
+ * @ports.rx_pause:	Switch of RX pause frame
+ * @ports.tx_pause:	Switch of Tx pause frame
  * @ports.supp_fwlldp: hardware of LLDP supported
  * @ports.fwlldp_enabled: is hardware of LLDP enabled
  * @ports.port_type:	one of %PORT_* defines for ethtool
@@ -231,6 +233,8 @@ struct nfp_eth_table {
 		bool supp_fwlldp;
 		bool fwlldp_enabled;
 		bool override_changed;
+		bool rx_pause;
+		bool tx_pause;
 
 		/* Computed fields */
 		u8 port_type;
@@ -258,6 +262,8 @@ nfp_eth_set_fec(struct nfp_cpp *cpp, unsigned int idx, enum nfp_eth_fec mode);
 int nfp_eth_set_fwlldp(struct nfp_cpp *cpp, unsigned int idx, bool state);
 
 int nfp_eth_set_idmode(struct nfp_cpp *cpp, unsigned int idx, bool state);
+int nfp_eth_set_pauseparam(struct nfp_cpp *cpp, unsigned int idx,
+			   unsigned int tx_pause, unsigned int rx_pause);
 
 static inline bool nfp_eth_can_support_fec(struct nfp_eth_table_port *eth_port)
 {
