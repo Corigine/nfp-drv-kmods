@@ -442,7 +442,7 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 			wc->ex.imm_data = __swab32(cqe->imm_inval);
 			break;
 		case CRDMA_WQE_SEND_WITH_INVAL_OP:
-			wc->opcode = IB_WC_SEND;
+			wc->opcode = IB_WC_RECV;
 			wc->wc_flags |= IB_WC_WITH_INVALIDATE;
 			wc->ex.invalidate_rkey = le32_to_cpu(cqe->imm_inval);
 			break;
