@@ -69,7 +69,7 @@ static const char crdma_version[] =
  * allocate additional MSI vectors to then set this variable. When
  * we convert to MSI-X we will need the new registration interface.
  */
-static bool have_interrupts = false;
+static bool have_interrupts = true;
 module_param(have_interrupts, bool, 0444);
 MODULE_PARM_DESC(have_interrupts, "During bring-up, allows selective use of "
 		"event driven command mode (default: false)");
