@@ -920,6 +920,8 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 
 	dev->have_interrupts = have_interrupts;
 
+	spin_lock_init(&dev->qp_lock);
+
 	dev->id = idr_alloc(&crdma_dev_id, NULL, 0, 0, GFP_KERNEL);
 	if (dev->id < 0)
 		goto err_free_info;
