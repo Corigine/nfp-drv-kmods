@@ -278,6 +278,8 @@ struct crdma_mem *crdma_alloc_dma_mem(struct crdma_ibdev *dev,
 	mem->max_order = mem->min_order = order;
 	num_pages = (size + (PAGE_SIZE-1)) >> PAGE_SHIFT;
 
+	mem->coherent = coherent;
+
 	if (!coherent)
 		err = __crdma_alloc_mem_pages(dev, mem, num_pages);
 	else
