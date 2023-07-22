@@ -13,6 +13,8 @@ CONFIG_NFP_EXPORTS ?= y
 CONFIG_NFP_NET_PF ?= y
 # Include code for the VFs
 CONFIG_NFP_NET_VF ?= y
+# Include code for the Hardware Doorbell
+CONFIG_NFP_HARD_DB ?= y
 
 ccflags-y := $(CFLAGS_EXTRA)
 
@@ -85,6 +87,11 @@ ccflags-y += -DCONFIG_NFP_DEBUG
 
 nfp-objs += \
 		nfp_net_debugfs.o
+endif
+
+# Select HARD Doorbell if forced from command line or kconfig
+ifeq ($(CONFIG_NFP_HARD_DB),y)
+ccflags-y += -DCONFIG_NFP_HARD_DB
 endif
 
 # Ubuntu version may contain non-digit characters, like rc, in such case
