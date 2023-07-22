@@ -1201,7 +1201,7 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 		irq = -1;
 	}
 
-	pf->cpp = nfp_cpp_from_nfp6000_pcie(pdev, dev_info, irq);
+	pf->cpp = nfp_cpp_from_nfp6000_pcie(pdev, dev_info, irq, pf);
 	if (IS_ERR(pf->cpp)) {
 		err = PTR_ERR(pf->cpp);
 		goto err_disable_msix;

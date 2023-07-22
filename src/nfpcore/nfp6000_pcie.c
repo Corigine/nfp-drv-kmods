@@ -29,6 +29,7 @@
 
 #include "nfp_cpp.h"
 #include "nfp_dev.h"
+#include "nfp_main.h"
 
 #include "nfp6000/nfp6000.h"
 
@@ -81,6 +82,11 @@
 #define     NFP_PCIE_BAR_PCIE2CPP_MapType_GENERAL       3
 #define     NFP_PCIE_BAR_PCIE2CPP_MapType_EXPLICIT0     4
 #define     NFP_PCIE_BAR_PCIE2CPP_MapType_EXPLICIT1     5
+/* In 4.3.1.2.11.1 clause of DB of NFP Kestrel, MapType of
+ * PcieToCppExpansionBar only support Explicit register set 0,
+ * 5 is for RoCE peripheral not Explicit register set 1.
+ */
+#define     NFP_PCIE_BAR_PCIE2CPP_MapType_ROCE          5
 #define     NFP_PCIE_BAR_PCIE2CPP_MapType_EXPLICIT2     6
 #define     NFP_PCIE_BAR_PCIE2CPP_MapType_EXPLICIT3     7
 #define   NFP_PCIE_BAR_PCIE2CPP_Target_BaseAddress(_x)  (((_x) & 0xf) << 23)
@@ -189,6 +195,18 @@ struct nfp6000_pcie {
 	/* Event management */
 	struct nfp_em_manager *event;
 };
+
+/* Judge this device support hardware doorbell or not */
+static bool nfp_support_hardware_doorbell(const struct nfp6000_pcie *nfp)
+{
+#ifdef CONFIG_NFP_HARD_DB
+	/* If new chip type support hardware doorbell, you need
+	 * add device id in this judgment statement.
+	 */
+	return nfp->pdev->device == PCI_DEVICE_ID_NFP3800;
+#endif
+	return false;
+}
 
 static u32 nfp_bar_maptype(struct nfp_bar *bar)
 {
@@ -603,10 +621,13 @@ static ssize_t show_barcfg(struct device *dev, struct device_attribute *attr,
 		"Fixed", "Bulk", "Target", "General",
 		"Expl0", "Expl1", "Expl2", "Expl3"
 	};
+
 	struct nfp6000_pcie *nfp = nfp_cpp_priv(dev_get_drvdata(dev));
 	int n, maptype, tgtact, tgttok, length, action;
 	ssize_t off = 0;
 	u64 base;
+
+	bartype[5] = nfp_support_hardware_doorbell(nfp) ? "ROCE" : "Expl1";
 
 	for (n = 0; n < nfp->bars; n++) {
 		struct nfp_bar *bar = &nfp->bar[n];
@@ -631,6 +652,7 @@ static ssize_t show_barcfg(struct device *dev, struct device_attribute *attr,
 		off += scnprintf(buf + off, PAGE_SIZE - off,
 				 "BAR%d(%d): %s map, ",
 				 bar->index, bar->bitsize, bartype[maptype]);
+
 		switch (maptype) {
 		case NFP_PCIE_BAR_PCIE2CPP_MapType_FIXED:
 			off += scnprintf(buf + off, PAGE_SIZE - off,
@@ -702,7 +724,7 @@ static int bar_cmp(const void *aptr, const void *bptr)
  *
  * BAR0.0: Reserved for General Mapping (for MSI-X access to PCIe SRAM)
  * BAR0.1: Reserved for XPB access (for MSI-X access to PCIe PBA)
- * BAR0.2: --
+ * BAR0.2: Reserved for Doorbell Mapping (for RoCE or other Application)
  * BAR0.3: --
  * BAR0.4: Reserved for Explicit 0.0-0.3 access
  * BAR0.5: Reserved for Explicit 1.0-1.3 access
@@ -712,7 +734,8 @@ static int bar_cmp(const void *aptr, const void *bptr)
  * BAR1.0-BAR1.7: --
  * BAR2.0-BAR2.7: --
  */
-static int enable_bars(struct nfp6000_pcie *nfp, u16 interface)
+static int enable_bars(struct nfp6000_pcie *nfp, u16 interface,
+		       struct nfp_pf *pf)
 {
 	const u32 barcfg_msix_general =
 		NFP_PCIE_BAR_PCIE2CPP_MapType(
@@ -734,7 +757,14 @@ static int enable_bars(struct nfp6000_pcie *nfp, u16 interface)
 		NFP_PCIE_BAR_PCIE2CPP_MapType(
 			NFP_PCIE_BAR_PCIE2CPP_MapType_EXPLICIT3),
 	};
-	char status_msg[196] = {};
+#ifdef CONFIG_NFP_HARD_DB
+	const u32 barcfg_doorbell =
+		NFP_PCIE_BAR_PCIE2CPP_MapType(
+			NFP_PCIE_BAR_PCIE2CPP_MapType_ROCE) |
+		NFP_PCIE_BAR_PCIE2CPP_LengthSelect_32BIT;
+#endif
+
+	char status_msg[216] = {};
 	int i, err, bars_free;
 	struct nfp_bar *bar;
 	int expl_groups;
@@ -842,7 +872,26 @@ static int enable_bars(struct nfp6000_pcie *nfp, u16 interface)
 	bars_free--;
 
 	nfp6000_bar_write(nfp, bar, barcfg_msix_xpb);
+#ifdef CONFIG_NFP_HARD_DB
+	/* Use BAR0.2 for Doorbell */
+	if (nfp_support_hardware_doorbell(nfp)) {
+		bar = &nfp->bar[2];
 
+		bar->iomem = ioremap(nfp_bar_resource_start(bar),
+			nfp_bar_resource_len(bar));
+		if (bar->iomem) {
+			msg += scnprintf(msg, end - msg,
+					"0.2: PCIe DoorBell, ");
+			atomic_inc(&bar->refcnt);
+			bars_free--;
+			nfp6000_bar_write(nfp, bar, barcfg_doorbell);
+		}
+
+		pf->db_phys  = nfp_bar_resource_start(bar);
+		pf->db_iomem = bar->iomem;
+		pf->db_size  = nfp_bar_resource_len(bar);
+	}
+#endif
 	/* Use BAR0.4..BAR0.7 for EXPL IO */
 	for (i = 0; i < 4; i++) {
 		int j;
@@ -1540,7 +1589,8 @@ static const struct nfp_cpp_operations nfp6000_pcie_ops = {
  */
 struct nfp_cpp *
 nfp_cpp_from_nfp6000_pcie(struct pci_dev *pdev,
-			  const struct nfp_dev_info *dev_info, int event_irq)
+			  const struct nfp_dev_info *dev_info, int event_irq,
+			  struct nfp_pf *pf)
 {
 	struct nfp6000_pcie *nfp;
 	u16 interface;
@@ -1584,7 +1634,7 @@ nfp_cpp_from_nfp6000_pcie(struct pci_dev *pdev,
 		goto err_free_nfp;
 	}
 
-	err = enable_bars(nfp, interface);
+	err = enable_bars(nfp, interface, pf);
 	if (err)
 		goto err_free_nfp;
 

@@ -105,6 +105,9 @@ struct nfp_dumpspec {
  * @multi_pf.beat_addr:	Pointer to mapped beat address used for keepalive
  * @lock:		Protects all fields which may change after probe,
  *			which is replaced by devlink lock after 5.18(inclusive)
+ * @db_iomem:		Pointer to mapped doorbell space
+ * @db_phys:		Physical base address of doorbell space
+ * @db_size:		Size of doorbell space
  */
 struct nfp_pf {
 	struct pci_dev *pdev;
@@ -180,6 +183,11 @@ struct nfp_pf {
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
 	struct mutex lock;
+#endif
+#ifdef CONFIG_NFP_HARD_DB
+	void __iomem *db_iomem;
+	phys_addr_t db_phys;
+	size_t db_size;
 #endif
 };
 
