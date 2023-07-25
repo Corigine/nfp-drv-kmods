@@ -2973,7 +2973,7 @@ static int crdma_map_mr_sg(struct ib_mr *mr, struct scatterlist *sg,
 
 	cmr->access = IB_ACCESS_LOCAL_WRITE|IB_ACCESS_REMOTE_WRITE
 		|IB_ACCESS_REMOTE_READ|IB_ACCESS_REMOTE_ATOMIC;
-	cmr->io_vaddr = mr->iova;
+	cmr->io_vaddr = mr->iova & ~((u64)page_size - 1);
 	cmr->len = cmr->npages * page_size;
 	cmr->page_shift = PAGE_SHIFT + order;
 

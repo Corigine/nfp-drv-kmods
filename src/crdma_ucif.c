@@ -1870,7 +1870,8 @@ int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 				CRDMA_MPT_REMOTE_WRITE_ENABLE : 0) |
 			((cmr->access & IB_ACCESS_REMOTE_READ) ?
 				CRDMA_MPT_REMOTE_READ_ENABLE : 0) |
-			(cmr->umem ? 0 : CRDMA_MPT_DMA);
+			(cmr->umem ? 0 : ((cmr->type == CRDMA_MR_TYPE_FRMR) ?
+				0 :CRDMA_MPT_DMA));
 
 	/* Set PHYS flag if only a single MTT entry and it is supported */
 	if (cmr->num_mtt == 1 && (dev->cap.opt_flags &
@@ -1896,7 +1897,6 @@ int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 				CRDMA_MPT_LOG2_PAGE_SZ_SHIFT;
 	param->page_info = cpu_to_le32(page_info);
 	param->mtt_index = cpu_to_le32(cmr->base_mtt);
-	param->frmr_entries = 0;
 	param->reserved = 0;
 
 	memset(&cmd, 0, sizeof(cmd));
