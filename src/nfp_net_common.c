@@ -2625,8 +2625,10 @@ static int nfp_net_bridge_setlink(struct net_device *dev, struct nlmsghdr *nlh,
 		if (nla_type(attr) != IFLA_BRIDGE_MODE)
 			continue;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
 		if (nla_len(attr) < sizeof(mode))
 			return -EINVAL;
+#endif
 
 		new_ctrl = nn->dp.ctrl;
 		mode = nla_get_u16(attr);
