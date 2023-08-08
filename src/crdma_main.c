@@ -74,6 +74,15 @@ module_param(have_interrupts, bool, 0444);
 MODULE_PARM_DESC(have_interrupts, "During bring-up, allows selective use of "
 		"event driven command mode (default: false)");
 
+/*
+ * DCQCN is a typical congestion control protocol used for RoCEv2,
+ * which can promote RoCEv2's performance when traffic crowds.
+*/
+static bool dcqcn_enable = false;
+module_param(dcqcn_enable, bool, 0444);
+MODULE_PARM_DESC(dcqcn_enable, "During bring-up, allows selective use of "
+		"setting dcqcn enable (default: false)");
+
 /**
  * Load device capabilities/attributes.
  *
@@ -532,6 +541,17 @@ out:
 	return cnt;
 }
 
+static ssize_t show_dcqcn_enable(struct device *device,
+                struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "0x%x\n", dcqcn_enable);
+}
+
+static int crdma_init_dcqcn(struct crdma_ibdev *dev)
+{
+	return crdma_dcqcn_enable_cmd(dev, dcqcn_enable);
+}
+
 /**
  * Debug helper to initiate commands through sysfs
  *
@@ -619,6 +639,7 @@ static DEVICE_ATTR(board_id, S_IRUGO, show_board,  NULL);
 static DEVICE_ATTR(command,  S_IWUSR|S_IWGRP, NULL, exec_command);
 static DEVICE_ATTR(doorbell, S_IRUGO|S_IWUSR|S_IWGRP, show_doorbell, store_doorbell);
 static DEVICE_ATTR(uc_gid, S_IRUGO, dump_uc_gid, NULL);
+static DEVICE_ATTR(dcqcn_enable, S_IRUGO, show_dcqcn_enable, NULL);
 
 static struct device_attribute *crdma_class_attrs[] = {
 	&dev_attr_hw_rev,
@@ -627,6 +648,7 @@ static struct device_attribute *crdma_class_attrs[] = {
 	&dev_attr_doorbell,
 	&dev_attr_command,
 	&dev_attr_uc_gid,
+	&dev_attr_dcqcn_enable,
 };
 
 static int crdma_init_maps(struct crdma_ibdev *dev)
@@ -939,6 +961,9 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 #endif
 
 	if (crdma_register_verbs(dev))
+		goto err_cleanup_hca;
+
+	if (crdma_init_dcqcn(dev))
 		goto err_cleanup_hca;
 
 	for (i = 0; i < ARRAY_SIZE(crdma_class_attrs); i++)

@@ -94,7 +94,8 @@ enum {
 	CRDMA_CMD_MCG_DESTROY		= 41,
 	CRDMA_CMD_MCG_ATTACH		= 42,
 	CRDMA_CMD_MCG_DETACH		= 43,
-	CRDMA_CMD_SET_PORT_MTU		= 49
+	CRDMA_CMD_SET_PORT_MTU		= 49,
+	CRDMA_CMD_DCQCN_ENABLE		= 50
 };
 
 /* Microcode QP Modify opcode modifiers */
@@ -1014,6 +1015,15 @@ int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port);
  * Returns 0 on success, otherwise an error.
  */
 int crdma_set_port_mtu_cmd(struct crdma_ibdev *dev, u8 port, u32 mtu);
+
+/**
+ * Enable or Disable dcqcn to microcode.
+ *
+ * @dev: RoCE IB device.
+ * @enbaled: TRUE: to enable, FALSE: to disable
+ * Returns 0 on success, otherwise an error.
+ */
+int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
 
 /**
  * Issue microcode MPT create command.

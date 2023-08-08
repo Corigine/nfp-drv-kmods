@@ -1825,6 +1825,12 @@ int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port)
 			port, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
+int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enbaled)
+{
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_DCQCN_ENABLE, 0,
+			enbaled, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+}
+
 int crdma_set_port_mtu_cmd(struct crdma_ibdev *dev, u8 port, u32 mtu)
 {
 	struct crdma_cmd cmd;
