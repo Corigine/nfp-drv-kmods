@@ -296,7 +296,6 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 
 	dev->cap.ib.max_cqe = 1 << cap->max_cqe_log2;
 	dev->cap.ib.max_mr = cap->max_mpt;
-	dev->cap.ib.max_pd = CRDMA_IB_MAX_PD;
 	dev->cap.ib.max_qp_rd_atom = 1 << cap->max_qp_rsp_res_log2;
 	dev->cap.ib.max_ee_rd_atom = 0;
 	dev->cap.ib.max_res_rd_atom =  1 << cap->max_rdma_res_log2;
@@ -313,16 +312,13 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.ib.max_raw_ipv6_qp = 0;
 	dev->cap.ib.max_raw_ethy_qp = 0;
 
-	dev->cap.ib.max_mcast_grp = 1 << cap->max_mcg_log2;
-	dev->cap.ib.max_mcast_qp_attach = 1 << cap->max_mcg_qp_log2;
+	/* Mcast is not supported */
+	dev->cap.ib.max_mcast_grp = 0;
+	dev->cap.ib.max_mcast_qp_attach = 0;
+	dev->cap.ib.max_total_mcast_qp_attach = 0;
 
-	/*
-	 * TODO: circle back with microcode and see if we need to
-	 * to add this limit or if it is grp*qp.
-	 */
-	dev->cap.ib.max_total_mcast_qp_attach = dev->cap.ib.max_mcast_grp *
-				dev->cap.ib.max_mcast_qp_attach;
-
+	/* Stored in driver not firmware, so specify these in driver side*/
+	dev->cap.ib.max_pd = CRDMA_IB_MAX_PD;
 	dev->cap.ib.max_ah = CRDMA_IB_MAX_AH;
 
 #if (!(VER_NON_RHEL_GE(5,8) || VER_RHEL_GE(8,0)))
@@ -330,10 +326,10 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.ib.max_fmr = 0;
 	dev->cap.ib.max_map_per_fmr = 0;
 #endif
-
-	dev->cap.ib.max_srq = 1 << cap->max_srq_log2;
-	dev->cap.ib.max_srq_wr = 1 << cap->max_srq_wr_log2;
-	dev->cap.ib.max_srq_sge = dev->cap.ib.max_sge_rd;
+	/* SRQ is not supported */
+	dev->cap.ib.max_srq = 0;
+	dev->cap.ib.max_srq_wr = 0;
+	dev->cap.ib.max_srq_sge = 0;
 
 	/*
 	 * TODO: circle back with microcode, probably need to add

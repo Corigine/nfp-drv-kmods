@@ -357,7 +357,7 @@ struct crdma_ibdev {
 	spinlock_t		qp_lock;
 	struct radix_tree_root	qp_tree;
 
-	/* 
+	/*
 	 * CQ allocation bitmap and table. For now we are being wasteful
 	 * and allocating a table for CQN to CQ map; we will change this
 	 * to be a Radix Tree or something with a smaller footprint later.

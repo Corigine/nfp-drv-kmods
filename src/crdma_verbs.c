@@ -169,7 +169,7 @@ static struct crdma_mem *crdma_alloc_hw_queue(struct crdma_ibdev *dev,
 	if (err) {
 		crdma_err("crdma_mmt_write_sg failed for HWQ, %d\n", err);
 		crdma_free_dma_mem(dev, mem);
-		return ERR_PTR(-ENOMEM); 
+		return ERR_PTR(-ENOMEM);
 	}
 	return mem;
 }
@@ -502,7 +502,6 @@ static int crdma_query_device(struct ib_device *ibdev,
 	 * account for entries used for driver overhead.
 	 */
 	dev_attr->max_qp_wr -= CRDMA_WQ_WQE_SPARES;
-	dev_attr->max_cqe--;
 	if (dev_attr->max_srq_wr)
 		dev_attr->max_srq_wr -= CRDMA_WQ_WQE_SPARES;
 
@@ -2561,14 +2560,14 @@ static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
 		crdma_warn("Too many CQE requested %d\n", num_cqe);
 		return -EINVAL;
 	}
-	
+
 	num_cqe = roundup_pow_of_two(num_cqe + 1);
 	oldnum = ccq->num_cqe;
 	ccq->num_cqe = num_cqe - 1;
-	if (num_cqe == ibcq->cqe + 1) 
+	if (num_cqe == ibcq->cqe + 1)
 		return 0;
 	spin_lock_irq(&ccq->lock);
-	
+
 	newmem = crdma_alloc_hw_queue(dev,
                                 num_cqe * dev->cap.cqe_size);
         if (IS_ERR(newmem)) {
@@ -2576,7 +2575,7 @@ static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
                 ret = -ENOMEM;
                 goto out;
         }
-	
+
 	newcqe = sg_virt(newmem->alloc);
 	for (i = 0, tmpcqe = newcqe; i < ccq->num_cqe; i++, tmpcqe++)
                 tmpcqe->owner = 0;
@@ -2586,10 +2585,10 @@ static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
 	ccq->cqe_buf = newcqe;
 	ccq->num_cqe_log2 = ilog2(num_cqe);
 	ibcq->cqe = num_cqe -1;
-	
+
 	ret = crdma_cq_resize_cmd(dev, ccq);
 	if (ret) {
-		
+
 		crdma_warn("Microcode resize CQ command failed\n");
 		dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
 			ccq->ci_mbox, ccq->ci_mbox_paddr);

@@ -500,7 +500,7 @@ void crdma_ring_db32(struct crdma_ibdev *dev, uint32_t value, int offset)
 {
 	unsigned long flags;
 	spin_lock_irqsave(&dev->priv_uar_lock, flags);
-	__raw_writel((__force u32) cpu_to_le32(value), 
+	__raw_writel((__force u32) cpu_to_le32(value),
 		     dev->priv_uar.map + offset);
 	spin_unlock_irqrestore(&dev->priv_uar_lock, flags);
 	return;
