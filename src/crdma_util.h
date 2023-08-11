@@ -77,10 +77,11 @@ void crdma_cleanup_bitmap(struct crdma_bitmap *bitmap);
  * Allocate the next free index in a bitmap.
  *
  * @bitmap: Pointer to the bitmap used for allocation.
+ * @allocated_index: Pointer to the memory in which index allocated is stored.
  *
- * Returns the bitmap index, or < 0 on error.
+ * Returns 0 on success, otherwise -ENOMEM;
  */
-u32 crdma_alloc_bitmap_index(struct crdma_bitmap *bitmap);
+int crdma_alloc_bitmap_index(struct crdma_bitmap *bitmap, u32 *allocated_index);
 
 /**
  * Free an index in the specified bitmap.

@@ -922,8 +922,7 @@ static int crdma_alloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 	int err;
 
-	pd->pd_index = crdma_alloc_bitmap_index(&dev->pd_map);
-	if (pd->pd_index < 0) {
+	if (crdma_alloc_bitmap_index(&dev->pd_map, &pd->pd_index)) {
 		return -ENOMEM;
 	}
 
@@ -951,8 +950,7 @@ static struct ib_pd *crdma_alloc_pd(struct ib_device *ibdev,
 	if (!pd)
 		return ERR_PTR(-ENOMEM);
 
-	pd->pd_index = crdma_alloc_bitmap_index(&dev->pd_map);
-	if (pd->pd_index < 0) {
+	if (crdma_alloc_bitmap_index(&dev->pd_map, &pd->pd_index)) {
 		err = -ENOMEM;
 		goto free_mem;
 	}
@@ -1293,12 +1291,14 @@ static int crdma_create_qp(struct ib_qp *qp,
 	}
 
 	/* Allocate resource index for the QP control object */
-	cqp->qp_index = qp_init_attr->qp_type == IB_QPT_GSI ?
-		CRDMA_QP1_INDEX : crdma_alloc_bitmap_index(&dev->qp_map);
-	if (cqp->qp_index < 0) {
-		crdma_warn("No QP index available\n");
-		err = -ENOMEM;
-		goto free_mem;
+	if (qp_init_attr->qp_type == IB_QPT_GSI) {
+		cqp->qp_index = CRDMA_QP1_INDEX;
+	} else {
+		if (crdma_alloc_bitmap_index(&dev->qp_map, &cqp->qp_index)) {
+			crdma_warn("No QP index available\n");
+			err = -ENOMEM;
+			goto free_mem;
+		}
 	}
 
 	/* Kernel always allocates QP memory, user contexts will mmap it */
@@ -1462,12 +1462,14 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 	}
 
 	/* Allocate resource index for the QP control object */
-	cqp->qp_index = qp_init_attr->qp_type == IB_QPT_GSI ?
-		CRDMA_QP1_INDEX : crdma_alloc_bitmap_index(&dev->qp_map);
-	if (cqp->qp_index < 0) {
-		crdma_warn("No QP index available\n");
-		err = -ENOMEM;
-		goto free_mem;
+	if (qp_init_attr->qp_type == IB_QPT_GSI) {
+		cqp->qp_index = CRDMA_QP1_INDEX;
+	} else {
+		if (crdma_alloc_bitmap_index(&dev->qp_map, &cqp->qp_index)) {
+			crdma_warn("No QP index available\n");
+			err = -ENOMEM;
+			goto free_mem;
+		}
 	}
 
 	/* Kernel always allocates QP memory, user contexts will mmap it */
@@ -2214,8 +2216,7 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 #endif
 
 	/* Allocate resource index for the CQ control object */
-	ccq->cqn = crdma_alloc_bitmap_index(&dev->cq_map);
-	if (ccq->cqn < 0) {
+	if (crdma_alloc_bitmap_index(&dev->cq_map, &ccq->cqn)) {
 		crdma_warn("No CQ index available\n");
 		err = -ENOMEM;
 		goto free_mem;
@@ -2368,8 +2369,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 #endif
 
 	/* Allocate resource index for the CQ control object */
-	ccq->cqn = crdma_alloc_bitmap_index(&dev->cq_map);
-	if (ccq->cqn < 0) {
+	if (crdma_alloc_bitmap_index(&dev->cq_map, &ccq->cqn)) {
 		crdma_warn("No CQ index available\n");
 		err = -ENOMEM;
 		goto free_mem;
@@ -2700,8 +2700,7 @@ static struct ib_mr *crdma_get_dma_mr(struct ib_pd *pd, int access_flags)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	cmr->mpt_index = crdma_alloc_bitmap_index(&dev->mpt_map);
-	if (cmr->mpt_index < 0) {
+	if (crdma_alloc_bitmap_index(&dev->mpt_map, &cmr->mpt_index)) {
 		err = -ENOMEM;
 		goto free_mem;
 	}
@@ -2749,8 +2748,7 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	cmr->mpt_index = crdma_alloc_bitmap_index(&dev->mpt_map);
-	if (cmr->mpt_index < 0) {
+	if (crdma_alloc_bitmap_index(&dev->mpt_map, &cmr->mpt_index)) {
 		err = -ENOMEM;
 		goto free_mem;
 	}
@@ -2887,8 +2885,7 @@ static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 		}
 	}
 
-	cmr->mpt_index = crdma_alloc_bitmap_index(&cdev->mpt_map);
-	if (cmr->mpt_index < 0) {
+	if (crdma_alloc_bitmap_index(&cdev->mpt_map, &cmr->mpt_index)) {
 		err = -ENOMEM;
 		goto free_mtt;
 	}

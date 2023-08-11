@@ -74,18 +74,16 @@ void crdma_cleanup_bitmap(struct crdma_bitmap *bitmap)
 	return;
 }
 
-u32 crdma_alloc_bitmap_index(struct crdma_bitmap *bitmap)
+int crdma_alloc_bitmap_index(struct crdma_bitmap *bitmap, u32 *allocated_index)
 {
 	u32 index;
-	u32 range;
 
-	range = bitmap->max_index - bitmap->min_index + 1;
 	spin_lock(&bitmap->lock);
 
-	index = find_next_zero_bit(bitmap->map, range, bitmap->last_index);
-	if (index >= range)
-		index = find_first_zero_bit(bitmap->map, range);
-	if (index >= range)
+	index = find_next_zero_bit(bitmap->map, bitmap->num_bits, bitmap->last_index);
+	if (index >= bitmap->num_bits)
+		index = find_first_zero_bit(bitmap->map, bitmap->num_bits);
+	if (index >= bitmap->num_bits)
 		goto full;
 
 	set_bit(index, bitmap->map);
@@ -93,10 +91,12 @@ u32 crdma_alloc_bitmap_index(struct crdma_bitmap *bitmap)
 	index += bitmap->min_index;
 
 	spin_unlock(&bitmap->lock);
-	return index;
+
+	*allocated_index = index;
+	return 0;
 full:
 	spin_unlock(&bitmap->lock);
-	return -EAGAIN;
+	return -ENOMEM;
 }
 
 void crdma_free_bitmap_index(struct crdma_bitmap *bitmap, u32 index)
@@ -181,9 +181,9 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	sg_dma_len(mem->alloc) = mem->tot_len;
 	mem->num_sg = 1;
 	mem->num_mtt = 1;
-	mem->base_mtt_ndx = crdma_alloc_bitmap_index(&dev->mtt_map);
-	if (mem->base_mtt_ndx < 0)
+	if (crdma_alloc_bitmap_index(&dev->mtt_map, &mem->base_mtt_ndx)) {
 		goto alloc_err;
+	}
 
 	return 0;
 
@@ -330,8 +330,7 @@ void crdma_free_dma_mem(struct crdma_ibdev *dev, struct crdma_mem *mem)
 
 int crdma_alloc_uar(struct crdma_ibdev *dev, struct crdma_uar *uar)
 {
-	uar->index = crdma_alloc_bitmap_index(&dev->uar_map);
-	if (uar->index < 0)
+	if (crdma_alloc_bitmap_index(&dev->uar_map, &uar->index))
 		return -ENOMEM;
 	uar->map = NULL;
 	return 0;
