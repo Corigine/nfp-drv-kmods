@@ -2651,7 +2651,7 @@ static int crdma_poll_cq(struct ib_cq *cq, int num_entries,
 
 		ccq->consumer_cnt++;
 
-#if 1 /* Extra debug only */
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 		print_hex_dump(KERN_DEBUG, "CQE:", DUMP_PREFIX_OFFSET, 8, 1,
 			cqe, 32, 0);
 #endif
