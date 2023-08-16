@@ -186,10 +186,12 @@ nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
 #else
 	void *md_dst = NULL;
 #endif
+	bool vlan_insert, pad_cap, pad_align = false;
 	struct nfp_ipsec_offload offload_info;
+	unsigned long cur_phys, target_phys;
 	unsigned char *data;
-	bool vlan_insert;
 	u32 meta_id = 0;
+	u8 pad_len = 0;
 	int md_bytes;
 
 #ifdef CONFIG_NFP_NET_IPSEC
@@ -203,8 +205,11 @@ nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
 #endif
 
 	vlan_insert = skb_vlan_tag_present(skb) && (dp->ctrl & NFP_NET_CFG_CTRL_TXVLAN_V2);
+	pad_cap = !!(dp->ctrl_w1 & NFP_NET_CFG_CTRL_META_PAD);
+	cur_phys = virt_to_phys(skb->data);
 
-	if (!(md_dst || vlan_insert || *ipsec))
+	if (!(md_dst || vlan_insert || *ipsec) &&
+	    !(pad_cap && (cur_phys % cache_line_size())))
 		return 0;
 
 	md_bytes = sizeof(meta_id) +
@@ -212,15 +217,39 @@ nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
 		   (vlan_insert ? NFP_NET_META_VLAN_SIZE : 0) +
 		   (*ipsec ? NFP_NET_META_IPSEC_FIELD_SIZE : 0);
 
+	/* Determine whether padding is necessary. */
+	cur_phys -= md_bytes;
+	if (pad_cap && (cur_phys % cache_line_size()))
+		pad_align = true;
+
+	/* Determine padding len such that skb->data is cache aligned. */
+	if (pad_align) {
+		md_bytes += NFP_NET_META_PAD_SIZE;
+		cur_phys -= NFP_NET_META_PAD_SIZE;
+		target_phys = ALIGN_DOWN(cur_phys, cache_line_size());
+		pad_len = cur_phys - target_phys;
+		md_bytes += pad_len;
+	}
+
 	if (unlikely(skb_cow_head(skb, md_bytes)))
 		return -ENOMEM;
 
 	data = skb_push(skb, md_bytes) + md_bytes;
+
+	if (pad_align) {
+		data -= pad_len;
+		memset(data, 0, pad_len);
+		data -= NFP_NET_META_PAD_SIZE;
+		*data = pad_len;
+		meta_id <<= NFP_NET_META_FIELD_SIZE;
+		meta_id |= NFP_NET_META_PAD;
+	}
 #ifdef COMPAT__HAVE_METADATA_IP_TUNNEL
 	if (md_dst) {
 		data -= NFP_NET_META_PORTID_SIZE;
 		put_unaligned_be32(md_dst->u.port_info.port_id, data);
-		meta_id = NFP_NET_META_PORTID;
+		meta_id <<= NFP_NET_META_FIELD_SIZE;
+		meta_id |= NFP_NET_META_PORTID;
 	}
 #endif
 	if (vlan_insert) {
