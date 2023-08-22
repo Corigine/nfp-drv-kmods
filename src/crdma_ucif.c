@@ -1036,20 +1036,26 @@ free_mbox:
 
 int crdma_query_nic(struct crdma_ibdev *dev, uint32_t *boardid)
 {
+	struct crdma_cmd_mbox out_mbox;
 	struct crdma_cmd cmd;
 	int status;
+	uint32_t val;
 
 	memset(&cmd, 0, sizeof(cmd));
+	if (crdma_init_mailbox(dev, &out_mbox))
+		return -1;
 
 	cmd.opcode = CRDMA_CMD_QUERY_NIC;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
-	cmd.output_imm = true;
+	cmd.output_param = out_mbox.dma_addr;
 
 	status = crdma_cmd(dev, &cmd);
 	if (status == CRDMA_STS_OK) {
-		*boardid = cmd.output_param & 0x0FFFFFFFFull;
+		memcpy(&val, out_mbox.buf, sizeof(val));
+		*boardid = le32_to_cpu(val);
 	}
 
+	crdma_cleanup_mailbox(dev, &out_mbox);
 	return status;
 }
 
