@@ -519,9 +519,9 @@ err_flush:
  */
 static void nfp_nfdk_tx_complete(struct nfp_net_tx_ring *tx_ring, int budget)
 {
+	u32 done_pkts = 0, done_bytes = 0, tot_md_bytes = 0;
 	struct nfp_net_r_vector *r_vec = tx_ring->r_vec;
 	struct nfp_net_dp *dp = &r_vec->nfp_net->dp;
-	u32 done_pkts = 0, done_bytes = 0;
 	struct nfp_nfdk_tx_buf *ktxbufs;
 	struct device *dev = dp->dev;
 	struct netdev_queue *nd_q;
@@ -542,12 +542,17 @@ static void nfp_nfdk_tx_complete(struct nfp_net_tx_ring *tx_ring, int budget)
 	ktxbufs = tx_ring->ktxbufs;
 
 	while (todo > 0) {
+		struct nfp_nfdk_tx_desc *md_desc;
 		const skb_frag_t *frag, *fend;
 		unsigned int size, n_descs = 1;
 		struct nfp_nfdk_tx_buf *txbuf;
 		struct sk_buff *skb;
+		u32 md_bytes = 0;
+		u64 metadata;
+		u32 idx;
 
-		txbuf = &ktxbufs[D_IDX(tx_ring, rd_p)];
+		idx = D_IDX(tx_ring, rd_p);
+		txbuf = &ktxbufs[idx];
 		skb = txbuf->skb;
 		txbuf++;
 
@@ -575,12 +580,26 @@ static void nfp_nfdk_tx_complete(struct nfp_net_tx_ring *tx_ring, int budget)
 			txbuf++;
 		}
 
+		/* Metadata descriptor indicates whether metadata was added. */
+		md_desc = &tx_ring->ktxds[idx + n_descs - 1];
+		metadata = le64_to_cpu(md_desc->raw);
+		if (metadata & NFDK_DESC_TX_CHAIN_META) {
+			/* Get metadata size from skb. */
+			u32 meta_id = get_unaligned_be32(skb->data);
+			md_bytes = FIELD_GET(NFDK_META_LEN, meta_id);
+		}
+
 		if (!skb_is_gso(skb)) {
 			done_bytes += skb->len;
 			done_pkts++;
+			tot_md_bytes += md_bytes;
 		} else {
 			done_bytes += txbuf->real_len;
 			done_pkts += txbuf->pkt_cnt;
+			/* metadata size needs to be removed for each packet
+			 * due to nfp_nfdk_tx_tso over counting.
+			 */
+			tot_md_bytes += txbuf->pkt_cnt * md_bytes;
 			n_descs++;
 		}
 
@@ -594,7 +613,7 @@ next:
 	tx_ring->qcp_rd_p = qcp_rd_p;
 
 	u64_stats_update_begin(&r_vec->tx_sync);
-	r_vec->tx_bytes += done_bytes;
+	r_vec->tx_bytes += done_bytes - tot_md_bytes;
 	r_vec->tx_pkts += done_pkts;
 	u64_stats_update_end(&r_vec->tx_sync);
 
