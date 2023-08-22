@@ -566,7 +566,9 @@ int crdma_set_av(struct ib_pd *pd,
 	av->service_level = ah_attr->sl;
 	av->s_gid_ndx     = grh->sgid_index;
 	av->hop_limit     = grh->hop_limit;
-	av->traffic_class = grh->traffic_class;
+	/* Fill ecn field to lowest 2-bits */
+	av->traffic_class = ((grh->traffic_class & 0xFC) |
+				(dcqcn_enable ? 0x2 : 0x0));
 
 	/* Always swap to account for hardware bus swap */
 	av->flow_label    = __swab32(grh->flow_label);

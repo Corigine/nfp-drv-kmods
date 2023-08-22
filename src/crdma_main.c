@@ -78,7 +78,7 @@ MODULE_PARM_DESC(have_interrupts, "During bring-up, allows selective use of "
  * DCQCN is a typical congestion control protocol used for RoCEv2,
  * which can promote RoCEv2's performance when traffic crowds.
 */
-static bool dcqcn_enable = false;
+bool dcqcn_enable = false;
 module_param(dcqcn_enable, bool, 0444);
 MODULE_PARM_DESC(dcqcn_enable, "During bring-up, allows selective use of "
 		"setting dcqcn enable (default: false)");

@@ -83,7 +83,9 @@ struct crdma_ib_create_ah_resp {
 	__u8   v_id;                    /* VLAN is valid or not */
 	__u8   gid_type;
 	__u8   d_mac[6];
-	__u8   rsvd[6];
+	__u8   traffic_class;           /* Used for Traffic class */
+	__u8   rsvd[5];
 };
 
+extern bool dcqcn_enable;
 #endif /* CRDMA_ABI_H */

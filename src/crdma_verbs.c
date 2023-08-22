@@ -1013,6 +1013,7 @@ static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr
 		resp.v_id     = cah->av.v_id;
 		resp.gid_type = cah->av.gid_type;
 		memcpy(resp.d_mac, cah->av.d_mac, ETH_ALEN);
+		resp.traffic_class = cah->av.traffic_class;
 
 		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
 		if (err)
@@ -1049,6 +1050,7 @@ static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 		resp.v_id     = cah->av.v_id;
 		resp.gid_type = cah->av.gid_type;
 		memcpy(resp.d_mac, cah->av.d_mac, ETH_ALEN);
+		resp.traffic_class = cah->av.traffic_class;
 
 		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
 		if (err)
