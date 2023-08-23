@@ -1074,6 +1074,12 @@ int nfp_net_pf_get_app_id(struct nfp_pf *pf)
 					  NFP_APP_CORE_NIC);
 }
 
+static int nfp_net_pf_get_pf0_app_id(struct nfp_pf *pf)
+{
+	return nfp_pf_rtsym_read_optional(pf, "_pf0_net_app_id",
+					  NFP_APP_CORE_NIC);
+}
+
 static u64 nfp_net_pf_get_app_cap(struct nfp_pf *pf)
 {
 	char name[32];
@@ -1236,6 +1242,18 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 	if (!pf->mip)
 		pf->mip = nfp_mip_open(pf->cpp);
 	pf->rtbl = __nfp_rtsym_table_read(pf->cpp, pf->mip);
+
+	/* Currently disa for pf1 is not supported, Skip driver loading when app is
+	   flower on pf that is not pf0. Since app_id for pf1 is not available, so
+	   we read app_id for pf0 instead.
+	*/
+	if (pf->multi_pf.id != 0 &&
+	    nfp_net_pf_get_pf0_app_id(pf) == NFP_APP_FLOWER_NIC) {
+		dev_info(&pdev->dev,
+			 "Currently FLOWER is unsupported on PF%u, skip loading\n",
+			 pf->multi_pf.id);
+		goto err_fw_unload;
+	}
 
 	err = nfp_pf_find_rtsyms(pf);
 	if (err)
