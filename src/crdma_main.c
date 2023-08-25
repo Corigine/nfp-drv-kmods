@@ -133,9 +133,9 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	crdma_dev_info(dev, "UCode firmware:%d.%d\n",
 			dev->cap.uc_maj_rev, dev->cap.uc_min_rev);
 #endif
-	cap = kmalloc(sizeof(*cap), GFP_KERNEL);
+	cap = kzalloc(sizeof(*cap), GFP_KERNEL);
 	if (!cap) {
-		crdma_dev_warn(dev, "kmalloc failure\n");
+		crdma_dev_warn(dev, "kzalloc failure\n");
 		return -ENOMEM;
 	}
 
@@ -582,9 +582,9 @@ static ssize_t exec_command(struct device *device,
 		err = crdma_query_ucode(dev, &ucode_attr);
 		break;
 	case CRDMA_CMD_QUERY_DEV_CAP:
-		cap = kmalloc(sizeof(*cap), GFP_KERNEL);
+		cap = kzalloc(sizeof(*cap), GFP_KERNEL);
 		if (!cap) {
-			crdma_info("kmalloc failure\n");
+			crdma_info("kzalloc failure\n");
 			return -ENOMEM;
 		}
 		err = crdma_query_dev_cap(dev, cap);
@@ -920,7 +920,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		crdma_err("IB device allocation failed\n");
 		return NULL;
 	}
-	dev->nfp_info = kmalloc(size, GFP_KERNEL);
+	dev->nfp_info = kzalloc(size, GFP_KERNEL);
 	if (!dev->nfp_info) {
 		crdma_err("NFP Information memory allocation failed\n");
 		goto err_free_dev;

@@ -92,7 +92,7 @@ static int crdma_add_mmap_req(struct crdma_ucontext *uctxt, u64 paddr,
 	crdma_info("Add a mmap_req: 0x%016llX, length: %lld\n",
 			paddr, length);
 #endif
-	req = kmalloc(sizeof(*req), GFP_KERNEL);
+	req = kzalloc(sizeof(*req), GFP_KERNEL);
 	if (!req)
 		return -ENOMEM;
 
@@ -803,7 +803,7 @@ static struct ib_ucontext * crdma_alloc_ucontext(struct ib_device *ibdev,
 	 */
 	resp.max_qp = dev->cap.ib.max_qp - dev->cap.rsvd_qp;
 
-	crdma_uctxt = kmalloc(sizeof(*crdma_uctxt), GFP_KERNEL);
+	crdma_uctxt = kzalloc(sizeof(*crdma_uctxt), GFP_KERNEL);
 	if (!crdma_uctxt)
 		return ERR_PTR(-ENOMEM);
 
@@ -946,7 +946,7 @@ static struct ib_pd *crdma_alloc_pd(struct ib_device *ibdev,
 	struct crdma_pd *pd;
 	int err;
 
-	pd = kmalloc(sizeof(*pd), GFP_KERNEL);
+	pd = kzalloc(sizeof(*pd), GFP_KERNEL);
 	if (!pd)
 		return ERR_PTR(-ENOMEM);
 
@@ -2696,7 +2696,7 @@ static struct ib_mr *crdma_get_dma_mr(struct ib_pd *pd, int access_flags)
 	struct crdma_mr *cmr;
 	int err;
 
-	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
+	cmr = kzalloc(sizeof(*cmr), GFP_KERNEL);
 	if (!cmr) {
 		crdma_info("No memory for MR object\n");
 		return ERR_PTR(-ENOMEM);
@@ -2744,7 +2744,7 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 	int count, num_comp, shift, order, log2_page_sz;
 	int err;
 
-	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
+	cmr = kzalloc(sizeof(*cmr), GFP_KERNEL);
 	if (!cmr) {
 		crdma_warn("No memory for MR object\n");
 		return ERR_PTR(-ENOMEM);
@@ -2871,7 +2871,7 @@ static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 		return ERR_PTR(-EINVAL);
 	}
 
-	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
+	cmr = kzalloc(sizeof(*cmr), GFP_KERNEL);
 	if (!cmr) {
 		crdma_err("No memory for MR object\n");
 		return ERR_PTR(-ENOMEM);

@@ -51,7 +51,7 @@ int crdma_init_bitmap(struct crdma_bitmap *bitmap, u32 min, u32 max)
 	size_t	size;
 
 	size = BITS_TO_LONGS(max - min + 1) * sizeof(long);
-	bitmap->map = kmalloc(size, GFP_KERNEL);
+	bitmap->map = kzalloc(size, GFP_KERNEL);
 	if (!bitmap->map) {
 		crdma_warn("Unable to allocate bitmap\n");
 		return -ENOMEM;
