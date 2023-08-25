@@ -7,8 +7,10 @@
 #include <linux/module.h>
 #include <linux/rtnetlink.h>
 
+#include "nfp_main.h"
 #include "nfp_net.h"
 #include "nfp_net_dp.h"
+#include "nfpcore/nfp_cpp.h"
 
 static struct dentry *nfp_dir;
 
@@ -171,7 +173,64 @@ void nfp_net_debugfs_vnic_add(struct nfp_net *nn, struct dentry *ddir)
 	}
 }
 
-struct dentry *nfp_net_debugfs_device_add(struct pci_dev *pdev)
+static ssize_t nfp_dev_cpp_read_state(struct file *file, char __user *buffer,
+				      size_t count, loff_t *ppos)
+{
+	struct nfp_pf *pf = file->private_data;
+	int bytes_not_copied;
+	char buf[8];
+	int len;
+
+	/* don't allow partial reads */
+	if (*ppos != 0)
+		return 0;
+
+	/* Return boolean state to user */
+	len = snprintf(buf, sizeof(buf), "%u\n", !!pf->nfp_dev_cpp);
+	bytes_not_copied = copy_to_user(buffer, buf, len);
+
+	if (bytes_not_copied)
+		return -EFAULT;
+
+	*ppos = len;
+	return len;
+}
+
+static ssize_t nfp_dev_cpp_set_state(struct file *file,
+				     const char __user *buffer,
+				     size_t count, loff_t *ppos)
+{
+	struct nfp_pf *pf = file->private_data;
+	bool cpp_requested;
+	int err;
+
+	/* Don't allow partial writes */
+	if (*ppos != 0)
+		return 0;
+
+	err = kstrtobool_from_user(buffer, count, &cpp_requested);
+	if (err)
+		return err;
+
+	if (cpp_requested && !pf->nfp_dev_cpp) {
+		pf->nfp_dev_cpp = nfp_platform_device_register(pf->cpp, NFP_DEV_CPP_TYPE);
+	} else if (!cpp_requested && pf->nfp_dev_cpp) {
+		nfp_platform_device_unregister(pf->nfp_dev_cpp);
+		pf->nfp_dev_cpp = NULL;
+	}
+
+	return count;
+}
+
+static const struct file_operations nfp_dev_cpp_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.read = nfp_dev_cpp_read_state,
+	.write = nfp_dev_cpp_set_state,
+};
+
+struct dentry *nfp_net_debugfs_device_add(struct pci_dev *pdev,
+					  struct nfp_pf *pf)
 {
 	struct dentry *dev_dir;
 
@@ -181,6 +240,10 @@ struct dentry *nfp_net_debugfs_device_add(struct pci_dev *pdev)
 	dev_dir = debugfs_create_dir(pci_name(pdev), nfp_dir);
 	if (IS_ERR_OR_NULL(dev_dir))
 		return NULL;
+
+	if (pf)
+		debugfs_create_file("nfp_dev_cpp", 0600, dev_dir, pf,
+				    &nfp_dev_cpp_fops);
 
 	return dev_dir;
 }

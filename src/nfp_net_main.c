@@ -906,7 +906,7 @@ int nfp_net_pci_probe(struct nfp_pf *pf)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 	devl_lock(devlink);
 #endif
-	pf->ddir = nfp_net_debugfs_device_add(pf->pdev);
+	pf->ddir = nfp_net_debugfs_device_add(pf->pdev, pf);
 
 	/* Allocate the vnics and do basic init */
 	err = nfp_net_pf_alloc_vnics(pf, ctrl_bar, qc_bar, stride);

@@ -272,7 +272,7 @@ static int nfp_netvf_pci_probe(struct pci_dev *pdev,
 		goto err_irqs_disable;
 
 	nfp_net_info(nn);
-	vf->ddir = nfp_net_debugfs_device_add(pdev);
+	vf->ddir = nfp_net_debugfs_device_add(pdev, NULL);
 	nfp_net_debugfs_vnic_add(nn, vf->ddir);
 
 	return 0;

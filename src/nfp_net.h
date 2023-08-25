@@ -115,6 +115,7 @@
 #endif
 
 /* Forward declarations */
+struct nfp_pf;
 struct nfp_cpp;
 struct nfp_dev_info;
 struct nfp_dp_ops;
@@ -1067,7 +1068,7 @@ int nfp_net_fs_del_hw(struct nfp_net *nn, struct nfp_fs_entry *entry);
 #ifdef CONFIG_NFP_DEBUG
 void nfp_net_debugfs_create(void);
 void nfp_net_debugfs_destroy(void);
-struct dentry *nfp_net_debugfs_device_add(struct pci_dev *pdev);
+struct dentry *nfp_net_debugfs_device_add(struct pci_dev *pdev, struct nfp_pf *pf);
 void nfp_net_debugfs_vnic_add(struct nfp_net *nn, struct dentry *ddir);
 void nfp_net_debugfs_dir_clean(struct dentry **dir);
 #else

@@ -694,6 +694,22 @@ static inline int compat_kstrtol(const char *cp, int base, long *valp)
 #define kstrtol(cp, base, valp) compat_kstrtol(cp, base, valp)
 #endif
 
+#if VER_NON_RHEL_LT(4, 6) || VER_RHEL_LT(7, 4)
+static inline
+int compat_kstrtobool_from_user(const char __user *s, size_t count, bool *res)
+{
+	/* Longest string needed to differentiate, newline, terminator */
+	char buf[4];
+
+	count = min(count, sizeof(buf) - 1);
+	if (copy_from_user(buf, s, count))
+		return -EFAULT;
+	buf[count] = '\0';
+	return strtobool(buf, res);
+}
+#define kstrtobool_from_user(s, count, res) compat_kstrtobool_from_user(s, count, res)
+#endif /* VER_NON_RHEL_LT(4, 6) || VER_RHEL_LT(7, 4) */
+
 /* v3.17.0
  * do_getttimeofday() moved from linux/time.h to linux/timekeeping.h
  */
