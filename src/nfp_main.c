@@ -1416,6 +1416,8 @@ void nfp_pci_error_reset_prepare(struct pci_dev *dev)
 	struct nfp_pf *pf = pci_get_drvdata(dev);
 
 	if (pf) {
+		struct nfp_net *nn;
+
 		if (pf->multi_pf.en && pf->multi_pf.beat_addr) {
 			u8 __iomem *addr;
 
@@ -1427,15 +1429,35 @@ void nfp_pci_error_reset_prepare(struct pci_dev *dev)
 			addr = pf->multi_pf.beat_addr + ((pf->multi_pf.id + 1) << 3);
 			writeq(jiffies, addr);
 		}
+
+		list_for_each_entry(nn, &pf->vnics, vnic_list) {
+			if (nn->dp.netdev && nn->dp.netdev->flags & IFF_UP) {
+				struct net_device *netdev = nn->dp.netdev;
+
+				netdev->netdev_ops->ndo_stop(netdev);
+			}
+		}
 	}
 }
 void nfp_pci_error_reset_done(struct pci_dev *dev)
 {
 	struct nfp_pf *pf = pci_get_drvdata(dev);
 
-	if (pf)
+	if (pf) {
+		struct nfp_net *nn;
+
+		list_for_each_entry(nn, &pf->vnics, vnic_list) {
+			if (nn->dp.netdev && nn->dp.netdev->flags & IFF_UP) {
+				struct net_device *netdev = nn->dp.netdev;
+
+				rtnl_lock();
+				netdev->netdev_ops->ndo_open(netdev);
+				rtnl_unlock();
+			}
+		}
 		if (pf->multi_pf.en && pf->multi_pf.beat_addr)
 			add_timer(&pf->multi_pf.beat_timer);
+	}
 }
 
 static const struct pci_error_handlers nfp_pci_err_handler = {
