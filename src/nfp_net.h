@@ -110,6 +110,10 @@
 #define NFP_NET_RX_BUF_NON_DATA	(NFP_NET_RX_BUF_HEADROOM +		\
 				 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 
+#ifdef CONFIG_NFP_ROCE
+#define NFP_NET_MAX_ROCE_VECTORS        8
+#endif
+
 /* Forward declarations */
 struct nfp_cpp;
 struct nfp_dev_info;
@@ -125,6 +129,10 @@ struct nfp_nfd3_tx_buf;
 
 struct nfp_nfdk_tx_desc;
 struct nfp_nfdk_tx_buf;
+
+#ifdef CONFIG_NFP_ROCE
+struct nfp_roce;
+#endif
 
 /* Convenience macro for wrapping descriptor index on ring size */
 #define D_IDX(ring, idx)	((idx) & ((ring)->cnt - 1))
@@ -638,6 +646,9 @@ struct nfp_net_dp {
  * @mbox_amsg.list:	List of message to process
  * @mbox_amsg.work:	Work to process message asynchronously
  * @app_priv:		APP private data for this vNIC
+ * @roce:		Pointer to RoCE information of VNIC
+ * @num_roce_vecs:	Number of interrupt vectors for RoCE
+ * @roce_irq_entries:	MSIX entries for RoCE
  */
 struct nfp_net {
 	struct nfp_net_dp dp;
@@ -751,6 +762,12 @@ struct nfp_net {
 		struct list_head list;
 		struct work_struct work;
 	} mbox_amsg;
+
+#ifdef CONFIG_NFP_ROCE
+	struct nfp_roce *roce;
+	u8 num_roce_vecs;
+	struct msix_entry roce_irq_entries[NFP_NET_MAX_ROCE_VECTORS];
+#endif
 
 	void *app_priv;
 };

@@ -273,6 +273,7 @@
 #define   NFP_NET_CFG_CTRL_MULTI_PF	  (0x1 << 5) /* Multi PF */
 #define   NFP_NET_CFG_CTRL_FREELIST_EN	  (0x1 << 6) /* Freelist enable flag bit */
 #define   NFP_NET_CFG_CTRL_META_PAD	  (0x1 << 7) /* Metadata padding */
+#define   NFP_NET_CFG_CTRL_ROCEV2	  (0x1 << 9) /* ROCEV2 offload */
 
 #define NFP_NET_CFG_CAP_WORD1		0x00a4
 

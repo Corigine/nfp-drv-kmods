@@ -108,6 +108,8 @@ struct nfp_dumpspec {
  * @db_iomem:		Pointer to mapped doorbell space
  * @db_phys:		Physical base address of doorbell space
  * @db_size:		Size of doorbell space
+ * @roce_command_area:  Pointer to CPP area for RoCE command interface
+ * @roce_cmdif:         Pointer to IO address for RoCE command interface
  */
 struct nfp_pf {
 	struct pci_dev *pdev;
@@ -189,7 +191,12 @@ struct nfp_pf {
 	phys_addr_t db_phys;
 	size_t db_size;
 #endif
+#ifdef CONFIG_NFP_ROCE
+	struct nfp_cpp_area *roce_command_area;
+	void __iomem *roce_cmdif;
+#endif
 };
+
 
 extern int nfp_dev_cpp;
 extern bool nfp_net_vnic;

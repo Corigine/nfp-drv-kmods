@@ -19,6 +19,7 @@
 #include <linux/pci_regs.h>
 #include <linux/random.h>
 #include <linux/rtnetlink.h>
+#include <linux/module.h>
 
 #include "nfpcore/nfp.h"
 #include "nfpcore/nfp_cpp.h"
@@ -33,7 +34,19 @@
 #include "nfp_main.h"
 #include "nfp_port.h"
 
+#include "nfpcore/nfp_roce.h"
+
 #define NFP_PF_CSR_SLICE_SIZE	(32 * 1024)
+
+#ifdef CONFIG_NFP_ROCE
+unsigned int nfp_roce_ints_num = 4;
+module_param(nfp_roce_ints_num, uint, 0444);
+MODULE_PARM_DESC(nfp_roce_ints_num, "Number of RoCE interrupt vectors (default 4)");
+
+bool nfp_roce_enabled;
+module_param(nfp_roce_enabled, bool, 0444);
+MODULE_PARM_DESC(nfp_roce_enabled, "Enable RoCE interface registration (default = False)");
+#endif
 
 /**
  * nfp_net_get_mac_addr() - Get the MAC address.
@@ -171,6 +184,8 @@ nfp_net_pf_init_vnic(struct nfp_pf *pf, struct nfp_net *nn, unsigned int id)
 #else
 			goto err_debugfs_vnic_clean;
 #endif
+		if (nfp_net_add_roce(pf, nn))
+			nn_warn(nn, "Unable to export device for RoCE\n");
 	}
 
 	return 0;
@@ -244,11 +259,15 @@ static int nfp_net_pf_alloc_irqs(struct nfp_pf *pf)
 {
 	unsigned int wanted_irqs, num_irqs, vnics_left, irqs_left;
 	struct nfp_net *nn;
+	unsigned int roce_wanted_vecs;
 
 	/* Get MSI-X vectors */
 	wanted_irqs = 0;
-	list_for_each_entry(nn, &pf->vnics, vnic_list)
+	list_for_each_entry(nn, &pf->vnics, vnic_list) {
 		wanted_irqs += NFP_NET_NON_Q_VECTORS + nn->dp.num_r_vecs;
+		roce_wanted_vecs = nfp_roce_irqs_wanted();
+		wanted_irqs += roce_wanted_vecs;
+	}
 	pf->irq_entries = kcalloc(wanted_irqs, sizeof(*pf->irq_entries),
 				  GFP_KERNEL);
 	if (!pf->irq_entries)
@@ -274,6 +293,10 @@ static int nfp_net_pf_alloc_irqs(struct nfp_pf *pf)
 		nfp_net_irqs_assign(nn, &pf->irq_entries[num_irqs - irqs_left],
 				    n);
 		irqs_left -= n;
+		roce_wanted_vecs = nfp_roce_irqs_wanted();
+		nfp_roce_irqs_assign(nn, &pf->irq_entries[num_irqs - irqs_left],
+			roce_wanted_vecs);
+		irqs_left -= roce_wanted_vecs;
 		vnics_left--;
 	}
 
@@ -470,6 +493,8 @@ static void nfp_net_pci_unmap_mem(struct nfp_pf *pf)
 		nfp_cpp_area_release_free(pf->mac_stats_bar);
 	nfp_cpp_area_release_free(pf->qc_area);
 	nfp_cpp_area_release_free(pf->data_vnic_bar);
+
+	nfp_roce_free_configure_resource(pf);
 }
 
 static int nfp_net_pci_map_mem(struct nfp_pf *pf)
@@ -533,6 +558,13 @@ static int nfp_net_pci_map_mem(struct nfp_pf *pf)
 		nfp_err(pf->cpp, "Failed to map Queue Controller area.\n");
 		err = PTR_ERR(mem);
 		goto err_unmap_vfcfg_tbl2;
+	}
+
+	if (nfp_roce_acquire_configure_resource(pf)) {
+		nfp_info(pf->cpp, "Failed to map RoCE configure resource.\n");
+		/* We do not return error here, nfp driver just help roce to
+		 * map resoure, if it failed, it still works as a normal nic.
+		 */
 	}
 
 	return 0;
@@ -946,6 +978,7 @@ void nfp_net_pci_remove(struct nfp_pf *pf)
 	list_for_each_entry_safe(nn, next, &pf->vnics, vnic_list) {
 		if (!nfp_net_is_data_vnic(nn))
 			continue;
+		nfp_net_remove_roce(nn);
 		nfp_net_pf_clean_vnic(pf, nn);
 		nfp_net_pf_free_vnic(pf, nn);
 	}
