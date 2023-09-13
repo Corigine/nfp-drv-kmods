@@ -15,6 +15,13 @@ CONFIG_NFP_NET_PF ?= y
 CONFIG_NFP_NET_VF ?= y
 # Include code for the Hardware Doorbell
 CONFIG_NFP_HARD_DB ?= y
+# Include code for the RoCE
+CONFIG_NFP_ROCE ?= y
+
+# RoCE dependes on Hardware Doorbell
+ifeq ($(CONFIG_NFP_ROCE),y)
+  CONFIG_NFP_HARD_DB := y
+endif
 
 ccflags-y := $(CFLAGS_EXTRA)
 
@@ -87,6 +94,14 @@ ccflags-y += -DCONFIG_NFP_DEBUG
 
 nfp-objs += \
 		nfp_net_debugfs.o
+endif
+
+# Select RoCE if forced from command line or kconfig
+ifeq ($(CONFIG_NFP_ROCE),y)
+ccflags-y += -DCONFIG_NFP_ROCE
+
+nfp-objs += \
+		nfpcore/nfp_roce.o
 endif
 
 # Select HARD Doorbell if forced from command line or kconfig
