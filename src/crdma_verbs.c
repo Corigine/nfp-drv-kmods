@@ -36,6 +36,7 @@
 #include <linux/errno.h>
 #include <linux/scatterlist.h>
 #include <linux/workqueue.h>
+#include <net/addrconf.h>
 #include <asm/byteorder.h>
 
 #include <rdma/ib_verbs.h>
