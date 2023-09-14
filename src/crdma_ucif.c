@@ -1498,7 +1498,7 @@ static void crdma_set_qp_ctrl(struct crdma_ibdev *dev,
 	if (qp->mem->num_mtt == 1 && (dev->cap.opt_flags &
 			CRDMA_DEV_CAP_FLAG_PHYS))
 		word = 1 << CRDMA_QP_CTRL_PHYS_BIT_SHIFT;
-	if (qp->sq_sig_type == IB_SIGNAL_ALL_WR)
+	if (qp->sq_sig_all)
 		word |= 1 << CRDMA_QP_CTRL_SIGALL_BIT_SHIFT;
 
 	/* Special QP are a anomaly, set QP1 and add GSI flag */

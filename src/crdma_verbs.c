@@ -1284,7 +1284,7 @@ static int crdma_create_qp(struct ib_qp *qp,
 	cqp->srqn = qp_init_attr->srq ?
 		to_crdma_srq(qp_init_attr->srq)->srq_index : 0;
 
-	cqp->sq_sig_type = qp_init_attr->sq_sig_type;
+	cqp->sq_sig_all = (qp_init_attr->sq_sig_type == IB_SIGNAL_ALL_WR) ? 1 : 0;
 
 	/* Set the actual number and sizes of the QP work requests */
 	err = crdma_qp_set_wq_sizes(dev, cqp, qp_init_attr);
@@ -1455,7 +1455,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 	cqp->srqn = qp_init_attr->srq ?
 		to_crdma_srq(qp_init_attr->srq)->srq_index : 0;
 
-	cqp->sq_sig_type = qp_init_attr->sq_sig_type;
+	cqp->sq_sig_all = (qp_init_attr->sq_sig_type == IB_SIGNAL_ALL_WR) ? 1 : 0;
 
 	/* Set the actual number and sizes of the QP work requests */
 	err = crdma_qp_set_wq_sizes(dev, cqp, qp_init_attr);
@@ -1728,7 +1728,7 @@ static int crdma_query_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	qp_attr->cap.max_send_wr = cqp->sq.wqe_cnt;
 	qp_attr->cap.max_send_sge = cqp->sq.max_sg;
 	qp_attr->cap.max_inline_data = cqp->max_inline;
-	qp_init_attr->sq_sig_type = cqp->sq_sig_type;
+	qp_init_attr->sq_sig_type = cqp->sq_sig_all ? IB_SIGNAL_ALL_WR : 0;
 	qp_init_attr->qp_type = cqp->ib_qp.qp_type;
 	qp_init_attr->cap = qp_attr->cap;
 out:
@@ -2042,7 +2042,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		owner.flags  = flags |
 				(wr->send_flags & IB_SEND_FENCE ?
 				 CRDMA_WQE_CTRL_FENCE_BIT : 0) |
-				(wr->send_flags & IB_SEND_SIGNALED ?
+				(wr->send_flags & IB_SEND_SIGNALED || cqp->sq_sig_all ?
 				 CRDMA_WQE_CTRL_SIGNAL_BIT : 0) |
 				(wr->send_flags & IB_SEND_SOLICITED ?
 				 CRDMA_WQE_CTRL_SOLICITED_BIT : 0) |

@@ -240,7 +240,7 @@ struct crdma_qp {
 	int                     qp1_port;
 
 	enum ib_qp_state	qp_state;
-	enum ib_sig_type	sq_sig_type;
+	int			sq_sig_all;
 	u32                     max_inline;
 	u32			pdn;
 	u32			send_cqn;
