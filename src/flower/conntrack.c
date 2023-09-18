@@ -1241,6 +1241,13 @@ static int nfp_ct_do_nft_merge(struct nfp_fl_ct_zone_entry *zt,
 	list_add(&nft_m_entry->tc_merge_list, &tc_m_entry->children);
 	list_add(&nft_m_entry->nft_flow_list, &nft_entry->children);
 
+	if (!post_ct_entry->goto_chain_index)
+		err = nfp_fl_ct_add_offload(nft_m_entry);
+	else
+		err = nfp_fl_create_new_pre_ct(nft_m_entry);
+	if (err)
+		goto err_nft_ct_offload;
+
 	err = rhashtable_insert_fast(&zt->nft_merge_tb, &nft_m_entry->hash_node,
 				     nfp_nft_ct_merge_params);
 	if (err)
@@ -1248,20 +1255,14 @@ static int nfp_ct_do_nft_merge(struct nfp_fl_ct_zone_entry *zt,
 
 	zt->nft_merge_count++;
 
-	if (post_ct_entry->goto_chain_index > 0)
-		return nfp_fl_create_new_pre_ct(nft_m_entry);
-
-	/* Generate offload structure and send to nfp */
-	err = nfp_fl_ct_add_offload(nft_m_entry);
-	if (err)
-		goto err_nft_ct_offload;
-
 	return err;
 
-err_nft_ct_offload:
-	nfp_fl_ct_del_offload(zt->priv->app, nft_m_entry->tc_flower_cookie,
-			      nft_m_entry->netdev);
 err_nft_ct_merge_insert:
+	if (!post_ct_entry->goto_chain_index)
+		nfp_fl_ct_del_offload(zt->priv->app,
+				      nft_m_entry->tc_flower_cookie,
+				      nft_m_entry->netdev);
+err_nft_ct_offload:
 	list_del(&nft_m_entry->tc_merge_list);
 	list_del(&nft_m_entry->nft_flow_list);
 	kfree(nft_m_entry);
