@@ -1099,6 +1099,7 @@ static int nfp_fl_ct_add_offload(struct nfp_fl_nft_tc_merge *m_entry)
 	if (err)
 		goto ct_remove_rhash_err;
 
+	flow_pay->in_hw = true;
 	m_entry->tc_flower_cookie = flow_pay->tc_flower_cookie;
 	m_entry->flow_pay = flow_pay;
 
