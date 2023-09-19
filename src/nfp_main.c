@@ -701,6 +701,18 @@ nfp_get_fw_policy_value(struct pci_dev *pdev, struct nfp_nsp *nsp,
 	return err;
 }
 
+static u8 __iomem *
+nfp_get_beat_addr(struct nfp_pf *pf, int pf_id)
+{
+	/* Each PF has corresponding qword to beat:
+	 * offset | usage
+	 *   0    | magic number
+	 *   8    | beat qword of pf0
+	 *   16   | beat qword of pf1
+	 */
+	return pf->multi_pf.beat_addr + ((pf_id + 1) << 3);
+}
+
 static void
 #if VER_NON_RHEL_LT(4, 14) || VER_RHEL_LT(7, 6)
 nfp_nsp_beat_timer(unsigned long t)
@@ -709,16 +721,8 @@ nfp_nsp_beat_timer(struct timer_list *t)
 #endif
 {
 	struct nfp_pf *pf = from_timer(pf, t, multi_pf.beat_timer);
-	u8 __iomem *addr;
 
-	/* Each PF has corresponding qword to beat:
-	 * offset | usage
-	 *   0    | magic number
-	 *   8    | beat qword of pf0
-	 *   16   | beat qword of pf1
-	 */
-	addr = pf->multi_pf.beat_addr + ((pf->multi_pf.id + 1) << 3);
-	writeq(jiffies, addr);
+	writeq(jiffies, nfp_get_beat_addr(pf, pf->multi_pf.id));
 	/* Beat once per second. */
 	mod_timer(&pf->multi_pf.beat_timer, jiffies + HZ);
 }
@@ -775,28 +779,42 @@ nfp_nsp_keepalive_stop(struct nfp_pf *pf)
 	}
 }
 
+static u64
+nfp_get_sibling_beat(struct nfp_pf *pf)
+{
+	unsigned int i = 0;
+	u64 beat = 0;
+
+	if (!pf->multi_pf.beat_addr)
+		return 0;
+
+	for (; i < pf->dev_info->pf_num_per_unit; i++) {
+		if (i == pf->multi_pf.id)
+			continue;
+
+		beat += readq(nfp_get_beat_addr(pf, i));
+	}
+
+	return beat;
+}
+
 static bool
 nfp_skip_fw_load(struct nfp_pf *pf, struct nfp_nsp *nsp)
 {
-	const struct nfp_mip *mip;
+	unsigned long timeout = jiffies + HZ * 3;
+	u64 beat = nfp_get_sibling_beat(pf);
 
 	if (!pf->multi_pf.en || nfp_nsp_fw_loaded(nsp) <= 0)
 		return false;
 
-	mip = nfp_mip_open(pf->cpp);
-	if (!mip)
-		return false;
+	while (time_is_after_jiffies(timeout)) {
+		if (beat != nfp_get_sibling_beat(pf))
+			return true;
 
-	/* For the case that system boots from pxe, we need
-	 * reload FW if pxe FW is running.
-	 */
-	if (!strncmp(nfp_mip_name(mip), "pxe", 3)) {
-		nfp_mip_close(mip);
-		return false;
+		msleep(500);
 	}
 
-	pf->mip = mip;
-	return true;
+	return false;
 }
 
 /**
@@ -810,7 +828,7 @@ nfp_skip_fw_load(struct nfp_pf *pf, struct nfp_nsp *nsp)
 static int
 nfp_fw_load(struct pci_dev *pdev, struct nfp_pf *pf, struct nfp_nsp *nsp)
 {
-	bool do_reset, fw_loaded = false, fw_new = false;
+	bool do_reset, fw_loaded = false;
 	const struct firmware *fw = NULL;
 	int err, reset, policy, ifcs = 0;
 	char *token, *ptr;
@@ -891,30 +909,17 @@ nfp_fw_load(struct pci_dev *pdev, struct nfp_pf *pf, struct nfp_nsp *nsp)
 		}
 		dev_info(&pdev->dev, "Finished loading FW image\n");
 		fw_loaded = true;
-		fw_new = true;
 	} else if (policy != NFP_NSP_APP_FW_LOAD_DISK &&
 		   nfp_nsp_has_stored_fw_load(nsp)) {
-		err = nfp_nsp_load_stored_fw(nsp);
-
-		/* Same logic with loading from disk when multi-PF. Othewise:
-		 *
-		 * Don't propagate this error to stick with legacy driver
+		/* Don't propagate this error to stick with legacy driver
 		 * behavior, failure will be detected later during init.
-		 *
-		 * Don't flag the fw_loaded in this case since other devices
-		 * may reuse the firmware when configured this way.
 		 */
-		if (!err) {
+		if (!nfp_nsp_load_stored_fw(nsp))
 			dev_info(&pdev->dev, "Finished loading stored FW image\n");
 
-			if (pf->multi_pf.en)
-				fw_loaded = true;
-		} else {
-			if (pf->multi_pf.en)
-				dev_err(&pdev->dev, "Stored FW loading failed: %d\n", err);
-			else
-				err = 0;
-		}
+		/* Don't flag the fw_loaded in this case since other devices
+		 * may reuse the firmware when configured this way
+		 */
 	} else {
 		dev_warn(&pdev->dev, "Didn't load firmware, please update flash or reconfigure card\n");
 	}
@@ -928,16 +933,8 @@ exit_release_fw:
 	 */
 	if (err < 0)
 		nfp_nsp_keepalive_stop(pf);
-	else if (fw_loaded && ifcs == 1 && !pf->multi_pf.en)
+	else if (fw_loaded && ifcs == 1)
 		pf->unload_fw_on_remove = true;
-
-	/* Only setting magic number when fw is freshly loaded here. NSP
-	 * won't unload fw when heartbeat stops if the magic number is not
-	 * correct. It's used when firmware is preloaded and shouldn't be
-	 * unloaded when driver exits.
-	 */
-	if (fw_new && pf->multi_pf.en)
-		writeq(NFP_KEEPALIVE_MAGIC, pf->multi_pf.beat_addr);
 
 	return err < 0 ? err : fw_loaded;
 }
@@ -1022,6 +1019,12 @@ static void nfp_fw_unload(struct nfp_pf *pf)
 {
 	struct nfp_nsp *nsp;
 	int err;
+
+	if (pf->multi_pf.en && pf->multi_pf.beat_addr) {
+		/* NSP will unload firmware when no active PF exists. */
+		writeq(NFP_KEEPALIVE_MAGIC, pf->multi_pf.beat_addr);
+		return;
+	}
 
 	nsp = nfp_nsp_open(pf->cpp);
 	if (IS_ERR(nsp)) {
@@ -1239,8 +1242,7 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_sriov_remove;
 
-	if (!pf->mip)
-		pf->mip = nfp_mip_open(pf->cpp);
+	pf->mip = nfp_mip_open(pf->cpp);
 	pf->rtbl = __nfp_rtsym_table_read(pf->cpp, pf->mip);
 
 	/* Currently disa for pf1 is not supported, Skip driver loading when app is
@@ -1317,11 +1319,11 @@ err_dev_cpp_unreg:
 		nfp_platform_device_unregister(pf->nfp_dev_cpp);
 	compat_pci_sriov_reset_totalvfs(pf->pdev);
 err_fw_unload:
-	nfp_nsp_keepalive_stop(pf);
 	kfree(pf->rtbl);
 	nfp_mip_close(pf->mip);
 	if (pf->unload_fw_on_remove)
 		nfp_fw_unload(pf);
+	nfp_nsp_keepalive_stop(pf);
 	kfree(pf->eth_tbl);
 	kfree(pf->nspi);
 	vfree(pf->dumpspec);
@@ -1374,12 +1376,12 @@ static void __nfp_pci_shutdown(struct pci_dev *pdev, bool unload_fw)
 		nfp_platform_device_unregister(pf->nfp_net_vnic);
 
 	vfree(pf->dumpspec);
-	nfp_nsp_keepalive_stop(pf);
 	kfree(pf->rtbl);
 	nfp_mip_close(pf->mip);
 	if (unload_fw && pf->unload_fw_on_remove)
 		nfp_fw_unload(pf);
 
+	nfp_nsp_keepalive_stop(pf);
 	if (pf->nfp_dev_cpp)
 		nfp_platform_device_unregister(pf->nfp_dev_cpp);
 
