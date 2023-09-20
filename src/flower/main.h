@@ -346,6 +346,7 @@ struct nfp_flower_priv {
 	struct list_head predt_list;
 	struct rhashtable neigh_table;
 	spinlock_t predt_lock; /* Lock to serialise predt/neigh table updates */
+	struct mutex nfp_fl_lock; /* Protect the flow operation */
 };
 
 /**

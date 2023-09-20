@@ -1276,8 +1276,6 @@ int nfp_flower_merge_offloaded_flows(struct nfp_app *app,
 	u64 parent_ctx = 0;
 	int err;
 
-	ASSERT_RTNL();
-
 	if (sub_flow1 == sub_flow2 ||
 	    nfp_flower_is_merge_flow(sub_flow1) ||
 	    nfp_flower_is_merge_flow(sub_flow2))
@@ -2124,33 +2122,43 @@ nfp_flower_repr_offload(struct nfp_app *app, struct net_device *netdev,
 			compat__flow_cls_offload *flower)
 #endif
 {
+	struct nfp_flower_priv *priv = app->priv;
+	int ret;
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
 	if (!eth_proto_is_802_3(flower->common.protocol))
 		return -EOPNOTSUPP;
 #endif
-
+	mutex_lock(&priv->nfp_fl_lock);
 	switch (flower->command) {
 	case FLOW_CLS_REPLACE:
 #if VER_NON_RHEL_LT(5, 0)
-		return nfp_flower_add_offload(app, netdev, flower, egress);
+		ret = nfp_flower_add_offload(app, netdev, flower, egress);
 #else
-		return nfp_flower_add_offload(app, netdev, flower);
+		ret = nfp_flower_add_offload(app, netdev, flower);
 #endif
+		break;
 	case FLOW_CLS_DESTROY:
 #if VER_NON_RHEL_LT(5, 0)
-		return nfp_flower_del_offload(app, netdev, flower, egress);
+		ret = nfp_flower_del_offload(app, netdev, flower, egress);
 #else
-		return nfp_flower_del_offload(app, netdev, flower);
+		ret = nfp_flower_del_offload(app, netdev, flower);
 #endif
+		break;
 	case FLOW_CLS_STATS:
 #if VER_NON_RHEL_LT(5, 0)
-		return nfp_flower_get_stats(app, netdev, flower, egress);
+		ret = nfp_flower_get_stats(app, netdev, flower, egress);
 #else
-		return nfp_flower_get_stats(app, netdev, flower);
+		ret = nfp_flower_get_stats(app, netdev, flower);
 #endif
+		break;
 	default:
-		return -EOPNOTSUPP;
+		ret = -EOPNOTSUPP;
+		break;
 	}
+	mutex_unlock(&priv->nfp_fl_lock);
+
+	return ret;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
