@@ -1461,8 +1461,10 @@ void nfp_pci_error_reset_done(struct pci_dev *dev)
 }
 
 static const struct pci_error_handlers nfp_pci_err_handler = {
+#if VER_NON_RHEL_GE(4, 13) || VER_RHEL_GE(8, 0)
         .reset_prepare = nfp_pci_error_reset_prepare,
         .reset_done = nfp_pci_error_reset_done,
+#endif
 };
 
 static struct pci_driver nfp_pci_driver = {
