@@ -236,6 +236,10 @@ typedef struct flow_cls_offload compat__flow_cls_offload;
 	TCF_BLOCK_BINDER_TYPE_CLSACT_EGRESS
 #endif
 
+#ifndef ALIGN_DOWN
+#define ALIGN_DOWN(x, a)       __ALIGN_KERNEL((x) - ((a) - 1), (a))
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)
 typedef u32 netdev_features_t;
 
