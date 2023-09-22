@@ -1930,8 +1930,9 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 	int ret = 0;
 	u8 flags;
 	u32 qpn = cqp->qp_index;
+	unsigned long irq_flags;
 
-	spin_lock(&cqp->sq.lock);
+	spin_lock_irqsave(&cqp->sq.lock, irq_flags);
 	while (wr) {
 		if (wr->num_sge > cqp->sq.max_sg) {
 			crdma_warn("WR num_sge too large %d\n", wr->num_sge);
@@ -2091,7 +2092,7 @@ out:
 		set_wqe_sw_ownership(&cqp->sq, cqp->sq.tail +
 				     CRDMA_WQ_WQE_SPARES);
 	}
-	spin_unlock(&cqp->sq.lock);
+	spin_unlock_irqrestore(&cqp->sq.lock, irq_flags);
 
 	return 0;
 }
@@ -2136,8 +2137,9 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 	struct crdma_qp *cqp = to_crdma_qp(qp);
 	struct crdma_rwqe *rwqe;
 	int ret = 0;
+	unsigned long irq_flags;
 
-	spin_lock(&cqp->rq.lock);
+	spin_lock_irqsave(&cqp->rq.lock, irq_flags);
 	while(wr) {
 		if (wr->num_sge > cqp->rq.max_sg) {
 			crdma_warn("RQ work request SG entries too large %d\n",
@@ -2179,7 +2181,7 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 		cqp->rq.tail = (cqp->rq.tail + 1) & cqp->rq.mask;
 		wr = wr->next;
 	}
-	spin_unlock(&cqp->rq.lock);
+	spin_unlock_irqrestore(&cqp->rq.lock, irq_flags);
 
 	return ret;
 
