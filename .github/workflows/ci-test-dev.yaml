@@ -111,10 +111,11 @@ on:
           NFP architecture/OS on which to run tests
       bsp_ver:
         type: string
-        default: '23.04-0'
+        default: single_pf
         required: false
         description: >-
-          Which BSP version to install on the DUT and flash to the NFP
+          Which BSP version to install on the DUT and flash to the NFP. Specify
+          'single_pf' or 'multi_pf' or version such as '23.04-4'
       driver_source_ver:
         type: string
         default: 'release-23.07.1'
