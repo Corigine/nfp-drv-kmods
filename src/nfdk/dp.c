@@ -11,6 +11,7 @@
 #include <linux/overflow.h>
 #endif
 #include <linux/sizes.h>
+#include <linux/in.h>
 #include <net/xfrm.h>
 
 #include "../nfp_app.h"
@@ -289,6 +290,31 @@ nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
 	return NFDK_DESC_TX_CHAIN_META;
 }
 
+static void
+nfp_nfdk_align_first_frag(struct sk_buff *skb)
+{
+	unsigned long cur_phys, target_phys;
+	const skb_frag_t *frag;
+	unsigned int pull_len;
+
+	if (skb_shinfo(skb)->nr_frags == 0)
+		return;
+
+	/* Align the first skb fragment by moving data from the fragment
+	 * to the skb inline section.
+	 */
+	frag = &skb_shinfo(skb)->frags[0];
+	cur_phys = page_to_phys(skb_frag_page(frag)) + skb_frag_off(frag);
+	target_phys = ALIGN(cur_phys, cache_line_size());
+	pull_len = target_phys - cur_phys;
+	pull_len = min(pull_len, skb_frag_size(frag));
+
+	if (pull_len == 0)
+		return;
+
+	__pskb_pull_tail(skb, pull_len);
+}
+
 /**
  * nfp_nfdk_tx() - Main transmit entry point
  * @skb:    SKB to transmit
@@ -335,6 +361,14 @@ netdev_tx_t nfp_nfdk_tx(struct sk_buff *skb, struct net_device *netdev)
 	metadata = nfp_nfdk_prep_tx_meta(dp, nn->app, skb, &ipsec);
 	if (unlikely((int)metadata < 0))
 		goto err_flush;
+
+	/* Optimise jumbo TCP frames */
+	if (((eth_hdr(skb)->h_proto == htons(ETH_P_IP) && \
+	      ip_hdr(skb)->protocol == IPPROTO_TCP) || \
+	     (eth_hdr(skb)->h_proto == htons(ETH_P_IPV6) && \
+	      ipv6_hdr(skb)->nexthdr == IPPROTO_TCP)) && \
+	    skb->len > NFP_NET_DEFAULT_MTU)
+		nfp_nfdk_align_first_frag(skb);
 
 	if (unlikely(compat_ndo_features_check(nn, skb)))
 		goto err_flush;
