@@ -1820,7 +1820,7 @@ static int nfp_net_fs_from_ethtool(struct nfp_fs_entry *entry, struct ethtool_rx
 			return -EINVAL;
 	}
 
-	switch (fs->flow_type) {
+	switch (fs->flow_type & ~FLOW_RSS) {
 		case TCP_V4_FLOW:
 		case TCP_V6_FLOW:
 			entry->key.l4_proto = IPPROTO_TCP;
@@ -1850,13 +1850,15 @@ static int nfp_net_fs_check_existing(struct nfp_net *nn, struct nfp_fs_entry *ne
 	struct nfp_fs_entry *entry;
 
 	list_for_each_entry(entry, &nn->fs.list, node) {
-		if ((new->flow_type == entry->flow_type) &&
+		if ((new->loc != entry->loc) &&
+		    !((new->flow_type ^ entry->flow_type) & ~FLOW_RSS) &&
 		    !memcmp(&new->key, &entry->key, sizeof(new->key)) &&
 		    !memcmp(&new->msk, &entry->msk, sizeof(new->msk)))
 			return entry->loc;
 	}
 
-	return 0;
+	/* -1 means no duplicates */
+	return -1;
 }
 
 static int nfp_net_fs_add(struct nfp_net *nn, struct ethtool_rxnfc *cmd)
@@ -1932,7 +1934,7 @@ static int nfp_net_fs_add(struct nfp_net *nn, struct ethtool_rxnfc *cmd)
 	nfp_net_fs_from_ethtool(new, fs);
 
 	err = nfp_net_fs_check_existing(nn, new);
-	if (err) {
+	if (err >= 0) {
 		nn_err(nn, "Identical rule is existing in %d.\n", err);
 		err = -EINVAL;
 		goto err;
