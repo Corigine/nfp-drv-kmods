@@ -230,10 +230,12 @@ nfp_flower_repr_get_type_and_port(struct nfp_app *app, u32 port_id, u8 *port)
 	case NFP_FLOWER_CMSG_PORT_TYPE_PCIE_PORT:
 		*port = FIELD_GET(NFP_FLOWER_CMSG_PORT_VNIC, port_id);
 		if (FIELD_GET(NFP_FLOWER_CMSG_PORT_VNIC_TYPE, port_id) ==
-		    NFP_FLOWER_CMSG_PORT_VNIC_TYPE_PF)
+		    NFP_FLOWER_CMSG_PORT_VNIC_TYPE_PF) {
+			if (app->pf->multi_pf.en)
+				*port -= app->pf->multi_pf.id;
 			return NFP_REPR_TYPE_PF;
-		else
-			return NFP_REPR_TYPE_VF;
+		}
+		return NFP_REPR_TYPE_VF;
 	}
 
 	return __NFP_REPR_TYPE_MAX;
@@ -416,6 +418,12 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 		struct net_device *repr;
 		struct nfp_port *port;
 		u32 port_id;
+		int idx;
+
+		if (repr_type == NFP_REPR_TYPE_PF)
+			idx = app->pf->multi_pf.en ? app->pf->multi_pf.id : i;
+		else
+			idx = i;
 
 		repr = nfp_repr_alloc(app);
 		if (!repr) {
@@ -434,9 +442,6 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 		nfp_repr->app_priv = repr_priv;
 		repr_priv->nfp_repr = nfp_repr;
 
-		/* For now we only support 1 PF */
-		WARN_ON(repr_type == NFP_REPR_TYPE_PF && i);
-
 		port = nfp_port_alloc(app, port_type, repr);
 		if (IS_ERR(port)) {
 			err = PTR_ERR(port);
@@ -449,15 +454,14 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 			port->vnic = priv->nn->dp.ctrl_bar;
 		} else {
 			port->pf_id = app->pf->multi_pf.id;
-			port->vf_id = i;
+			port->vf_id = idx;
 			port->vnic =
-				app->pf->vf_cfg_mem + i * NFP_NET_CFG_BAR_SZ;
+				app->pf->vf_cfg_mem + idx * NFP_NET_CFG_BAR_SZ;
 		}
 
 		eth_hw_addr_random(repr);
+		port_id = nfp_flower_cmsg_pcie_port(nfp_pcie, vnic_type, idx, queue);
 
-		port_id = nfp_flower_cmsg_pcie_port(nfp_pcie, vnic_type,
-						    i, queue);
 		err = nfp_repr_init(app, repr,
 				    port_id, port, priv->nn->dp.netdev);
 		if (err) {
@@ -519,11 +523,13 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 	struct nfp_reprs *reprs;
 	unsigned int i;
 
-	ctrl_skb = nfp_flower_cmsg_mac_repr_start(app, eth_tbl->count);
+	phy_reprs_num = app->pf->multi_pf.en ? app->pf->max_data_vnics :
+	                eth_tbl->count;
+
+	ctrl_skb = nfp_flower_cmsg_mac_repr_start(app, phy_reprs_num);
 	if (!ctrl_skb)
 		return -ENOMEM;
 
-	phy_reprs_num = eth_tbl->count;
 	reprs = nfp_reprs_alloc(eth_tbl->max_index + 1);
 	if (!reprs) {
 		err = -ENOMEM;
@@ -531,7 +537,8 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 	}
 
 	for (i = 0; i < phy_reprs_num; i++) {
-		unsigned int phys_port = eth_tbl->ports[i].index;
+		int idx = app->pf->multi_pf.en ? app->pf->multi_pf.id : i;
+		unsigned int phys_port = eth_tbl->ports[idx].index;
 		struct net_device *repr;
 		struct nfp_port *port;
 		u32 cmsg_port_id;
@@ -560,7 +567,7 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 			nfp_repr_free(repr);
 			goto err_reprs_clean;
 		}
-		err = nfp_port_init_phy_port(app->pf, app, port, i);
+		err = nfp_port_init_phy_port(app->pf, app, port, idx);
 		if (err) {
 			kfree(repr_priv);
 			nfp_port_free(port);
@@ -581,9 +588,9 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 			goto err_reprs_clean;
 		}
 
-		nfp_flower_cmsg_mac_repr_add(ctrl_skb, i,
-					     eth_tbl->ports[i].nbi,
-					     eth_tbl->ports[i].base,
+		nfp_flower_cmsg_mac_repr_add(ctrl_skb, app->pf->multi_pf.en ? 0 : idx,
+					     eth_tbl->ports[idx].nbi,
+					     eth_tbl->ports[idx].base,
 					     phys_port);
 
 		RCU_INIT_POINTER(reprs->reprs[phys_port], repr);
