@@ -60,7 +60,16 @@ nfp_net_sriov_update(struct nfp_app *app, int vf, u16 update, const char *msg)
 	writeb(vf, app->pf->vfcfg_tbl2 + NFP_NET_VF_CFG_MB_VF_NUM);
 	writew(update, app->pf->vfcfg_tbl2 + NFP_NET_VF_CFG_MB_UPD);
 
-	nn = list_first_entry(&app->pf->vnics, struct nfp_net, vnic_list);
+	if (!nfp_app_needs_ctrl_vnic(app)) {
+		nn = list_first_entry(&app->pf->vnics, struct nfp_net, vnic_list);
+	} else {
+		/* we can not use ctrl vnic for sriov update */
+		list_for_each_entry(nn, &app->pf->vnics, vnic_list) {
+			if (nn != app->pf->ctrl_vnic)
+				break;
+		}
+	}
+
 	/* Signal VF reconfiguration */
 	ret = nfp_net_reconfig(nn, NFP_NET_CFG_UPDATE_VF);
 	if (ret)
