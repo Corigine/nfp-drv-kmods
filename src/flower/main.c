@@ -235,6 +235,9 @@ nfp_flower_repr_get_type_and_port(struct nfp_app *app, u32 port_id, u8 *port)
 				*port -= app->pf->multi_pf.id;
 			return NFP_REPR_TYPE_PF;
 		}
+
+		if (app->pf->multi_pf.en)
+			*port -= app->pf->multi_pf.vf_fid;
 		return NFP_REPR_TYPE_VF;
 	}
 
@@ -397,10 +400,10 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 			    enum nfp_flower_cmsg_port_vnic_type vnic_type,
 			    enum nfp_repr_type repr_type, unsigned int cnt)
 {
+	u8 nfp_pcie = nfp_cppcore_pcie_unit(app->pf->cpp);
 	struct nfp_flower_priv *priv = app->priv;
 	atomic_t *replies = &priv->reify_replies;
 	struct nfp_flower_repr_priv *repr_priv;
-	u8 nfp_pcie = nfp_get_pf_id(app->pf);
 	enum nfp_port_type port_type;
 	struct nfp_repr *nfp_repr;
 	struct nfp_reprs *reprs;
@@ -421,9 +424,9 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 		int idx;
 
 		if (repr_type == NFP_REPR_TYPE_PF)
-			idx = app->pf->multi_pf.en ? app->pf->multi_pf.id : i;
+			idx = app->pf->multi_pf.id;
 		else
-			idx = i;
+			idx = i + app->pf->multi_pf.vf_fid;
 
 		repr = nfp_repr_alloc(app);
 		if (!repr) {
@@ -454,9 +457,9 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 			port->vnic = priv->nn->dp.ctrl_bar;
 		} else {
 			port->pf_id = app->pf->multi_pf.id;
-			port->vf_id = idx;
+			port->vf_id = i;
 			port->vnic =
-				app->pf->vf_cfg_mem + idx * NFP_NET_CFG_BAR_SZ;
+				app->pf->vf_cfg_mem + i * NFP_NET_CFG_BAR_SZ;
 		}
 
 		eth_hw_addr_random(repr);
