@@ -230,6 +230,27 @@ nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
 		target_phys = ALIGN_DOWN(cur_phys, cache_line_size());
 		pad_len = cur_phys - target_phys;
 		md_bytes += pad_len;
+
+		/* Check if we have sufficient space for padding, metadata + headers
+		 * must be less than 256 bytes due to LSO descriptor definiton.
+		 */
+		if (skb_is_gso(skb)) {
+			u32 hdrlen;
+
+			if (!skb->encapsulation)
+				hdrlen = skb_transport_offset(skb) + tcp_hdrlen(skb);
+			else
+				hdrlen = skb_inner_transport_header(skb) - skb->data +
+					 inner_tcp_hdrlen(skb);
+
+			if ((hdrlen + md_bytes) >> 8) {
+				pad_align = false;
+				md_bytes -= pad_len + NFP_NET_META_PAD_SIZE;
+				if (md_bytes == sizeof(meta_id))
+					/* no other metadata */
+					return 0;
+			}
+		}
 	}
 
 	if (unlikely(skb_cow_head(skb, md_bytes)))
