@@ -2,7 +2,10 @@
 /* Copyright (C) 2017-2018 Netronome Systems, Inc. */
 
 #include <linux/etherdevice.h>
+#include <linux/netdevice.h>
 #include <linux/inetdevice.h>
+#include <linux/inet.h>
+#include <net/ip.h>
 #include <net/netevent.h>
 #include <linux/idr.h>
 #include <net/dst_metadata.h>
@@ -450,6 +453,44 @@ void nfp_tun_unlink_and_update_nn_entries(struct nfp_app *app,
 	}
 }
 
+/* Requires rcu_read_lock */
+static bool
+nfp_netdev_ip_matches(struct net_device *dev, __be32 *ipv4,
+		      struct in6_addr *ipv6)
+{
+	/* Check if IPv4 address is assigned to device. */
+	if (ipv4) {
+		struct in_device *in_dev;
+		struct in_ifaddr *ifa;
+
+		in_dev = __in_dev_get_rcu(dev);
+		if (!in_dev)
+			return false;
+
+		in_dev_for_each_ifa_rcu(ifa, in_dev) {
+			if (ifa->ifa_address && (*ipv4 == ifa->ifa_address))
+				return true;
+		}
+	}
+
+	/* Check if IPv6 address is assigned to device. */
+	if (ipv6) {
+		struct inet6_dev *in6_dev;
+		struct inet6_ifaddr *ifa6;
+
+		in6_dev = __in6_dev_get(dev);
+		if (!in6_dev)
+			return false;
+
+		list_for_each_entry_rcu(ifa6, &in6_dev->addr_list, if_list) {
+			if (ipv6_addr_equal(ipv6, &ifa6->addr))
+				return true;
+		}
+	}
+
+	return false;
+}
+
 static void
 nfp_tun_write_neigh(struct net_device *netdev, struct nfp_app *app,
 		    void *flow, struct neighbour *neigh, bool is_ipv6,
@@ -502,6 +543,10 @@ nfp_tun_write_neigh(struct net_device *netdev, struct nfp_app *app,
 			ext = &payload->ext;
 			lag = &payload->lag;
 			mtype = NFP_FLOWER_CMSG_TYPE_TUN_NEIGH_V6;
+
+			/* Check if IPv6 address is assigned to device. */
+			nn_entry->is_offloaded = nfp_netdev_ip_matches(netdev,
+				NULL, &payload->src_ipv6);
 		} else {
 			struct flowi4 *flowi4 = (struct flowi4 *)flow;
 			struct nfp_tun_neigh_v4 *payload;
@@ -513,6 +558,10 @@ nfp_tun_write_neigh(struct net_device *netdev, struct nfp_app *app,
 			ext = &payload->ext;
 			lag = &payload->lag;
 			mtype = NFP_FLOWER_CMSG_TYPE_TUN_NEIGH;
+
+			/* Check if IPv4 address is assigned to device. */
+			nn_entry->is_offloaded = nfp_netdev_ip_matches(netdev,
+				&payload->src_ipv4, NULL);
 		}
 		ext->host_ctx = cpu_to_be32(U32_MAX);
 		ext->vlan_tpid = cpu_to_be16(U16_MAX);
@@ -530,9 +579,13 @@ nfp_tun_write_neigh(struct net_device *netdev, struct nfp_app *app,
 			goto err;
 
 		nfp_tun_link_predt_entries(app, nn_entry);
-		nfp_flower_xmit_tun_conf(app, mtype, neigh_size,
-					 nn_entry->payload,
-					 GFP_ATOMIC);
+
+		/* Offload only if payload IP address matches netdev IP address */
+		if (nn_entry->is_offloaded) {
+			nfp_flower_xmit_tun_conf(app, mtype, neigh_size,
+						 nn_entry->payload,
+						 GFP_ATOMIC);
+		}
 	} else if (nn_entry && neigh_invalid) {
 		if (is_ipv6) {
 			struct flowi6 *flowi6 = (struct flowi6 *)flow;
@@ -575,12 +628,16 @@ nfp_tun_write_neigh(struct net_device *netdev, struct nfp_app *app,
 			payload = (struct nfp_tun_neigh_v6 *)nn_entry->payload;
 			common = &payload->common;
 			mtype = NFP_FLOWER_CMSG_TYPE_TUN_NEIGH_V6;
+			nn_entry->is_offloaded = nfp_netdev_ip_matches(netdev,
+				NULL, &payload->src_ipv6);
 		} else {
 			struct nfp_tun_neigh_v4 *payload;
 
 			payload = (struct nfp_tun_neigh_v4 *)nn_entry->payload;
 			common = &payload->common;
 			mtype = NFP_FLOWER_CMSG_TYPE_TUN_NEIGH;
+			nn_entry->is_offloaded = nfp_netdev_ip_matches(netdev,
+				&payload->src_ipv4, NULL);
 		}
 
 		ether_addr_copy(dst_addr, common->dst_addr);
@@ -592,9 +649,13 @@ nfp_tun_write_neigh(struct net_device *netdev, struct nfp_app *app,
 				nn_entry->flow = NULL;
 			}
 			nfp_tun_link_predt_entries(app, nn_entry);
-			nfp_flower_xmit_tun_conf(app, mtype, neigh_size,
-						 nn_entry->payload,
-						 GFP_ATOMIC);
+
+			/* Offload only if payload IP address matches netdev IP address */
+			if (nn_entry->is_offloaded) {
+				nfp_flower_xmit_tun_conf(app, mtype, neigh_size,
+							 nn_entry->payload,
+							 GFP_ATOMIC);
+			}
 		}
 	}
 
@@ -651,6 +712,9 @@ nfp_tun_neigh_event_handler(struct notifier_block *nb, unsigned long event,
 			 * for new entries, lookup can be skipped when an entry
 			 * gets invalidated - as only the daddr is needed for
 			 * deleting.
+			 * This function is not guaranteed to return a valid
+			 * address for flow6->saddr if the intended tunnel IP
+			 * is absent from the system.
 			 */
 			dst = compat__ipv6_dst_lookup_flow(dev_net(n->dev), NULL,
 							   &flow6, NULL);
@@ -674,6 +738,9 @@ nfp_tun_neigh_event_handler(struct notifier_block *nb, unsigned long event,
 			 * new entries, lookup can be skipped when an entry
 			 * gets invalidated - as only the daddr is needed for
 			 * deleting.
+			 * This function is not guaranteed to return a valid
+			 * address for flow4->saddr if the intended tunnel IP
+			 * is absent from the system.
 			 */
 			rt = ip_route_output_key(dev_net(n->dev), &flow4);
 			err = PTR_ERR_OR_ZERO(rt);

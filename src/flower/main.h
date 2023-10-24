@@ -184,6 +184,7 @@ struct nfp_tun_neigh_v6 {
  * @payload:		The neighbour info payload
  * @flow:		Linked flow rule
  * @is_ipv6:		Flag to indicate if payload is ipv6 or ipv4
+ * @is_offloaded:	Flag to indicate if payload is offloaded
  */
 struct nfp_neigh_entry {
 	unsigned long neigh_cookie;
@@ -192,6 +193,7 @@ struct nfp_neigh_entry {
 	char *payload;
 	struct nfp_predt_entry *flow;
 	bool is_ipv6;
+	bool is_offloaded;
 };
 
 /**
