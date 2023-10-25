@@ -3223,6 +3223,10 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 #if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))
         ret = ib_register_device(&dev->ibdev, "crdma%d",
 		&dev->nfp_info->pdev->dev);
+#elif VER_NON_RHEL_OR_KYL_GE(5, 1)
+        ret = ib_register_device(&dev->ibdev, "crdma%d");
+#elif (VER_NON_RHEL_OR_KYL_GE(4, 20) || VER_KYL_GE(10, 2))
+	ret = ib_register_device(&dev->ibdev, "crdma%d", NULL);
 #else
 	ret = ib_register_device(&dev->ibdev, NULL);
 #endif
