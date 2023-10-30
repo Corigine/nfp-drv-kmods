@@ -1977,7 +1977,7 @@ free_mtt:
 void crdma_cleanup_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 {
 	__crdma_no_param_cmd(dev, CRDMA_CMD_MPT_DESTROY, 0,
-			cmr->mpt_index, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+			cmr->key, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 	crdma_free_bitmap_area(&dev->mtt_map, cmr->base_mtt, cmr->num_mtt);
 	return;
 }
