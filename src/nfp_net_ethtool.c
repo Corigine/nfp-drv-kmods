@@ -2898,6 +2898,7 @@ static const struct ethtool_ops nfp_net_ethtool_ops = {
 	.set_phys_id		= nfp_net_set_phys_id,
 	.get_priv_flags		= nfp_net_get_pflags,
 	.set_priv_flags		= nfp_net_set_pflags,
+	.get_ts_info		= ethtool_op_get_ts_info,
 };
 
 const struct ethtool_ops nfp_port_ethtool_ops = {
