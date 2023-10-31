@@ -1940,7 +1940,7 @@ int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr,
 					 umem->sgt_append.sgt.nents,
 					 cmr->base_mtt, cmr->num_mtt,
 					 PAGE_SHIFT, comp_pages, comp_order);
-#elif (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 		ret = crdma_mtt_write_sg(dev, umem->sg_head.sgl, umem->nmap,
 					 cmr->base_mtt, cmr->num_mtt,
 					 PAGE_SHIFT, comp_pages, comp_order);

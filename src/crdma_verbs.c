@@ -204,7 +204,7 @@ static void crdma_compound_order(struct ib_umem *umem, u64 start,
 	struct scatterlist *sg;
 	u64 pfn;
 	u64 base = 0;
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	unsigned long page_shift = PAGE_SHIFT;
 #else
 	unsigned long page_shift = umem->page_shift;
@@ -747,7 +747,7 @@ static int crdma_query_pkey(struct ib_device *ibdev, u8 port_num,
 	return 0;
 }
 
-#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static int crdma_alloc_ucontext(struct ib_ucontext *ib_uctxt,
 				struct ib_udata *udata)
 {
@@ -833,7 +833,7 @@ free_uctxt:
 }
 #endif
 
-#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static void crdma_dealloc_ucontext(struct ib_ucontext *ib_uctxt)
 #else
 static int crdma_dealloc_ucontext(struct ib_ucontext *ib_uctxt)
@@ -853,7 +853,7 @@ static int crdma_dealloc_ucontext(struct ib_ucontext *ib_uctxt)
 	}
 	mutex_unlock(&crdma_uctxt->mmap_pending_lock);
 
-#if (!(VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0)))
+#if (!(VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3)))
 	kfree(crdma_uctxt);
 	return 0;
 #endif
@@ -915,7 +915,7 @@ static int crdma_mmap(struct ib_ucontext *ib_uctxt,
 	return -EINVAL;
 }
 
-#if (VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static int crdma_alloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
 {
 	struct ib_device *ibdev = ibpd->device;
@@ -971,7 +971,7 @@ free_mem:
 }
 #endif
 
-#if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static int crdma_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata)
 #else
 static int crdma_dealloc_pd(struct ib_pd *pd)
@@ -988,7 +988,7 @@ static int crdma_dealloc_pd(struct ib_pd *pd)
 	return 0;
 }
 
-#if (VER_NON_RHEL_GE(5,8) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,8) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr,
 			struct ib_udata *udata)
 {
@@ -1089,7 +1089,7 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 	return 0;
 }
 
-#if (VER_NON_RHEL_GE(5,0) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,0) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static int crdma_destroy_ah(struct ib_ah *ah, u32 flags)
 {
 	return 0;
@@ -1617,7 +1617,7 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 
 	/* State transition attribute/transport type validation */
 	ret = -EINVAL;
-#if (VER_NON_RHEL_GE(4,20) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(4,20) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	if (!ib_modify_qp_is_ok(cur_state, new_state,
 			qp->qp_type, qp_attr_mask)) {
 #else
@@ -1736,7 +1736,7 @@ out:
 	return ret;
 }
 
-#if (VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static int crdma_destroy_qp(struct ib_qp *qp, struct ib_udata *udata)
 #else
 static int crdma_destroy_qp(struct ib_qp *qp)
@@ -2195,7 +2195,7 @@ static void crdma_drain_rq(struct ib_qp *qp)
 	return;
 }
 
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 				  struct ib_udata *udata)
 {
@@ -2505,7 +2505,7 @@ static int crdma_modify_cq(struct ib_cq *cq, u16 cq_count, u16 cq_period)
 	return 0;
 }
 
-#if (VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
 #else
 static int crdma_destroy_cq(struct ib_cq *cq)
@@ -2760,7 +2760,7 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 
 #if (VER_NON_RHEL_GE(5,6))
 	cmr->umem = ib_umem_get(pd->device, start, length, access_flags);
-#elif (VER_NON_RHEL_GE(5,5) || VER_RHEL_GE(8,0))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,5) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	cmr->umem = ib_umem_get(udata, start, length, access_flags);
 #elif (VER_NON_RHEL_GE(5,1))
 	cmr->umem = ib_umem_get(udata, start, length, access_flags, 0);
@@ -2774,7 +2774,7 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 		goto free_mpt;
 	}
 
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	log2_page_sz = PAGE_SHIFT;
 #else
 	log2_page_sz = cmr->umem->page_shift;
@@ -2809,7 +2809,7 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 	cmr->io_vaddr = virt_addr;
 	cmr->len = length;
 	cmr->access = access_flags;
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	cmr->page_shift = PAGE_SHIFT;
 #else
 	cmr->page_shift = cmr->umem->page_shift;
@@ -2837,7 +2837,7 @@ free_mem:
 	return ERR_PTR(err);
 }
 
-#if (VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static int crdma_dereg_mr(struct ib_mr *mr, struct ib_udata *udata)
 #else
 static int crdma_dereg_mr(struct ib_mr *mr)
@@ -3015,7 +3015,7 @@ int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u32 port,
 
        return IB_MAD_RESULT_SUCCESS;
 }
-#elif (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
                       const struct ib_wc *in_wc, const struct ib_grh *in_grh,
                       const struct ib_mad *in_mad, struct ib_mad *out_mad,
@@ -3063,7 +3063,7 @@ int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
 }
 #endif
 
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 static const struct ib_device_ops crdma_dev_ops = {
     .owner              = THIS_MODULE,
     .driver_id          = RDMA_DRIVER_CRDMA,
@@ -3168,7 +3168,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 #endif
 	dev->ibdev.dev.parent			= &dev->nfp_info->pdev->dev;
 
-#if (VER_NON_RHEL_GE(5,0) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,0) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	ib_set_device_ops(&dev->ibdev, &crdma_dev_ops);
 #else
 	dev->ibdev.owner                = THIS_MODULE;
@@ -3220,12 +3220,12 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.drain_rq		= crdma_drain_rq;
 #endif
 
-#if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
         ret = ib_register_device(&dev->ibdev, "crdma%d",
 		&dev->nfp_info->pdev->dev);
-#elif VER_NON_RHEL_OR_KYL_GE(5, 1)
+#elif VER_NON_RHEL_GE(5,1)
         ret = ib_register_device(&dev->ibdev, "crdma%d");
-#elif (VER_NON_RHEL_OR_KYL_GE(4, 20) || VER_KYL_GE(10, 2))
+#elif (VER_NON_KYL_GE(4,20) || VER_KYL_GE(10,2))
 	ret = ib_register_device(&dev->ibdev, "crdma%d", NULL);
 #else
 	ret = ib_register_device(&dev->ibdev, NULL);

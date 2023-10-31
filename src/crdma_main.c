@@ -911,7 +911,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		return NULL;
 	}
 
-#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	dev = ib_alloc_device(crdma_ibdev, ibdev);
 #else
 	dev = (struct crdma_ibdev *) ib_alloc_device(
