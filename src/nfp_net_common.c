@@ -739,6 +739,10 @@ nfp_net_calc_fl_bufsz_data(struct nfp_net_dp *dp)
 		fl_bufsz += dp->rx_offset;
 	fl_bufsz += ETH_HLEN + VLAN_HLEN * 2 + dp->mtu;
 
+	/* Alloc extra 32 bytes for rx dma length alignment */
+	if (dp->ctrl_w1 & NFP_NET_CFG_CTRL_RX_ALIGNMENT)
+		fl_bufsz += 32;
+
 	return fl_bufsz;
 }
 
@@ -3317,6 +3321,12 @@ int nfp_net_init(struct nfp_net *nn)
 	} else {
 		nn->dp.mtu = NFP_NET_DEFAULT_MTU;
 	}
+
+#ifdef CONFIG_ARCH_PHYTIUM
+	if (nn->cap_w1 & NFP_NET_CFG_CTRL_RX_ALIGNMENT)
+		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_RX_ALIGNMENT;
+#endif
+
 	nn->dp.fl_bufsz = nfp_net_calc_fl_bufsz(&nn->dp);
 
 	if (nfp_app_ctrl_uses_data_vnics(nn->app))

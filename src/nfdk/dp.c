@@ -915,6 +915,8 @@ nfp_nfdk_parse_meta(struct net_device *netdev, struct nfp_meta_parsed *meta,
 				return false;
 			data += sizeof(struct nfp_net_tls_resync_req);
 			break;
+               case NFP_NET_META_PAD:
+			return false;
 #ifdef CONFIG_NFP_NET_IPSEC
 		case NFP_NET_META_IPSEC:
 			/* Note: IPsec packet could have zero saidx, so need add 1
