@@ -2534,6 +2534,52 @@ static int nfp_net_xdp(struct net_device *netdev, struct netdev_bpf *xdp)
 }
 #endif
 
+#if VER_NON_RHEL_GE(4, 19) || VER_RHEL_GE(8, 0)
+static u16 nfp_skb_tx_hash(const struct sk_buff *skb, u16 num_tx_queues)
+{
+	u32 hash;
+
+	if (skb->sk && skb->sk->sk_hash)
+		hash = skb->sk->sk_hash;
+	else
+		hash = (__force u16)skb->protocol ^ skb->hash;
+
+	hash = jhash_1word(hash, 1);
+
+	return (u16)(((u64)hash * num_tx_queues) >> 32);
+}
+
+#if VER_NON_RHEL_LT(5, 2) || VER_RHEL_LT(9, 0)
+u16 nfp_net_select_queue(struct net_device *netdev,
+			 struct sk_buff *skb,
+			 struct net_device __always_unused *sb_dev,
+			 select_queue_fallback_t fallback)
+#else
+u16 nfp_net_select_queue(struct net_device *netdev,
+			 struct sk_buff *skb,
+			 struct net_device __always_unused *sb_dev)
+#endif
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+	struct nfp_app *app = nn->app;
+	u16 qoffset, qcount, hash;
+	int tclass;
+
+	tclass = nfp_app_select_tclass(app, nn, skb);
+	if (tclass >= 0) {
+		qcount = nn->tc_config[tclass].count;
+		qoffset = nn->tc_config[tclass].offset;
+		hash = nfp_skb_tx_hash(skb, qcount);
+		return qoffset + hash;
+	}
+#if VER_NON_RHEL_LT(5, 2) || VER_RHEL_LT(9, 0)
+	return fallback(netdev, skb, sb_dev);
+#else
+	return netdev_pick_tx(netdev, skb, sb_dev);
+#endif
+}
+#endif
+
 static int nfp_net_set_mac_address(struct net_device *netdev, void *addr)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
@@ -2750,6 +2796,9 @@ const struct net_device_ops nfp_nfdk_netdev_ops = {
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 13, 0)
 	.ndo_setup_tc		= nfp_port_setup_tc,
+#endif
+#if VER_NON_RHEL_GE(4, 19) || VER_RHEL_GE(8, 0)
+	.ndo_select_queue	= nfp_net_select_queue,
 #endif
 	.ndo_tx_timeout		= nfp_net_tx_timeout,
 	.ndo_set_rx_mode	= nfp_net_set_rx_mode,

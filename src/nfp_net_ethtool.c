@@ -2591,6 +2591,7 @@ static int nfp_net_set_channels(struct net_device *netdev,
 {
 	struct nfp_net *nn = netdev_priv(netdev);
 	unsigned int total_rx, total_tx;
+	bool disable_set;
 
 	/* Reject unsupported */
 	if (
@@ -2603,6 +2604,12 @@ static int nfp_net_set_channels(struct net_device *netdev,
 
 	total_rx = channel->combined_count + channel->rx_count;
 	total_tx = channel->combined_count + channel->tx_count;
+
+	disable_set = nfp_app_pfc_is_enable(nn);
+	if (disable_set && (total_tx != nn->dp.num_stack_tx_rings)) {
+		netdev_err(netdev, "Can't set tx ring - the pfc is enabled\n");
+		return -EOPNOTSUPP;
+	}
 
 	if (total_rx > min(nn->max_rx_rings, nn->max_r_vecs) ||
 	    total_tx > min(nn->max_tx_rings, nn->max_r_vecs))

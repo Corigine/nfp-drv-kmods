@@ -85,6 +85,17 @@ static void nfp_nic_vnic_free(struct nfp_app *app, struct nfp_net *nn)
 	kfree(nn->app_priv);
 }
 
+static int nfp_nic_select_tclass(struct nfp_app *app, struct nfp_net *nn,
+				 struct sk_buff *skb)
+{
+	return nfp_dcb_select_tclass(app, nn, skb);
+}
+
+static bool nfp_nic_pfc_is_enable(struct nfp_app *app, struct nfp_net *nn)
+{
+	return nfp_dcb_pfc_is_enable(app, nn);
+}
+
 const struct nfp_app_type app_nic = {
 	.id		= NFP_APP_CORE_NIC,
 	.name		= "nic",
@@ -95,6 +106,8 @@ const struct nfp_app_type app_nic = {
 	.sriov_enable	= nfp_nic_sriov_enable,
 	.sriov_disable	= nfp_nic_sriov_disable,
 
+	.pfc_is_enable  = nfp_nic_pfc_is_enable,
+	.select_tclass  = nfp_nic_select_tclass,
 	.vnic_init      = nfp_nic_vnic_init,
 	.vnic_clean     = nfp_nic_vnic_clean,
 };
