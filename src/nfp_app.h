@@ -137,6 +137,9 @@ struct nfp_app_type {
 
 	int (*setup_tc)(struct nfp_app *app, struct net_device *netdev,
 			enum tc_setup_type type, void *type_data);
+	int (*select_tclass)(struct nfp_app *app, struct nfp_net *nn,
+			     struct sk_buff *skb);
+	bool (*pfc_is_enable)(struct nfp_app *app, struct nfp_net *nn);
 	int (*bpf)(struct nfp_app *app, struct nfp_net *nn,
 		   struct netdev_bpf *xdp);
 	int (*xdp_offload)(struct nfp_app *app, struct nfp_net *nn,
@@ -417,6 +420,14 @@ static inline void nfp_app_sriov_disable(struct nfp_app *app)
 		app->type->sriov_disable(app);
 }
 
+static inline int nfp_app_select_tclass(struct nfp_app *app, struct nfp_net *nn,
+					struct sk_buff *skb)
+{
+	if (!app || !app->type->select_tclass)
+		return -EOPNOTSUPP;
+	return app->type->select_tclass(app, nn, skb);
+}
+
 static inline
 struct net_device *nfp_app_dev_get(struct nfp_app *app, u32 id,
 				   bool *redir_egress)
@@ -447,6 +458,7 @@ struct nfp_app *nfp_app_alloc(struct nfp_pf *pf, enum nfp_app_id id);
 void nfp_app_free(struct nfp_app *app);
 int nfp_app_start(struct nfp_app *app, struct nfp_net *ctrl);
 void nfp_app_stop(struct nfp_app *app);
+bool nfp_app_pfc_is_enable(struct nfp_net *nn);
 
 /* Callbacks shared between apps */
 

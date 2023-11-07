@@ -4,6 +4,7 @@
 #include <linux/device.h>
 #include <linux/netdevice.h>
 #include <net/dcbnl.h>
+#include <net/dsfield.h>
 
 #include "../nfp_app.h"
 #include "../nfp_net.h"
@@ -536,6 +537,39 @@ static int nfp_nic_dcbnl_ieee_delapp(struct net_device *dev,
 	return 0;
 }
 
+static int nfp_dcb_config_num_tc(struct nfp_net *nn, struct nfp_dcb *dcb, struct ieee_pfc *pfc)
+{
+	u8 num_pfc_tc = 0;
+	int tc_pfc_offset;
+	unsigned int i;
+	u16 qcount;
+
+	dcb->pfc_en = pfc->pfc_en;
+	for (i = 0; i < NFP_NET_MAX_PRIO; i++) {
+		if (BIT(i) & pfc->pfc_en)
+			num_pfc_tc |= BIT(dcb->prio2tc[i]);
+	}
+	tc_pfc_offset = NFP_NET_MAX_PFC_QUEUE_NUM;
+	qcount = nn->dp.num_stack_tx_rings;
+	if (qcount <= NFP_NET_MAX_PFC_QUEUE_NUM)
+		return -EOPNOTSUPP;
+
+	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
+		if (BIT(i) & num_pfc_tc) {
+			if (tc_pfc_offset < 0)
+				tc_pfc_offset = 0;
+			else
+				tc_pfc_offset--;
+			nn->tc_config[i].count = 1;
+			nn->tc_config[i].offset = tc_pfc_offset;
+		} else {
+			nn->tc_config[i].count = qcount - NFP_NET_MAX_PFC_QUEUE_NUM;
+			nn->tc_config[i].offset = NFP_NET_MAX_PFC_QUEUE_NUM;
+		}
+	}
+	return 0;
+}
+
 static int nfp_nic_dcbnl_ieee_getpfc(struct net_device *dev, struct ieee_pfc *pfc)
 {
 	struct nfp_net *nn = netdev_priv(dev);
@@ -576,6 +610,7 @@ static int nfp_nic_dcbnl_ieee_getpfc(struct net_device *dev, struct ieee_pfc *pf
 	pfc->pfc_en  = readb(base_offset + NFP_DCB_DATA_OFF_PFC);
 	pfc->mbc     = readb(base_offset + NFP_DCB_DATA_OFF_MBC);
 	pfc->delay   = readw(base_offset + NFP_DCB_DATA_OFF_DELAY);
+	dcb->pfc_en  = pfc->pfc_en;
 
 	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
 		pfc->requests[i] = readq(port->eth_stats + nfp_mac_pfc_pause_off[i]);
@@ -610,8 +645,89 @@ static int nfp_nic_dcbnl_ieee_setpfc(struct net_device *dev, struct ieee_pfc *pf
 	update = NFP_DCB_MSG_MSK_MBC | NFP_DCB_MSG_MSK_DELAY | NFP_DCB_MSG_MSK_PFC;
 	nfp_nic_set_enable(nn, NFP_DCB_ALL_PFC_ENABLE, &update);
 	nn_writel(nn, nn->tlv_caps.mbox_off + NFP_NET_CFG_MBOX_SIMPLE_VAL, update);
+	err = nfp_net_mbox_reconfig_and_unlock(nn, cmd);
+	if (err)
+		return err;
+
+	return nfp_dcb_config_num_tc(nn, dcb, pfc);
+}
+
+static int nfp_nic_ieee_ets_init(struct nfp_net *nn, struct nfp_dcb *dcb)
+{
+	const u32 cmd = NFP_NET_CFG_MBOX_CMD_DCB_UPDATE;
+	u32 update = 0;
+	int err;
+
+	if (!nfp_refresh_tc2idx(nn))
+		return 0;
+
+	nfp_nic_fill_ets(nn);
+	dcb->ets_init = true;
+	nfp_nic_set_enable(nn, NFP_DCB_ALL_QOS_ENABLE, &update);
+	nfp_nic_set_trust(nn, &update);
+	err = nfp_net_mbox_lock(nn, NFP_DCB_UPDATE_MSK_SZ);
+	if (err)
+		return err;
+
+	nn_writel(nn, nn->tlv_caps.mbox_off + NFP_NET_CFG_MBOX_SIMPLE_VAL,
+		  update | NFP_DCB_MSG_MSK_TSA | NFP_DCB_MSG_MSK_PCT |
+		  NFP_DCB_MSG_MSK_PCP);
 
 	return nfp_net_mbox_reconfig_and_unlock(nn, cmd);
+}
+
+#if VER_NON_RHEL_GE(4, 19) || VER_RHEL_GE(8, 0)
+static int nfp_get_dscp_priority(struct sk_buff *skb, struct nfp_dcb *dcb)
+{
+	int dscp = 0;
+
+	if (skb->protocol == htons(ETH_P_IP))
+		dscp = ipv4_get_dsfield(ip_hdr(skb)) >> 2;
+	else if (skb->protocol == htons(ETH_P_IPV6))
+		dscp = ipv6_get_dsfield(ipv6_hdr(skb)) >> 2;
+
+	return dcb->dscp2prio[dscp];
+}
+
+static int nfp_get_priority(struct nfp_net *nn, struct sk_buff *skb, struct nfp_dcb *dcb)
+{
+	if (dcb->trust_status == NFP_DCB_TRUST_DSCP)
+		return nfp_get_dscp_priority(skb, dcb);
+	if (skb_vlan_tag_present(skb))
+		return skb_vlan_tag_get_prio(skb);
+	return 0;
+}
+
+int nfp_dcb_select_tclass(struct nfp_app *app, struct nfp_net *nn,
+			  struct sk_buff *skb)
+{
+	struct nfp_dcb *dcb;
+	int priority;
+
+	dcb = get_dcb_priv(nn);
+	if ((dcb->dcb_cap & NFP_DCB_PFC_ENABLE) && dcb->pfc_en) {
+		priority = nfp_get_priority(nn, skb, dcb);
+		if (priority >= NFP_NET_MAX_PRIO)
+			return -EINVAL;
+
+		return dcb->prio2tc[priority];
+	}
+	return -EOPNOTSUPP;
+}
+#else
+int nfp_dcb_select_tclass(struct nfp_app *app, struct nfp_net *nn,
+			  struct sk_buff *skb)
+{
+	return -EOPNOTSUPP;
+}
+#endif
+
+bool nfp_dcb_pfc_is_enable(struct nfp_app *app, struct nfp_net *nn)
+{
+	struct nfp_dcb *dcb;
+
+	dcb = get_dcb_priv(nn);
+	return dcb->pfc_en;
 }
 
 static const struct dcbnl_rtnl_ops nfp_nic_dcbnl_ops = {
@@ -656,11 +772,13 @@ int nfp_nic_dcb_init(struct nfp_net *nn)
 			dcb->tc2idx[i] = i;
 			dcb->tc_tx_pct[i] = 0;
 			dcb->tc_maxrate[i] = 0;
-			dcb->tc_tsa[i] = IEEE_8021QAZ_TSA_VENDOR;
+			dcb->tc_tsa[i] = IEEE_8021QAZ_TSA_STRICT;
 		}
+		err = nfp_nic_ieee_ets_init(nn, dcb);
+		if (err)
+			dcb->ets_init = false;
 		dcb->trust_status = NFP_DCB_TRUST_INVALID;
 		dcb->rate_init = false;
-		dcb->ets_init = false;
 		dcb->dcb_cap = readb(dcb->dcbcfg_tbl + dcb->cfg_offset + NFP_DCB_DATA_OFF_CAP);
 		nn->dp.netdev->dcbnl_ops = &nfp_nic_dcbnl_ops;
 	}

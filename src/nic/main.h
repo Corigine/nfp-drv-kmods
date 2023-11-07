@@ -11,6 +11,7 @@
 #define NFP_NET_MAX_DSCP	64
 #define NFP_NET_MAX_TC		IEEE_8021QAZ_MAX_TCS
 #define NFP_NET_MAX_PRIO	8
+#define NFP_NET_MAX_PFC_QUEUE_NUM 8
 #define NFP_DCB_CFG_STRIDE	256
 
 struct nfp_dcb {
@@ -22,6 +23,7 @@ struct nfp_dcb {
 	u8 tc_tsa[IEEE_8021QAZ_MAX_TCS];
 	u8 dscp_cnt;
 	u8 trust_status;
+	u8 pfc_en;
 	u8 dcb_cap;
 	bool rate_init;
 	bool ets_init;
@@ -33,9 +35,22 @@ struct nfp_dcb {
 
 int nfp_nic_dcb_init(struct nfp_net *nn);
 void nfp_nic_dcb_clean(struct nfp_net *nn);
+int nfp_dcb_select_tclass(struct nfp_app *app, struct nfp_net *nn,
+			  struct sk_buff *skb);
+bool nfp_dcb_pfc_is_enable(struct nfp_app *app, struct nfp_net *nn);
 #else
 static inline int nfp_nic_dcb_init(struct nfp_net *nn) { return 0; }
 static inline void nfp_nic_dcb_clean(struct nfp_net *nn) {}
+static inline int nfp_dcb_select_tclass(struct nfp_app *app, struct nfp_net *nn,
+					struct sk_buff *skb)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline bool nfp_dcb_pfc_is_enable(struct nfp_app *app, struct nfp_net *nn)
+{
+	return false;
+}
 #endif
 
 struct nfp_app_nic_private {

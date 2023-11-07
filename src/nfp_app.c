@@ -85,6 +85,15 @@ void nfp_app_ndo_uninit(struct net_device *netdev)
 		app->type->ndo_uninit(app, netdev);
 }
 
+bool nfp_app_pfc_is_enable(struct nfp_net *nn)
+{
+	struct nfp_app *app = nn->app;
+
+	if (!app || !app->type->pfc_is_enable)
+		return false;
+	return app->type->pfc_is_enable(app, nn);
+}
+
 u64 *nfp_app_port_get_stats(struct nfp_port *port, u64 *data)
 {
 	if (!port || !port->app || !port->app->type->port_get_stats)
