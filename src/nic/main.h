@@ -22,6 +22,7 @@ struct nfp_dcb {
 	u8 tc_tsa[IEEE_8021QAZ_MAX_TCS];
 	u8 dscp_cnt;
 	u8 trust_status;
+	u8 dcb_cap;
 	bool rate_init;
 	bool ets_init;
 

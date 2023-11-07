@@ -11,7 +11,7 @@
 #include "../nfpcore/nfp_cpp.h"
 #include "../nfpcore/nfp_nffw.h"
 #include "../nfp_net_sriov.h"
-
+#include "../nfp_port.h"
 #include "main.h"
 
 #define NFP_DCB_TRUST_PCP	1
@@ -24,8 +24,10 @@
 
 #define NFP_DCB_GBL_ENABLE	BIT(0)
 #define NFP_DCB_QOS_ENABLE	BIT(1)
+#define NFP_DCB_PFC_ENABLE	BIT(2)
 #define NFP_DCB_DISABLE		0
 #define NFP_DCB_ALL_QOS_ENABLE	(NFP_DCB_GBL_ENABLE | NFP_DCB_QOS_ENABLE)
+#define NFP_DCB_ALL_PFC_ENABLE	(NFP_DCB_GBL_ENABLE | NFP_DCB_PFC_ENABLE | NFP_DCB_QOS_ENABLE)
 
 #define NFP_DCB_UPDATE_MSK_SZ	4
 #define NFP_DCB_TC_RATE_MAX	0xffff
@@ -39,6 +41,14 @@
 #define NFP_DCB_DATA_OFF_ENABLE		116
 #define NFP_DCB_DATA_OFF_TRUST		120
 
+#define NFP_DCB_DATA_OFF_PFC_CAP    121
+#define NFP_DCB_DATA_OFF_PFC        122
+#define NFP_DCB_DATA_OFF_DELAY      123
+#define NFP_DCB_DATA_OFF_MBC        125
+
+#define NFP_DCB_DATA_OFF_REQUEST     128
+#define NFP_DCB_DATA_OFF_INDICATIONS 192
+
 #define NFP_DCB_MSG_MSK_ENABLE	BIT(31)
 #define NFP_DCB_MSG_MSK_TRUST	BIT(30)
 #define NFP_DCB_MSG_MSK_TSA	BIT(29)
@@ -46,6 +56,10 @@
 #define NFP_DCB_MSG_MSK_PCP	BIT(27)
 #define NFP_DCB_MSG_MSK_RATE	BIT(26)
 #define NFP_DCB_MSG_MSK_PCT	BIT(25)
+#define NFP_DCB_MSG_MSK_PFC_CAP BIT(24)
+#define NFP_DCB_MSG_MSK_PFC	BIT(23)
+#define NFP_DCB_MSG_MSK_DELAY	BIT(22)
+#define NFP_DCB_MSG_MSK_MBC	BIT(21)
 
 #ifndef IEEE_8021QAZ_APP_SEL_DSCP
 #define IEEE_8021QAZ_APP_SEL_DSCP       5
@@ -522,12 +536,92 @@ static int nfp_nic_dcbnl_ieee_delapp(struct net_device *dev,
 	return 0;
 }
 
+static int nfp_nic_dcbnl_ieee_getpfc(struct net_device *dev, struct ieee_pfc *pfc)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_port *port;
+	struct nfp_dcb *dcb;
+	u8 *base_offset;
+	unsigned int i;
+
+	static int nfp_mac_pfc_pause_off[IEEE_8021QAZ_MAX_TCS * 2] = {
+		NFP_MAC_STATS_RX_PAUSE_FRAMES_CLASS0,
+		NFP_MAC_STATS_RX_PAUSE_FRAMES_CLASS1,
+		NFP_MAC_STATS_RX_PAUSE_FRAMES_CLASS2,
+		NFP_MAC_STATS_RX_PAUSE_FRAMES_CLASS3,
+		NFP_MAC_STATS_RX_PAUSE_FRAMES_CLASS4,
+		NFP_MAC_STATS_RX_PAUSE_FRAMES_CLASS5,
+		NFP_MAC_STATS_RX_PAUSE_FRAMES_CLASS6,
+		NFP_MAC_STATS_RX_PAUSE_FRAMES_CLASS7,
+		NFP_MAC_STATS_TX_PAUSE_FRAMES_CLASS0,
+		NFP_MAC_STATS_TX_PAUSE_FRAMES_CLASS1,
+		NFP_MAC_STATS_TX_PAUSE_FRAMES_CLASS2,
+		NFP_MAC_STATS_TX_PAUSE_FRAMES_CLASS3,
+		NFP_MAC_STATS_TX_PAUSE_FRAMES_CLASS4,
+		NFP_MAC_STATS_TX_PAUSE_FRAMES_CLASS5,
+		NFP_MAC_STATS_TX_PAUSE_FRAMES_CLASS6,
+		NFP_MAC_STATS_TX_PAUSE_FRAMES_CLASS7,
+	};
+
+	port = nfp_port_from_netdev(dev);
+	if (!nfp_port_get_eth_port(port) || !port->eth_stats)
+		return -EOPNOTSUPP;
+
+	dcb = get_dcb_priv(nn);
+	if (!(dcb->dcb_cap & NFP_DCB_PFC_ENABLE))
+		return -EOPNOTSUPP;
+
+	base_offset = dcb->dcbcfg_tbl + dcb->cfg_offset;
+	pfc->pfc_cap = IEEE_8021QAZ_MAX_TCS;
+	pfc->pfc_en  = readb(base_offset + NFP_DCB_DATA_OFF_PFC);
+	pfc->mbc     = readb(base_offset + NFP_DCB_DATA_OFF_MBC);
+	pfc->delay   = readw(base_offset + NFP_DCB_DATA_OFF_DELAY);
+
+	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
+		pfc->requests[i] = readq(port->eth_stats + nfp_mac_pfc_pause_off[i]);
+		pfc->indications[i] =
+			readq(port->eth_stats + nfp_mac_pfc_pause_off[i + IEEE_8021QAZ_MAX_TCS]);
+	}
+	return 0;
+}
+
+static int nfp_nic_dcbnl_ieee_setpfc(struct net_device *dev, struct ieee_pfc *pfc)
+{
+	const u32 cmd = NFP_NET_CFG_MBOX_CMD_DCB_UPDATE;
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+	u8 *base_offset;
+	u32 update = 0;
+	int err = 0;
+
+	dcb = get_dcb_priv(nn);
+	if (!(dcb->dcb_cap & NFP_DCB_PFC_ENABLE))
+		return -EOPNOTSUPP;
+
+	err = nfp_net_mbox_lock(nn, NFP_DCB_UPDATE_MSK_SZ);
+	if (err)
+		return err;
+
+	base_offset = dcb->dcbcfg_tbl + dcb->cfg_offset;
+	writeb(pfc->pfc_en, base_offset + NFP_DCB_DATA_OFF_PFC);
+	writew(pfc->delay, base_offset + NFP_DCB_DATA_OFF_DELAY);
+	writeb(pfc->mbc, base_offset + NFP_DCB_DATA_OFF_MBC);
+
+	update = NFP_DCB_MSG_MSK_MBC | NFP_DCB_MSG_MSK_DELAY | NFP_DCB_MSG_MSK_PFC;
+	nfp_nic_set_enable(nn, NFP_DCB_ALL_PFC_ENABLE, &update);
+	nn_writel(nn, nn->tlv_caps.mbox_off + NFP_NET_CFG_MBOX_SIMPLE_VAL, update);
+
+	return nfp_net_mbox_reconfig_and_unlock(nn, cmd);
+}
+
 static const struct dcbnl_rtnl_ops nfp_nic_dcbnl_ops = {
 	/* ieee 802.1Qaz std */
 	.ieee_getets	= nfp_nic_dcbnl_ieee_getets,
 	.ieee_setets	= nfp_nic_dcbnl_ieee_setets,
 	.ieee_getmaxrate = nfp_nic_dcbnl_ieee_getmaxrate,
 	.ieee_setmaxrate = nfp_nic_dcbnl_ieee_setmaxrate,
+	.ieee_getpfc	= nfp_nic_dcbnl_ieee_getpfc,
+	.ieee_setpfc	= nfp_nic_dcbnl_ieee_setpfc,
 	.ieee_setapp	= nfp_nic_dcbnl_ieee_setapp,
 	.ieee_delapp	= nfp_nic_dcbnl_ieee_delapp,
 };
@@ -567,7 +661,7 @@ int nfp_nic_dcb_init(struct nfp_net *nn)
 		dcb->trust_status = NFP_DCB_TRUST_INVALID;
 		dcb->rate_init = false;
 		dcb->ets_init = false;
-
+		dcb->dcb_cap = readb(dcb->dcbcfg_tbl + dcb->cfg_offset + NFP_DCB_DATA_OFF_CAP);
 		nn->dp.netdev->dcbnl_ops = &nfp_nic_dcbnl_ops;
 	}
 
