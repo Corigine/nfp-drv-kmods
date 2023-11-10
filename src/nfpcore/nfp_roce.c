@@ -123,11 +123,8 @@ int nfp_roce_acquire_configure_resource(struct nfp_pf *pf)
 
 	/* acquire configure */
 	cmd = nfp_rtsym_lookup(pf->rtbl, cmd_symbol);
-	if (!cmd) {
-		nfp_err(pf->cpp, "RoCE: rtsym '%s' does not exist\n",
-			cmd_symbol);
+	if (!cmd)
 		return -ENOENT;
-	}
 
 	if (pf->multi_pf.en) {
 		cpp_id = NFP_CPP_ISLAND_ID(cmd->target, NFP_CPP_ACTION_RW,
@@ -216,10 +213,8 @@ int nfp_net_add_roce(struct nfp_pf *pf, struct nfp_net *nn)
 	struct device *dev;
 	int err, i;
 
-	if ((nn->cap_w1 & NFP_NET_CFG_CTRL_ROCEV2) == 0) {
-		nfp_warn(pf->cpp, "Firmware has no RoCEv2 capacity\n");
+	if ((nn->cap_w1 & NFP_NET_CFG_CTRL_ROCEV2) == 0)
 		return 0;
-	}
 
 	if (!nfp_roce_enabled) {
 		nn->dp.ctrl_w1 &= ~NFP_NET_CFG_CTRL_ROCEV2;
