@@ -852,6 +852,7 @@ static int nfp_flower_init(struct nfp_app *app)
 	app_priv->total_mem_units = num_mems;
 	app_priv->active_mem_unit = 0;
 	app_priv->stats_ring_size = roundup_pow_of_two(ctx_count);
+	app_priv->ctx_count = ctx_count;
 	app->priv = app_priv;
 	app_priv->app = app;
 	skb_queue_head_init(&app_priv->cmsg_skbs_high);

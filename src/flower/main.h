@@ -275,6 +275,7 @@ struct nfp_fl_internal_ports {
  * @mask_ids:		List of free mask ids
  * @mask_table:		Hash table used to store masks
  * @stats_ring_size:	Maximum number of allowed stats ids
+ * @ctx_count:	Maximum number of host context
  * @flow_table:		Hash table used to store flower rules
  * @stats:		Stored stats updates for flower rules
  * @stats_lock:		Lock for flower rule stats updates
@@ -321,6 +322,7 @@ struct nfp_flower_priv {
 	struct nfp_fl_mask_id mask_ids;
 	DECLARE_HASHTABLE(mask_table, NFP_FLOWER_MASK_HASH_BITS);
 	u32 stats_ring_size;
+	u64 ctx_count;
 	struct rhashtable flow_table;
 	struct nfp_fl_stats *stats;
 	spinlock_t stats_lock; /* lock stats */

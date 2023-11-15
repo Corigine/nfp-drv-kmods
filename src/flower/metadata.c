@@ -17,6 +17,8 @@
 
 #include "main.h"
 #include "../nfp_app.h"
+#include "../nfp_main.h"
+#include "../nfpcore/nfp_nffw.h"
 
 struct nfp_mask_id_table {
 	struct hlist_node link;
@@ -42,10 +44,45 @@ static const struct rhashtable_params stats_ctx_table_params = {
 	.key_len	= sizeof(u32),
 };
 
+
+static int nfp_get_stats_entry_from_hw(struct nfp_app *app, u32 *stats_context_id)
+{
+	struct nfp_flower_priv *priv = app->priv;
+	int err;
+
+	err = nfp_ring_pop_put(app->pf->rtbl,
+			       "_FC_WC_EMU_0_HOST_CTX_RING_BASE",
+			       "_FC_WC_HOST_CTX_RING_EMU_0", stats_context_id,
+			       true);
+	if (err)
+		return err;
+
+	/* Check if context id is an invalid value */
+	if (*stats_context_id >= priv->ctx_count)
+		return -ENOENT;
+
+	return 0;
+}
+
+static int nfp_release_stats_entry_to_hw(struct nfp_app *app, u32 stats_context_id)
+{
+	int err;
+
+	err = nfp_ring_pop_put(app->pf->rtbl,
+			       "_FC_WC_EMU_0_HOST_CTX_RING_BASE",
+			       "_FC_WC_HOST_CTX_RING_EMU_0", &stats_context_id,
+			       false);
+
+	return err;
+}
+
 static int nfp_release_stats_entry(struct nfp_app *app, u32 stats_context_id)
 {
 	struct nfp_flower_priv *priv = app->priv;
 	struct circ_buf *ring;
+
+	if (app->pf->multi_pf.en)
+		return nfp_release_stats_entry_to_hw(app, stats_context_id);
 
 	ring = &priv->stats_ids.free_list;
 	/* Check if buffer is full, stats_ring_size must be power of 2 */
@@ -65,6 +102,9 @@ static int nfp_get_stats_entry(struct nfp_app *app, u32 *stats_context_id)
 	struct nfp_flower_priv *priv = app->priv;
 	u32 freed_stats_id, temp_stats_id;
 	struct circ_buf *ring;
+
+	if (app->pf->multi_pf.en)
+		return nfp_get_stats_entry_from_hw(app, stats_context_id);
 
 	ring = &priv->stats_ids.free_list;
 	freed_stats_id = priv->stats_ring_size;
@@ -139,10 +179,47 @@ void nfp_flower_rx_flow_stats(struct nfp_app *app, struct sk_buff *skb)
 	spin_unlock(&priv->stats_lock);
 }
 
+static int nfp_net_alloc_mask_from_hw(struct nfp_app *app, u8 *mask_id)
+{
+	u32 mask = 0;
+	int err;
+
+	err = nfp_ring_pop_put(app->pf->rtbl,
+			       "_FC_WC_EMU_0_MASK_ID_RING_BASE",
+			       "_FC_WC_MASK_ID_RING_EMU_0", &mask,
+			       true);
+	if (err)
+		return err;
+
+	/* 0 is an invalid value */
+	if (!mask || mask >= NFP_FLOWER_MASK_ENTRY_RS)
+		return -ENOENT;
+
+	*mask_id = (u8)mask;
+
+	return 0;
+}
+
+static int nfp_net_release_mask_to_hw(struct nfp_app *app, u8 mask_id)
+{
+	u32 mask = mask_id;
+	int err;
+
+	err = nfp_ring_pop_put(app->pf->rtbl,
+			       "_FC_WC_EMU_0_MASK_ID_RING_BASE",
+			       "_FC_WC_MASK_ID_RING_EMU_0", &mask,
+			       false);
+
+	return err;
+}
+
 static int nfp_release_mask_id(struct nfp_app *app, u8 mask_id)
 {
 	struct nfp_flower_priv *priv = app->priv;
 	struct circ_buf *ring;
+
+	if (app->pf->multi_pf.en)
+		return nfp_net_release_mask_to_hw(app, mask_id);
 
 	ring = &priv->mask_ids.mask_id_free_list;
 	/* Checking if buffer is full,
@@ -170,8 +247,15 @@ static int nfp_mask_alloc(struct nfp_app *app, u8 *mask_id)
 	struct circ_buf *ring;
 	u8 temp_id, freed_id;
 
-	ring = &priv->mask_ids.mask_id_free_list;
 	freed_id = NFP_FLOWER_MASK_ENTRY_RS - 1;
+	if (app->pf->multi_pf.en) {
+		if (nfp_net_alloc_mask_from_hw(app, mask_id))
+			goto err_not_found;
+
+		return 0;
+	}
+
+	ring = &priv->mask_ids.mask_id_free_list;
 	/* Checking for unallocated entries first. */
 	if (priv->mask_ids.init_unallocated > 0) {
 		*mask_id = priv->mask_ids.init_unallocated;
@@ -565,30 +649,32 @@ int nfp_flower_metadata_init(struct nfp_app *app, u64 host_ctx_count,
 
 	get_random_bytes(&priv->mask_id_seed, sizeof(priv->mask_id_seed));
 
-	/* Init ring buffer and unallocated mask_ids. */
-	priv->mask_ids.mask_id_free_list.buf =
-		kmalloc_array(NFP_FLOWER_MASK_ENTRY_RS,
-			      NFP_FLOWER_MASK_ELEMENT_RS, GFP_KERNEL);
-	if (!priv->mask_ids.mask_id_free_list.buf)
-		goto err_free_neigh_table;
+	if (!app->pf->multi_pf.en) {
+		/* Init ring buffer and unallocated mask_ids. */
+		priv->mask_ids.mask_id_free_list.buf =
+			kmalloc_array(NFP_FLOWER_MASK_ENTRY_RS,
+				      NFP_FLOWER_MASK_ELEMENT_RS, GFP_KERNEL);
+		if (!priv->mask_ids.mask_id_free_list.buf)
+			goto err_free_neigh_table;
 
-	priv->mask_ids.init_unallocated = NFP_FLOWER_MASK_ENTRY_RS - 1;
+		priv->mask_ids.init_unallocated = NFP_FLOWER_MASK_ENTRY_RS - 1;
 
-	/* Init timestamps for mask id*/
-	priv->mask_ids.last_used =
-		kmalloc_array(NFP_FLOWER_MASK_ENTRY_RS,
-			      sizeof(*priv->mask_ids.last_used), GFP_KERNEL);
-	if (!priv->mask_ids.last_used)
-		goto err_free_mask_id;
+		/* Init timestamps for mask id*/
+		priv->mask_ids.last_used =
+			kmalloc_array(NFP_FLOWER_MASK_ENTRY_RS,
+				      sizeof(*priv->mask_ids.last_used), GFP_KERNEL);
+		if (!priv->mask_ids.last_used)
+			goto err_free_mask_id;
 
-	/* Init ring buffer and unallocated stats_ids. */
-	priv->stats_ids.free_list.buf =
-		vmalloc(array_size(NFP_FL_STATS_ELEM_RS,
-				   priv->stats_ring_size));
-	if (!priv->stats_ids.free_list.buf)
-		goto err_free_last_used;
+		/* Init ring buffer and unallocated stats_ids. */
+		priv->stats_ids.free_list.buf =
+			vmalloc(array_size(NFP_FL_STATS_ELEM_RS,
+				priv->stats_ring_size));
+		if (!priv->stats_ids.free_list.buf)
+			goto err_free_last_used;
 
-	priv->stats_ids.init_unalloc = div_u64(host_ctx_count, host_num_mems);
+		priv->stats_ids.init_unalloc = div_u64(host_ctx_count, host_num_mems);
+	}
 
 	stats_size = FIELD_PREP(NFP_FL_STAT_ID_STAT, host_ctx_count) |
 		     FIELD_PREP(NFP_FL_STAT_ID_MU_NUM, host_num_mems - 1);
@@ -603,11 +689,14 @@ int nfp_flower_metadata_init(struct nfp_app *app, u64 host_ctx_count,
 	return 0;
 
 err_free_ring_buf:
-	vfree(priv->stats_ids.free_list.buf);
+	if (priv->stats_ids.free_list.buf)
+		vfree(priv->stats_ids.free_list.buf);
 err_free_last_used:
-	kfree(priv->mask_ids.last_used);
+	if (priv->mask_ids.last_used)
+		kfree(priv->mask_ids.last_used);
 err_free_mask_id:
-	kfree(priv->mask_ids.mask_id_free_list.buf);
+	if (priv->mask_ids.mask_id_free_list.buf)
+		kfree(priv->mask_ids.mask_id_free_list.buf);
 err_free_neigh_table:
 	rhashtable_destroy(&priv->neigh_table);
 #if VER_NON_RHEL_GE(5, 9) || VER_RHEL_GE(8, 3)
@@ -745,7 +834,9 @@ void nfp_flower_metadata_cleanup(struct nfp_app *app)
 	rhashtable_free_and_destroy(&priv->neigh_table,
 				    nfp_check_rhashtable_empty, NULL);
 	kvfree(priv->stats);
-	kfree(priv->mask_ids.mask_id_free_list.buf);
-	kfree(priv->mask_ids.last_used);
-	vfree(priv->stats_ids.free_list.buf);
+	if (!app->pf->multi_pf.en) {
+		kfree(priv->mask_ids.mask_id_free_list.buf);
+		kfree(priv->mask_ids.last_used);
+		vfree(priv->stats_ids.free_list.buf);
+	}
 }
