@@ -971,29 +971,80 @@ free_mem:
 }
 #endif
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,4))
 static int crdma_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata)
-#else
-static int crdma_dealloc_pd(struct ib_pd *pd)
-#endif
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
 	struct crdma_pd *npd = to_crdma_pd(pd);
 
 	crdma_free_bitmap_index(&dev->pd_map, npd->pd_index);
 
-#if (!(VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0)))
-	kfree(pd);
-#endif
 	return 0;
 }
+#elif (VER_NON_KYL_GE(5,2) || VER_KYL_GE(10,3))
+static void crdma_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
+	struct crdma_pd *npd = to_crdma_pd(pd);
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,8) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+	crdma_free_bitmap_index(&dev->pd_map, npd->pd_index);
+
+	return;
+}
+#else
+static int crdma_dealloc_pd(struct ib_pd *pd)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
+	struct crdma_pd *npd = to_crdma_pd(pd);
+
+	crdma_free_bitmap_index(&dev->pd_map, npd->pd_index);
+
+	kfree(npd);
+
+	return 0;
+}
+#endif
+
+#if (VER_NON_RHEL_OR_KYL_GE(5,8) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,4))
 static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr,
 			struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ah->device);
 	struct rdma_ah_attr *ah_attr = init_attr->ah_attr;
+	struct crdma_ib_create_ah_resp resp = {};
+	struct crdma_ah *cah = to_crdma_ah(ah);
+	struct ib_pd *pd = ah->pd;
+	int err;
+
+
+	if (crdma_check_ah_attr(dev, ah_attr)) {
+		crdma_warn("CRDMA ah attr check failed\n");
+		return -EINVAL;
+	}
+
+	if (crdma_set_av(pd, &cah->av, ah_attr)) {
+		return -EINVAL;
+	}
+
+	if (udata) {
+		resp.vlan     = le32_to_cpu(cah->av.vlan);
+		resp.v_id     = cah->av.v_id;
+		resp.gid_type = cah->av.gid_type;
+		memcpy(resp.d_mac, cah->av.d_mac, ETH_ALEN);
+		resp.traffic_class = cah->av.traffic_class;
+
+		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
+		if (err)
+			return -EINVAL;
+	}
+
+	return 0;
+}
+#elif (VER_NON_KYL_GE(5,2) || VER_KYL_GE(10,3))
+static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr,
+			u32 flags, struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(ah->device);
 	struct crdma_ib_create_ah_resp resp = {};
 	struct crdma_ah *cah = to_crdma_ah(ah);
 	struct ib_pd *pd = ah->pd;
@@ -1089,7 +1140,17 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 	return 0;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,0) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,0) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,4))
+static int crdma_destroy_ah(struct ib_ah *ah, u32 flags)
+{
+	return 0;
+}
+#elif (VER_NON_KYL_GE(5,2) || VER_KYL_GE(10,3))
+static void crdma_destroy_ah(struct ib_ah *ah, u32 flags)
+{
+	return;
+}
+#elif (VER_NON_RHEL_OR_KYL_GE(5,0))
 static int crdma_destroy_ah(struct ib_ah *ah, u32 flags)
 {
 	return 0;
@@ -2505,11 +2566,113 @@ static int crdma_modify_cq(struct ib_cq *cq, u16 cq_count, u16 cq_period)
 	return 0;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,8) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,4))
 static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
+{
+        struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
+        struct crdma_cq *ccq = to_crdma_cq(cq);
+	int err;
+
+        err = crdma_cq_destroy_cmd(dev, ccq);
+        if (err) {
+                /*
+                 * TODO: Determine best course of action here, if we
+                 * ignore and continue we can not free the resource
+                 * because microcode will believe it is still in use.
+                 */
+                crdma_warn("Microcode destroy CQ command failed\n");
+                return -EINVAL;
+        }
+
+        if (dev->have_interrupts)
+                synchronize_irq(dev->eq_table.eq[ccq->eq_num].vector);
+
+        dev->cq_table[ccq->cqn] = NULL;
+
+        if (atomic_dec_and_test(&ccq->ref_cnt))
+                complete(&ccq->free);
+        wait_for_completion(&ccq->free);
+
+        dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
+                        ccq->ci_mbox, ccq->ci_mbox_paddr);
+        crdma_free_hw_queue(dev, ccq->mem);
+        crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
+
+        return 0;
+}
+#elif (VER_NON_KYL_GE(5,3) || VER_KYL_GE(10,3))
+static void crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
+{
+        struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
+        struct crdma_cq *ccq = to_crdma_cq(cq);
+	int err;
+
+        err = crdma_cq_destroy_cmd(dev, ccq);
+        if (err) {
+                /*
+                 * TODO: Determine best course of action here, if we
+                 * ignore and continue we can not free the resource
+                 * because microcode will believe it is still in use.
+                 */
+                crdma_warn("Microcode destroy CQ command failed\n");
+                return;
+        }
+
+        if (dev->have_interrupts)
+                synchronize_irq(dev->eq_table.eq[ccq->eq_num].vector);
+
+        dev->cq_table[ccq->cqn] = NULL;
+
+        if (atomic_dec_and_test(&ccq->ref_cnt))
+                complete(&ccq->free);
+        wait_for_completion(&ccq->free);
+
+        dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
+                        ccq->ci_mbox, ccq->ci_mbox_paddr);
+        crdma_free_hw_queue(dev, ccq->mem);
+        crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
+
+	return;
+}
+#elif VER_KERN_GE(5,2)
+static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
+{
+        struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
+        struct crdma_cq *ccq = to_crdma_cq(cq);
+	int err;
+
+        err = crdma_cq_destroy_cmd(dev, ccq);
+        if (err) {
+                /*
+                 * TODO: Determine best course of action here, if we
+                 * ignore and continue we can not free the resource
+                 * because microcode will believe it is still in use.
+                 */
+                crdma_warn("Microcode destroy CQ command failed\n");
+                kfree(ccq);
+                return -EINVAL;
+        }
+
+        if (dev->have_interrupts)
+                synchronize_irq(dev->eq_table.eq[ccq->eq_num].vector);
+
+        dev->cq_table[ccq->cqn] = NULL;
+
+        if (atomic_dec_and_test(&ccq->ref_cnt))
+                complete(&ccq->free);
+        wait_for_completion(&ccq->free);
+
+        dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
+                        ccq->ci_mbox, ccq->ci_mbox_paddr);
+        crdma_free_hw_queue(dev, ccq->mem);
+        crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
+
+        kfree(ccq);
+
+        return 0;
+}
 #else
 static int crdma_destroy_cq(struct ib_cq *cq)
-#endif
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
 	struct crdma_cq *ccq = to_crdma_cq(cq);
@@ -2523,6 +2686,7 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 		 * because microcode will believe it is still in use.
 		 */
 		crdma_warn("Microcode destroy CQ command failed\n");
+		kfree(ccq);
 		return -EINVAL;
 	}
 
@@ -2539,12 +2703,12 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 			ccq->ci_mbox, ccq->ci_mbox_paddr);
 	crdma_free_hw_queue(dev, ccq->mem);
 	crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
-#if (!(VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0)))
+
 	kfree(ccq);
-#endif
 
 	return 0;
 }
+#endif
 
 static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
 			struct ib_udata *udata)
@@ -2760,9 +2924,9 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 
 #if (VER_NON_RHEL_GE(5,6))
 	cmr->umem = ib_umem_get(pd->device, start, length, access_flags);
-#elif (VER_NON_RHEL_OR_KYL_GE(5,5) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,5) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,4))
 	cmr->umem = ib_umem_get(udata, start, length, access_flags);
-#elif (VER_NON_RHEL_GE(5,1))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_KYL_GE(10,3))
 	cmr->umem = ib_umem_get(udata, start, length, access_flags, 0);
 #else
 	cmr->umem = ib_umem_get(pd->uobject->context, start, length,
@@ -2856,6 +3020,69 @@ static int crdma_dereg_mr(struct ib_mr *mr)
 	return 0;
 }
 
+#if ((VER_NON_KYL_GE(5,2) && VER_NON_KYL_LT(5,9)) || VER_KYL_GE(10,3))
+static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd, enum ib_mr_type type,
+		     u32 max_num_sg, struct ib_udata *udata)
+{
+	struct crdma_ibdev *cdev = to_crdma_ibdev(pd->device);
+	struct crdma_mr *cmr;
+	int err;
+
+	if (type != IB_MR_TYPE_MEM_REG) {
+		crdma_info("MR type 0x%x not supported", type);
+		return ERR_PTR(-EINVAL);
+	}
+
+	if (max_num_sg > cdev->cap.ib.max_fast_reg_page_list_len) {
+		crdma_err("max num sg (0x%x) exceeded dev cap (0x%x)\n",
+		    max_num_sg, cdev->cap.ib.max_fast_reg_page_list_len);
+		return ERR_PTR(-EINVAL);
+	}
+
+	cmr = kzalloc(sizeof(*cmr), GFP_KERNEL);
+	if (!cmr) {
+		crdma_err("No memory for MR object\n");
+		return ERR_PTR(-ENOMEM);
+	}
+
+	cmr->num_mtt = max_num_sg;
+	if (cmr->num_mtt) {
+		cmr->base_mtt = crdma_alloc_bitmap_area(&cdev->mtt_map,
+						cmr->num_mtt);
+		if (cmr->base_mtt < 0) {
+			err = -ENOMEM;
+			goto free_mem;
+		}
+	}
+
+	if (crdma_alloc_bitmap_index(&cdev->mpt_map, &cmr->mpt_index)) {
+		err = -ENOMEM;
+		goto free_mtt;
+	}
+
+	cmr->pdn = to_crdma_pd(pd)->pd_index;
+	cmr->access = 0;
+	cmr->io_vaddr = 0;
+	cmr->len = 0;
+	cmr->mpt_order = 0;
+	cmr->page_shift = PAGE_SHIFT;
+	cmr->key = cmr->mpt_index << 8;
+	cmr->ib_mr.rkey = cmr->key;
+	cmr->ib_mr.lkey = cmr->key;
+	cmr->umem = NULL;
+	cmr->type = CRDMA_MR_TYPE_FRMR;
+
+	return &cmr->ib_mr;
+
+free_mtt:
+	if (cmr->num_mtt)
+		crdma_free_bitmap_area(&cdev->mtt_map, cmr->base_mtt,
+						cmr->num_mtt);
+free_mem:
+	kfree(cmr);
+	return ERR_PTR(err);
+}
+#else
 static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 			enum ib_mr_type type, u32 max_num_sg)
 {
@@ -2917,6 +3144,7 @@ free_mem:
 	kfree(cmr);
 	return ERR_PTR(err);
 }
+#endif
 
 static int crdma_attach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 {
@@ -3220,10 +3448,10 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.drain_rq		= crdma_drain_rq;
 #endif
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,4))
         ret = ib_register_device(&dev->ibdev, "crdma%d",
 		&dev->nfp_info->pdev->dev);
-#elif VER_NON_RHEL_GE(5,1)
+#elif (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_KYL_GE(10,3))
         ret = ib_register_device(&dev->ibdev, "crdma%d");
 #elif (VER_NON_KYL_GE(4,20) || VER_KYL_GE(10,2))
 	ret = ib_register_device(&dev->ibdev, "crdma%d", NULL);

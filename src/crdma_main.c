@@ -432,7 +432,7 @@ free_eq:
 static ssize_t show_hca_type(struct device *device,
 		struct device_attribute *attr, char *buf)
 {
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
@@ -444,7 +444,7 @@ static ssize_t show_hca_type(struct device *device,
 static ssize_t show_hw_rev(struct device *device,
 		struct device_attribute *attr, char *buf)
 {
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
@@ -456,7 +456,7 @@ static ssize_t show_hw_rev(struct device *device,
 static ssize_t show_board(struct device *device, struct device_attribute *attr,
 			  char *buf)
 {
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
@@ -480,7 +480,7 @@ static ssize_t show_doorbell(struct device *device, struct device_attribute *att
 static ssize_t store_doorbell(struct device *device, struct device_attribute *attr,
                               const char *buf, size_t size)
 {
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
        struct ib_device *ibdev = container_of(device, struct ib_device, dev);
        struct crdma_ibdev *cdev = to_crdma_ibdev(ibdev);
 #else
@@ -501,7 +501,7 @@ static ssize_t dump_uc_gid(struct device *device,
 	int i, j;
 	int err;
 
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
@@ -564,7 +564,7 @@ static ssize_t exec_command(struct device *device,
 	int i;
 	uint32_t outparm;
 
-#if (VER_NON_RHEL_GE(5,3) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
@@ -952,7 +952,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		goto err_unregister_verbs;
 	dev->ibdev.phys_port_cnt = dev->cap.n_ports;
 
-#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 	if (ib_device_set_netdev(&dev->ibdev, dev->nfp_info->netdev, 1))
 		goto err_free_idr;
 #endif
