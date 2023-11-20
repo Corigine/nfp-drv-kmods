@@ -163,6 +163,24 @@ struct nfp_tun_mac_addr_offload {
 	u8 addr[ETH_ALEN];
 };
 
+/**
+ * struct nfp_tun_ip_update_work - process neighbour offloads
+ * @work:	Work queue for updating offloads
+ * @app_priv:	Back pointer to flower app
+ * @event:	Event that spawned this work
+ * @dev:	net_device on which to operate
+ * @ipv6:	bool: true=ipv6, false=ipv4
+ * @ptr:	Pointer to in_ifaddr/inet6_ifaddr
+ */
+struct nfp_tun_ip_update_work {
+	struct work_struct work;
+	struct nfp_flower_priv *app_priv;
+	unsigned long event;
+	struct net_device *dev;
+	bool ipv6;
+	void *ptr;
+};
+
 enum nfp_flower_mac_offload_cmd {
 	NFP_TUNNEL_MAC_OFFLOAD_ADD =		0,
 	NFP_TUNNEL_MAC_OFFLOAD_DEL =		1,
@@ -757,6 +775,211 @@ nfp_tun_neigh_event_handler(struct notifier_block *nb, unsigned long event,
 
 	return NOTIFY_OK;
 }
+
+static void
+nfp_tun_ip_check_update(struct nfp_flower_priv *app_priv, unsigned long event,
+			struct net_device *dev, bool ipv6, void *ptr)
+{
+	struct nfp_neigh_entry *nn_entry;
+	struct rhashtable_iter iter;
+	struct nfp_tun_neigh *neigh;
+	bool ip_match, id_match;
+	struct nfp_app *app;
+	size_t neigh_size;
+	u32 port_id;
+	u8 type;
+
+#if IS_ENABLED(CONFIG_IPV6)
+	struct nfp_tun_neigh_v6 *payload6 = NULL;
+	struct inet6_ifaddr *ifa6 = ptr;
+	struct in6_addr nn_dst_addr6;
+#endif
+
+	struct nfp_tun_neigh_v4 *payload = NULL;
+	struct in_ifaddr *ifa = ptr;
+	__be32 nn_dst_addr;
+
+	app = app_priv->app;
+	port_id = nfp_flower_get_port_id_from_netdev(app, dev);
+	if (!port_id)
+		return;
+
+	/* NETDEV_UP if IP address added, NETDEV_DOWN if removed. */
+	if (event != NETDEV_UP && event != NETDEV_DOWN)
+		return;
+
+	/* Iterate over neighbour table */
+	rhashtable_walk_enter(&app_priv->neigh_table, &iter);
+	rhashtable_walk_start(&iter);
+	while ((nn_entry = rhashtable_walk_next(&iter)) != NULL) {
+		/* Skip invalid entries */
+		if (IS_ERR(nn_entry))
+			continue;
+		/* Skip already offloaded entries */
+		if ((event == NETDEV_UP) && nn_entry->is_offloaded)
+			continue;
+		if ((event == NETDEV_DOWN) && !nn_entry->is_offloaded)
+			continue;
+		/* Skip invalid addr entries */
+		if (nn_entry->is_ipv6 != ipv6)
+			continue;
+
+		/* If newly added/removed IP matches entry source
+		 * address, offload/unoffload the entry
+		 */
+		if (ipv6) {
+#if IS_ENABLED(CONFIG_IPV6)
+			neigh_size = sizeof(struct nfp_tun_neigh_v6);
+			payload6 = (struct nfp_tun_neigh_v6 *)nn_entry->payload;
+			neigh = (struct nfp_tun_neigh *)&payload6->common;
+			ip_match = ipv6_addr_equal(&payload6->src_ipv6,
+						   &ifa6->addr);
+#endif
+		} else {
+			neigh_size = sizeof(struct nfp_tun_neigh_v4);
+			payload = (struct nfp_tun_neigh_v4 *)nn_entry->payload;
+			neigh = (struct nfp_tun_neigh *)&payload->common;
+			ip_match = (payload->src_ipv4 == ifa->ifa_address);
+		}
+
+		id_match = (be32_to_cpu(neigh->port_id) == port_id);
+
+		if (!ip_match || !id_match)
+			continue;
+
+		nn_entry->is_offloaded = !nn_entry->is_offloaded;
+		if (event == NETDEV_DOWN) {
+			if (ipv6) {
+#if IS_ENABLED(CONFIG_IPV6)
+				nn_dst_addr6 = payload6->dst_ipv6;
+				memset(payload6, 0, neigh_size);
+				payload6->dst_ipv6 = nn_dst_addr6;
+#endif
+			} else {
+				nn_dst_addr = payload->dst_ipv4;
+				memset(payload, 0, neigh_size);
+				payload->dst_ipv4 = nn_dst_addr;
+			}
+		}
+		if (ipv6) {
+#if IS_ENABLED(CONFIG_IPV6)
+			type = NFP_FLOWER_CMSG_TYPE_TUN_NEIGH_V6;
+			nfp_flower_xmit_tun_conf(app, type, neigh_size,
+						 payload6, GFP_ATOMIC);
+#endif
+		} else {
+			type = NFP_FLOWER_CMSG_TYPE_TUN_NEIGH;
+			nfp_flower_xmit_tun_conf(app, type, neigh_size,
+						 payload, GFP_ATOMIC);
+		}
+	}
+	rhashtable_walk_stop(&iter);
+	rhashtable_walk_exit(&iter);
+}
+
+static void nfp_tun_ip_update(struct work_struct *work)
+{
+	struct nfp_tun_ip_update_work *update_work;
+	struct in_device *in_dev = NULL;
+#if IS_ENABLED(CONFIG_IPV6)
+	struct inet6_dev *in6_dev = NULL;
+#endif
+
+	update_work = container_of(work, struct nfp_tun_ip_update_work, work);
+	if (!update_work->ipv6) {
+		in_dev = in_dev_get(update_work->dev);
+		if (!in_dev)
+			goto end;
+	} else {
+#if IS_ENABLED(CONFIG_IPV6)
+		in6_dev = in6_dev_get(update_work->dev);
+		if (!in6_dev)
+			goto end;
+#else
+		goto end;
+#endif
+	}
+
+	nfp_tun_ip_check_update(update_work->app_priv,
+				update_work->event,
+				update_work->dev,
+				update_work->ipv6,
+				update_work->ptr);
+
+	if (!update_work->ipv6) {
+		in_dev_put(in_dev);
+	} else {
+#if IS_ENABLED(CONFIG_IPV6)
+		in6_dev_put(in6_dev);
+#endif
+	}
+
+end:
+	kfree(update_work);
+}
+
+static struct nfp_tun_ip_update_work *
+nfp_tun_ip_update_work(struct nfp_flower_priv *app_priv,
+		       struct net_device *dev, unsigned long event,
+		       bool ipv6, void *ptr)
+{
+	struct nfp_tun_ip_update_work *update_work;
+
+	update_work = kzalloc(sizeof(*update_work), GFP_ATOMIC);
+	if (WARN_ON(!update_work))
+		return NULL;
+
+	INIT_WORK(&update_work->work, nfp_tun_ip_update);
+	update_work->app_priv = app_priv;
+	update_work->dev = dev;
+	update_work->event = event;
+	update_work->ipv6 = ipv6;
+	update_work->ptr = ptr;
+
+	return update_work;
+}
+
+static int
+nfp_tun_ip_event_handler(struct notifier_block *nb,
+			 unsigned long event, void *ptr)
+{
+	struct nfp_tun_ip_update_work *update_work;
+	struct nfp_flower_priv *app_priv;
+	struct in_ifaddr *ifa = ptr;
+	struct net_device *dev;
+
+	dev = ifa->ifa_dev->dev;
+	app_priv = container_of(nb, struct nfp_flower_priv, tun.ip_nb);
+	update_work = nfp_tun_ip_update_work(app_priv, dev, event, false, ptr);
+	if (!update_work)
+		return NOTIFY_DONE;
+
+	queue_work(system_highpri_wq, &update_work->work);
+
+	return NOTIFY_DONE;
+}
+
+#if IS_ENABLED(CONFIG_IPV6)
+static int
+nfp_tun_ip6_event_handler(struct notifier_block *nb,
+			  unsigned long event, void *ptr)
+{
+	struct nfp_tun_ip_update_work *update_work;
+	struct nfp_flower_priv *app_priv;
+	struct inet6_ifaddr *ifa6 = ptr;
+	struct net_device *dev;
+
+	dev = ifa6->idev->dev;
+	app_priv = container_of(nb, struct nfp_flower_priv, tun.ip6_nb);
+	update_work = nfp_tun_ip_update_work(app_priv, dev, event, true, ptr);
+	if (!update_work)
+		return NOTIFY_DONE;
+
+	queue_work(system_highpri_wq, &update_work->work);
+
+	return NOTIFY_DONE;
+}
+#endif
 
 void nfp_tunnel_request_route_v4(struct nfp_app *app, struct sk_buff *skb)
 {
@@ -1531,13 +1754,33 @@ int nfp_tunnel_config_start(struct nfp_app *app)
 	priv->tun.neigh_nb.notifier_call = nfp_tun_neigh_event_handler;
 
 	err = register_netevent_notifier(&priv->tun.neigh_nb);
-	if (err) {
-		rhashtable_free_and_destroy(&priv->tun.offloaded_macs,
-					    nfp_check_rhashtable_empty, NULL);
-		return err;
-	}
+	if (err)
+		goto free_hashtable;
+
+	/* Initialise priv data for IPv4 neighbour updating. */
+	priv->tun.ip_nb.notifier_call = nfp_tun_ip_event_handler;
+	err = register_inetaddr_notifier(&priv->tun.ip_nb);
+	if (err)
+		goto unregister_netevent;
+
+	/* Initialise priv data for IPv6 neighbour updating. */
+#if IS_ENABLED(CONFIG_IPV6)
+	priv->tun.ip6_nb.notifier_call = nfp_tun_ip6_event_handler;
+	err = register_inet6addr_notifier(&priv->tun.ip6_nb);
+	if (err)
+		goto unregister_inet4;
+#endif
 
 	return 0;
+
+unregister_inet4:
+	unregister_inetaddr_notifier(&priv->tun.ip_nb);
+unregister_netevent:
+	unregister_netevent_notifier(&priv->tun.neigh_nb);
+free_hashtable:
+	rhashtable_free_and_destroy(&priv->tun.offloaded_macs,
+				    nfp_check_rhashtable_empty, NULL);
+	return err;
 }
 
 void nfp_tunnel_config_stop(struct nfp_app *app)
@@ -1547,6 +1790,10 @@ void nfp_tunnel_config_stop(struct nfp_app *app)
 	struct list_head *ptr, *storage;
 
 	unregister_netevent_notifier(&priv->tun.neigh_nb);
+	unregister_inetaddr_notifier(&priv->tun.ip_nb);
+#if IS_ENABLED(CONFIG_IPV6)
+	unregister_inet6addr_notifier(&priv->tun.ip6_nb);
+#endif
 
 	ida_destroy(&priv->tun.mac_off_ids);
 

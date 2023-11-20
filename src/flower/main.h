@@ -99,6 +99,8 @@ struct nfp_fl_stats_id {
  * @ipv6_off_lock:	Lock for the IPv6 address list
  * @mac_off_ids:	IDA to manage id assignment for offloaded MACs
  * @neigh_nb:		Notifier to monitor neighbour state
+ * @ip_nb:		Notifier to monitor IPv4 address state
+ * @ip6_nb:		Notifier to monitor IPv6 address state
  */
 struct nfp_fl_tunnel_offloads {
 	struct rhashtable offloaded_macs;
@@ -108,6 +110,8 @@ struct nfp_fl_tunnel_offloads {
 	struct mutex ipv6_off_lock;
 	struct ida mac_off_ids;
 	struct notifier_block neigh_nb;
+	struct notifier_block ip_nb;
+	struct notifier_block ip6_nb;
 };
 
 /**
