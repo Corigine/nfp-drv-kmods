@@ -984,10 +984,6 @@ static int nfp_nsp_init(struct pci_dev *pdev, struct nfp_pf *pf)
 		return err;
 	}
 
-	pf->multi_pf.en = pdev->multifunction;
-	pf->multi_pf.id = PCI_FUNC(pdev->devfn);
-	dev_info(&pdev->dev, "%s-PF detected\n", pf->multi_pf.en ? "Multi" : "Single");
-
 	err = nfp_nsp_wait(nsp);
 	if (err < 0)
 		goto exit_close_nsp;
@@ -1216,9 +1212,16 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 		goto err_disable_msix;
 	}
 
-	err = nfp_resource_table_init(pf->cpp);
-	if (err)
-		goto err_cpp_free;
+	pf->multi_pf.en = pdev->multifunction;
+	pf->multi_pf.id = PCI_FUNC(pdev->devfn);
+	dev_info(&pdev->dev, "%s-PF detected\n", pf->multi_pf.en ? "Multi" : "Single");
+
+	/* Only PF0 has the right to reclaim locked resources. */
+	if (!pf->multi_pf.id) {
+		err = nfp_resource_table_init(pf->cpp);
+		if (err)
+			goto err_cpp_free;
+	}
 
 	pf->hwinfo = nfp_hwinfo_read(pf->cpp);
 
