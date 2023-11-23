@@ -3406,6 +3406,11 @@ int nfp_net_init(struct nfp_net *nn)
 		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_MCAST_FILTER;
 #endif
 
+	/* Multi-PF is already enabled during pre-init, preserve control bit */
+	if (nn->cap_w1 & NFP_NET_CFG_CTRL_MULTI_PF)
+		nn->dp.ctrl_w1 |= (nn_readl(nn, NFP_NET_CFG_CTRL_WORD1) &
+				   NFP_NET_CFG_CTRL_MULTI_PF);
+
 	/* Enable metadata padding for dma alignment, if supported */
 	if (nn->cap_w1 & NFP_NET_CFG_CTRL_META_PAD)
 		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_META_PAD;
