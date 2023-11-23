@@ -188,7 +188,7 @@ nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
 	void *md_dst = NULL;
 #endif
 	bool vlan_insert, pad_cap, pad_align = false;
-	struct nfp_ipsec_offload offload_info;
+	struct nfp_ipsec_offload offload_info = {};
 	unsigned long cur_phys, target_phys;
 	unsigned char *data;
 	u32 meta_id = 0;
