@@ -118,13 +118,13 @@ on:
           'single_pf' or 'multi_pf' or version such as '23.04-4'
       driver_source_ver:
         type: string
-        default: 'release-23.07.1'
+        default: 'release-23.10.1'
         required: false
         description: >-
           Version/Branch of driver source code to use.
       driver_test_ver:
         type: string
-        default: 'main'
+        default: 'ci-dev-drv-tests'
         required: false
         description: >-
           Version/Branch of driver test code to use.
