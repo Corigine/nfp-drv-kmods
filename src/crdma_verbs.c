@@ -1140,7 +1140,7 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 	return 0;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,0) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,4))
+#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,4))
 static int crdma_destroy_ah(struct ib_ah *ah, u32 flags)
 {
 	return 0;
@@ -1150,9 +1150,10 @@ static void crdma_destroy_ah(struct ib_ah *ah, u32 flags)
 {
 	return;
 }
-#elif (VER_NON_RHEL_OR_KYL_GE(5,0))
+#elif VER_KERN_GE(5,0)
 static int crdma_destroy_ah(struct ib_ah *ah, u32 flags)
 {
+	kfree(to_crdma_ah(ah));
 	return 0;
 }
 #else
@@ -3243,7 +3244,7 @@ int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u32 port,
 
        return IB_MAD_RESULT_SUCCESS;
 }
-#elif (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,5) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
 int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
                       const struct ib_wc *in_wc, const struct ib_grh *in_grh,
                       const struct ib_mad *in_mad, struct ib_mad *out_mad,
