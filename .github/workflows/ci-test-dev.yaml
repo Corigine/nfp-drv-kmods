@@ -111,7 +111,7 @@ on:
           NFP architecture/OS on which to run tests
       bsp_ver:
         type: string
-        default: single_pf
+        default: multi_pf
         required: false
         description: >-
           Which BSP version to install on the DUT and flash to the NFP. Specify
