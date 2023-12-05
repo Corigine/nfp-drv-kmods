@@ -1,0 +1,150 @@
+name: Driver Regression Tests
+run-name: >-
+  Driver Regressions: ${{ github.head_ref || github.ref_name }}
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths-ignore:
+      - '.github/actions/**'
+      - '.github/data/**'
+      - '.github/images/**'
+      - '.github/packaging/**'
+      - '.github/scripts/**'
+      - '.github/workflows/**'
+      - 'Documentation/**'
+      - 'tools/**'
+      - 'tests/**'
+    secrets:
+      GHUB_TOKEN:
+        required: true
+      AZ_SAS_TOK:
+        required: true
+  workflow_dispatch:
+    secrets:
+      GHUB_TOKEN:
+        required: true
+      AZ_SAS_TOK:
+        required: true
+    inputs:
+      test:
+        type: string
+        required: false
+        default: 'all'
+        description: >-
+          Specify which test/s to run
+      fw_type:
+        type: choice
+        required: false
+        options:
+          - AUTO:all
+          - BPF:agilio-bpf-firmware
+          - NIC:agilio-nic-firmware
+          - SRIOV:agilio-sriov-firmware
+          - IPSEC:agilio-ipsec-firmware
+          - DISA:agilio-flower-app-firmware
+        default: AUTO:all
+        description: >-
+          Specify which type of firmware to use
+          when running the specified tests
+      fw_version:
+        type: string
+        required: false
+        default: ''
+        description: >-
+          Name/Version of firmware to use
+          when running the specified tests, e.g. Specifying
+          "22.07-0" in combination with `fw_type=NIC:agilio-nic-firmware`
+          will result in "agilio-nic-firmware-22.07-0.tar.gz" being used.
+          If left blank, the latest version of that firmware type will be used.
+      fw_release_type:
+        type: choice
+        required: false
+        options:
+          - releases
+          - prereleases
+          - interim
+          - temporary
+        default: releases
+        description: >-
+          Release type of the firmware to use
+          when running the specified tests
+      kernel_ver:
+        type: string
+        default: ''
+        required: false
+        description: >-
+          Which kernel to install on the DUT, if blank the latest build
+          available will be used
+      kernel_source:
+        type: choice
+        required: false
+        options:
+          - binaries/linux_stable
+          - binaries/linux_net_next
+          - tmp/linux_stable
+          - tmp/linux_net_next
+        default: binaries/linux_stable
+        description: >-
+          Where to find the desired kernel
+      platform:
+        type: choice
+        required: false
+        options:
+          - osprey/any
+          - kestrel/any
+          - all/any
+          - osprey/CentOS-8
+          - kestrel/CentOS-8
+          - all/CentOS-8
+          - osprey/Ubuntu-20.04
+          - kestrel/Ubuntu-20.04
+          - all/Ubuntu-20.04
+          - osprey/all
+          - kestrel/all
+          - all/all
+        default: all/any
+        description: >-
+          NFP architecture/OS on which to run tests
+      bsp_ver:
+        type: string
+        default: '23.04-0'
+        required: false
+        description: >-
+          Which BSP version to install on the DUT and flash to the NFP
+      driver_source_ver:
+        type: string
+        default: 'release-23.07.1'
+        required: false
+        description: >-
+          Version/Branch of driver source code to use.
+      driver_test_ver:
+        type: string
+        default: 'main'
+        required: false
+        description: >-
+          Version/Branch of driver test code to use.
+
+env:
+  CUSTOM_STABLE_KERNELS: binaries/misc/kernels/linux_stable_builds
+  CUSTOM_TMP_KERNELS: tmp/misc/kernels/${{ inputs.kernel_source }}_builds
+
+jobs:
+ call-test-dev:
+  uses: Corigine/ci-libs/.github/workflows/ci-drv-test-dev.yaml@main
+  with:
+    drv_revision: ${{ github.head_ref || github.ref_name }}
+    test: ${{ inputs.test }}
+    fw_type: ${{ inputs.fw_type }}
+    fw_version: ${{ inputs.fw_version }}
+    fw_release_type: ${{ inputs.fw_release_type }}
+    kernel_ver: ${{ inputs.kernel_ver }}
+    kernel_source: ${{ inputs.kernel_source }}
+    platform: ${{ inputs.platform }}
+    bsp_ver: ${{ inputs.bsp_ver }}
+    driver_source_ver: ${{ inputs.driver_source_ver }}
+    driver_test_ver: ${{ inputs.driver_test_ver }}
+  secrets: inherit
