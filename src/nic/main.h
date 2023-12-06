@@ -26,8 +26,10 @@ struct nfp_dcb {
 	u8 trust_status;
 	u8 pfc_en;
 	u8 dcb_cap;
+	u8 dcbx_cap;
 	bool rate_init;
 	bool ets_init;
+	u8 dcb_cee_state;
 
 	struct nfp_cpp_area *dcbcfg_tbl_area;
 	u8 __iomem *dcbcfg_tbl;

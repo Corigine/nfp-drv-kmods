@@ -23,6 +23,11 @@
 #define NFP_DCB_TSA_STRICT	2
 #define NFP_DCB_TSA_ETS		3
 
+#define NFP_CEE_STATE_UP    1
+#define NFP_CEE_STATE_DOWN  0
+#define NFP_NET_CEE_MAX_PRIO CEE_DCBX_MAX_PRIO
+#define NFP_NET_CEE_MAX_PGS  CEE_DCBX_MAX_PGS
+
 #define NFP_DCB_GBL_ENABLE	BIT(0)
 #define NFP_DCB_QOS_ENABLE	BIT(1)
 #define NFP_DCB_PFC_ENABLE	BIT(2)
@@ -65,6 +70,10 @@
 #ifndef IEEE_8021QAZ_APP_SEL_DSCP
 #define IEEE_8021QAZ_APP_SEL_DSCP       5
 #endif
+
+#define NFP_DCB_STATUS_SUCCESS	0
+#define NFP_DCB_STATUS_ERROR	1
+#define NFP_MAX_TRAFFIC_CLASS	0x80
 
 static struct nfp_dcb *get_dcb_priv(struct nfp_net *nn)
 {
@@ -766,6 +775,244 @@ bool nfp_dcb_pfc_is_enable(struct nfp_app *app, struct nfp_net *nn)
 	return dcb->pfc_en;
 }
 
+static u8 nfp_nic_dcbnl_cee_getstate(struct net_device *dev)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	dcb = get_dcb_priv(nn);
+	return dcb->dcb_cee_state;
+}
+
+static u8 nfp_nic_dcbnl_cee_setstate(struct net_device *dev, u8 state)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	dcb = get_dcb_priv(nn);
+	dcb->dcb_cee_state = state;
+	return 0;
+}
+
+static u8 nfp_nic_dcbnl_setall(struct net_device *dev)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_app *app = nn->app;
+	struct ieee_ets ets = {};
+	struct ieee_pfc pfc = {};
+	struct nfp_dcb *dcb;
+	int err, i;
+
+	dcb = get_dcb_priv(nn);
+
+	if (!dcb->dcb_cee_state) {
+		nfp_warn(app->cpp,
+			 "Failed to set CEE, the state is off");
+		return NFP_DCB_STATUS_ERROR;
+	}
+	/* Set ets configure */
+	ets.ets_cap = IEEE_8021QAZ_MAX_TCS;
+	for (i = 0; i < NFP_NET_CEE_MAX_PGS; i++) {
+		ets.tc_tx_bw[i] = dcb->tc_tx_pct[i];
+		ets.prio_tc[i]  = dcb->prio2tc[i];
+		ets.tc_tsa[i]   = IEEE_8021QAZ_TSA_ETS;
+	}
+	err = nfp_nic_dcbnl_ieee_setets(dev, &ets);
+	if (err) {
+		nfp_warn(app->cpp, "Failed to set CEE ETS:%d.", err);
+		return err;
+	}
+
+	/* Set pfc configure */
+	pfc.pfc_en = dcb->pfc_en;
+	err = nfp_nic_dcbnl_ieee_setpfc(dev, &pfc);
+	if (err) {
+		nfp_warn(app->cpp, "Failed to set CEE PFC:%d.", err);
+		return err;
+	}
+	return 0;
+}
+
+static void nfp_nic_dcbnl_setpgtccfgtx(struct net_device *dev,
+				       int priority, u8 prio_type,
+				       u8 pgid, u8 bw_pct, u8 up_map)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	if (priority >= NFP_NET_CEE_MAX_PRIO || pgid >= NFP_NET_CEE_MAX_PGS)
+		return;
+
+	dcb = get_dcb_priv(nn);
+	dcb->prio2tc[priority] = pgid;
+	dcb->tc_tx_pct[pgid] = bw_pct;
+}
+
+static void nfp_nic_dcbnl_getpgtccfgtx(struct net_device *dev,
+				       int priority, u8 *prio_type,
+				       u8 *pgid, u8 *bw_pct, u8 *up_map)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	if (priority >= NFP_NET_CEE_MAX_PRIO)
+		return;
+
+	dcb = get_dcb_priv(nn);
+	*prio_type = 0;
+	*pgid = dcb->prio2tc[priority];
+	*bw_pct = dcb->tc_tx_pct[*pgid];
+	*up_map = 0;
+}
+
+static void nfp_nic_dcbnl_setpgbwgcfgtx(struct net_device *dev,
+					int pgid, u8 bw_pct)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	dcb = get_dcb_priv(nn);
+
+	if (pgid >= NFP_NET_CEE_MAX_PGS)
+		return;
+
+	dcb->tc_tx_pct[pgid] = bw_pct;
+}
+
+static void nfp_nic_dcbnl_getpgbwgcfgtx(struct net_device *dev,
+					int pgid, u8 *bw_pct)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	dcb = get_dcb_priv(nn);
+
+	if (pgid >= NFP_NET_CEE_MAX_PGS)
+		return;
+
+	*bw_pct = dcb->tc_tx_pct[pgid];
+}
+
+static void nfp_nic_dcbnl_setpfccfg(struct net_device *dev,
+				    int priority, u8 setting)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	dcb = get_dcb_priv(nn);
+	if (!(dcb->dcb_cap & NFP_DCB_PFC_ENABLE) || priority >= NFP_NET_CEE_MAX_PRIO)
+		return;
+
+	if (setting)
+		dcb->pfc_en |= BIT(priority);
+	else
+		dcb->pfc_en &= ~BIT(priority);
+}
+
+static void nfp_nic_dcbnl_getpfccfg(struct net_device *dev,
+				    int priority, u8 *setting)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	dcb = get_dcb_priv(nn);
+	if (!(dcb->dcb_cap & NFP_DCB_PFC_ENABLE) || priority >= NFP_NET_CEE_MAX_PRIO)
+		return;
+
+	*setting = (dcb->pfc_en >> priority) & 0x1;
+}
+
+static u8 nfp_nic_dcbnl_getcap(struct net_device *dev,
+			       int capid, u8 *cap)
+{
+	int ret = 0;
+
+	switch (capid) {
+	case DCB_CAP_ATTR_PG:
+	case DCB_CAP_ATTR_PFC:
+	case DCB_CAP_ATTR_UP2TC:
+		*cap = true;
+		break;
+	case DCB_CAP_ATTR_PG_TCS:
+	case DCB_CAP_ATTR_PFC_TCS:
+		*cap = NFP_MAX_TRAFFIC_CLASS;
+		break;
+	case DCB_CAP_ATTR_GSP:
+	case DCB_CAP_ATTR_BCN:
+		*cap = false;
+		break;
+	case DCB_CAP_ATTR_DCBX:
+		*cap = DCB_CAP_DCBX_VER_CEE |
+		       DCB_CAP_DCBX_VER_IEEE;
+		break;
+	default:
+		*cap = false;
+		ret = EOPNOTSUPP;
+		break;
+	}
+	return ret;
+}
+
+static int nfp_nic_dcbnl_getnumtcs(struct net_device *dev,
+				   int tcs_id, u8 *num)
+{
+	switch (tcs_id) {
+	case DCB_NUMTCS_ATTR_PG:
+	case DCB_NUMTCS_ATTR_PFC:
+		*num = NFP_NET_CEE_MAX_PGS;
+		break;
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static u8 nfp_nic_dcbnl_getpfcstate(struct net_device *dev)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+	u8 *base_offset;
+	u8 pfc_en;
+
+	dcb = get_dcb_priv(nn);
+	if (!(dcb->dcb_cap & NFP_DCB_PFC_ENABLE))
+		return NFP_CEE_STATE_DOWN;
+
+	base_offset = dcb->dcbcfg_tbl + dcb->cfg_offset;
+	pfc_en  = readb(base_offset + NFP_DCB_DATA_OFF_PFC);
+	return pfc_en ? NFP_CEE_STATE_UP : NFP_CEE_STATE_DOWN;
+}
+
+static u8 nfp_nic_dcbnl_getdcbx(struct net_device *dev)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	dcb = get_dcb_priv(nn);
+	return dcb->dcbx_cap;
+}
+
+/**
+ * set required DCBx capability
+ * @netdev: the corresponding netdev
+ * @mode: new DCB mode managed or CEE+IEEE
+ *
+ * Set DCBx capability features
+ **/
+static u8 nfp_nic_dcbnl_setdcbx(struct net_device *dev, u8 mode)
+{
+	struct nfp_net *nn = netdev_priv(dev);
+	struct nfp_dcb *dcb;
+
+	dcb = get_dcb_priv(nn);
+	/* No support for LLD MANAGED */
+	if (mode & DCB_CAP_DCBX_LLD_MANAGED)
+		return NFP_DCB_STATUS_ERROR;
+
+	dcb->dcbx_cap = mode;
+	return NFP_DCB_STATUS_SUCCESS;
+}
+
 static const struct dcbnl_rtnl_ops nfp_nic_dcbnl_ops = {
 	/* ieee 802.1Qaz std */
 	.ieee_getets	= nfp_nic_dcbnl_ieee_getets,
@@ -776,6 +1023,22 @@ static const struct dcbnl_rtnl_ops nfp_nic_dcbnl_ops = {
 	.ieee_setpfc	= nfp_nic_dcbnl_ieee_setpfc,
 	.ieee_setapp	= nfp_nic_dcbnl_ieee_setapp,
 	.ieee_delapp	= nfp_nic_dcbnl_ieee_delapp,
+
+	/* CEE std */
+	.getstate	= nfp_nic_dcbnl_cee_getstate,
+	.setstate	= nfp_nic_dcbnl_cee_setstate,
+	.setall		= nfp_nic_dcbnl_setall,
+	.setpgtccfgtx	= nfp_nic_dcbnl_setpgtccfgtx,
+	.getpgtccfgtx	= nfp_nic_dcbnl_getpgtccfgtx,
+	.setpgbwgcfgtx	= nfp_nic_dcbnl_setpgbwgcfgtx,
+	.getpgbwgcfgtx	= nfp_nic_dcbnl_getpgbwgcfgtx,
+	.setpfccfg	= nfp_nic_dcbnl_setpfccfg,
+	.getpfccfg	= nfp_nic_dcbnl_getpfccfg,
+	.getcap		= nfp_nic_dcbnl_getcap,
+	.getnumtcs	= nfp_nic_dcbnl_getnumtcs,
+	.getpfcstate	= nfp_nic_dcbnl_getpfcstate,
+	.getdcbx	= nfp_nic_dcbnl_getdcbx,
+	.setdcbx	= nfp_nic_dcbnl_setdcbx,
 };
 
 int nfp_nic_dcb_init(struct nfp_net *nn)
@@ -813,6 +1076,8 @@ int nfp_nic_dcb_init(struct nfp_net *nn)
 		err = nfp_nic_ieee_ets_init(nn, dcb);
 		if (err)
 			dcb->ets_init = false;
+		dcb->dcbx_cap = DCB_CAP_DCBX_VER_CEE | DCB_CAP_DCBX_HOST |
+				DCB_CAP_DCBX_VER_IEEE;
 		dcb->trust_status = NFP_DCB_TRUST_INVALID;
 		dcb->rate_init = false;
 		dcb->dcb_cap = readb(dcb->dcbcfg_tbl + dcb->cfg_offset + NFP_DCB_DATA_OFF_CAP);
