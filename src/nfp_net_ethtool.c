@@ -2630,6 +2630,9 @@ static int nfp_port_set_pauseparam(struct net_device *netdev,
 	if (!eth_port)
 		return -EOPNOTSUPP;
 
+	if (pause->autoneg != AUTONEG_DISABLE)
+		return -EOPNOTSUPP;
+
 	err = nfp_eth_set_pauseparam(port->app->cpp, eth_port->index,
 				     pause->tx_pause, pause->rx_pause);
 	if (!err)
