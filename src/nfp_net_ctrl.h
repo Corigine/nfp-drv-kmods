@@ -276,6 +276,7 @@
 #define   NFP_NET_CFG_CTRL_FLOW_STEER	  (0x1 << 8) /* Flow steering */
 #define   NFP_NET_CFG_CTRL_ROCEV2	  (0x1 << 9) /* ROCEV2 offload */
 #define   NFP_NET_CFG_CTRL_RX_ALIGNMENT	  (0x1 << 15) /* Rx side dma length alignment */
+#define   NFP_NET_CFG_CTRL_USO		  (0x1 << 16) /* UDP segmentation offload */
 
 #define NFP_NET_CFG_CAP_WORD1		0x00a4
 
