@@ -1,6 +1,9 @@
 name: Driver Regression Tests
 run-name: >-
-  Driver Regressions: ${{ github.head_ref || github.ref_name }}
+  ${{ format('Driver Regressions: {0} + tests:{1}',
+             github.head_ref || github.ref_name,
+             inputs.driver_test_ver)
+  }}
 
 on:
   pull_request:
