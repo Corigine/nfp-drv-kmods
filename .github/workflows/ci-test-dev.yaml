@@ -135,6 +135,7 @@ jobs:
   uses: Corigine/ci-libs/.github/workflows/ci-drv-test-dev.yaml@main
   with:
     drv_revision: ${{ github.head_ref || github.ref_name }}
+    drv_parent_branch_on_pr: ${{ github.event_name == 'pull_request' && github.base_ref || '' }}
     test: ${{ inputs.test }}
     fw_type: ${{ inputs.fw_type }}
     fw_version: ${{ inputs.fw_version }}
