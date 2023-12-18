@@ -2,6 +2,7 @@
 /* Copyright (C) 2018 Netronome Systems, Inc. */
 
 #include "../nfp_net_compat.h"
+#include "../nfp_main.h"
 
 #include "main.h"
 
@@ -293,6 +294,23 @@ nfp_fl_lag_config_group(struct nfp_fl_lag *lag, struct nfp_fl_lag_group *group,
 	return 0;
 }
 
+static bool nfp_flower_lag_port_compare(struct nfp_repr *repr, struct nfp_flower_priv *priv)
+{
+	if (priv->app->pf->multi_pf.en) {
+		struct pci_dev *a_pdev, *b_pdev;
+
+		a_pdev = repr->app->pdev;
+		b_pdev = priv->app->pdev;
+		if (pci_domain_nr(a_pdev->bus) != pci_domain_nr(b_pdev->bus) ||
+		    a_pdev->bus->number != b_pdev->bus->number ||
+		    PCI_SLOT(a_pdev->devfn) != PCI_SLOT(b_pdev->devfn))
+			return true;
+	} else if (repr->app != priv->app) {
+		return true;
+	}
+	return false;
+}
+
 static void nfp_fl_lag_do_work(struct work_struct *work)
 {
 	enum nfp_fl_lag_batch batch = NFP_FL_LAG_BATCH_FIRST;
@@ -356,7 +374,7 @@ static void nfp_fl_lag_do_work(struct work_struct *work)
 
 			repr = netdev_priv(iter_netdev);
 
-			if (repr->app != priv->app) {
+			if (nfp_flower_lag_port_compare(repr, priv)) {
 				slaves = 0;
 				break;
 			}
@@ -560,10 +578,11 @@ nfp_fl_lag_changeupper_event(struct nfp_fl_lag *lag,
 		repr = netdev_priv(iter_netdev);
 
 		/* Ensure all ports are created by the same app/on same card. */
-		if (repr->app != priv->app) {
+		if (nfp_flower_lag_port_compare(repr, priv)) {
 			can_offload = false;
 			break;
 		}
+
 
 		slave_count++;
 	}
@@ -648,7 +667,7 @@ nfp_fl_lag_changels_event(struct nfp_fl_lag *lag, struct net_device *netdev,
 	repr = netdev_priv(netdev);
 
 	/* Verify that the repr is associated with this app. */
-	if (repr->app != priv->app)
+	if (nfp_flower_lag_port_compare(repr, priv))
 		return;
 
 	repr_priv = repr->app_priv;
