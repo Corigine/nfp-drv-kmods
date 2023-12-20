@@ -108,4 +108,7 @@ u8 __iomem *
 nfp_rtsym_map(struct nfp_rtsym_table *rtbl, const char *name, const char *id,
 	      unsigned int min_size, struct nfp_cpp_area **area);
 
+int nfp_ring_pop_put(struct nfp_rtsym_table *rtbl, const char *ring_base_name,
+		     const char *ring_emu_name, u32 *value, bool pop);
+
 #endif /* NFP_NFFW_H */

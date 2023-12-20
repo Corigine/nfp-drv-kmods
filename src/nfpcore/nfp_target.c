@@ -175,6 +175,7 @@ static int nfp6000_mu_emu(u32 cpp_id)
 	AT(18, 1,   0, P32);	/* read_queue_ring */
 	AT(18, 2, P32,   0);	/* write_queue */
 	AT(18, 3, P32,   0);	/* write_queue_ring */
+	AT(20, 0, P32,   0);	/* put */
 	AT(20, 2, P32,   0);	/* journal */
 	AT(21, 0,   0, P32);	/* get */
 	AT(21, 1,   0, P32);	/* get_eop */

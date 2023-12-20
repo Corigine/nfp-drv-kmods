@@ -567,3 +567,43 @@ nfp_rtsym_map(struct nfp_rtsym_table *rtbl, const char *name, const char *id,
 {
 	return nfp_rtsym_map_offset(rtbl, name, id, 0, min_size, area);
 }
+
+/**
+ * nfp_ring_pop_put() - pop/put a simple unsigned scalar value from ring
+ * @rtbl:	NFP RTsym table
+ * @ring_base_name:	base name for the ring
+ * @ring_emu_name:	ring index
+ * @value:	value to pop/put
+ * @pop:	if the operation is pop or not
+ *
+ * Lookup the symbol table for ring base and address, then pop/put value base on
+ * the ring with cpp read and write operation.
+ *
+ * Return: 0 on success, negative errno otherwise.
+ */
+int nfp_ring_pop_put(struct nfp_rtsym_table *rtbl, const char *ring_base_name,
+		     const char *ring_emu_name, u32 *value, bool pop)
+{
+	const struct nfp_rtsym *sym1, *sym2;
+	u32 cpp_id;
+	int err;
+	u8 act;
+
+	sym1 = nfp_rtsym_lookup(rtbl, ring_base_name);
+	if (!sym1)
+		return -ENOENT;
+
+	sym2 = nfp_rtsym_lookup(rtbl, ring_emu_name);
+	if (!sym2)
+		return -ENOENT;
+
+	act = pop ? 22 : 20;
+
+	cpp_id = NFP_CPP_ISLAND_ID(sym1->target, act, 0, sym1->domain);
+	err = pop ? nfp_cpp_readl(rtbl->cpp, cpp_id, sym2->addr,
+				  value) :
+		    nfp_cpp_writel(rtbl->cpp, cpp_id, sym2->addr,
+				   *value);
+
+	return err;
+}
