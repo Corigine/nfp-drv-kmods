@@ -3021,7 +3021,7 @@ static int crdma_dereg_mr(struct ib_mr *mr)
 	return 0;
 }
 
-#if ((VER_NON_KYL_GE(5,2) && VER_NON_KYL_LT(5,9)) || VER_KYL_GE(10,3))
+#if ((VER_NON_KYL_GE(5,2) && VER_NON_KYL_LT(5,9)) || VER_KYL_EQ(10,3))
 static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd, enum ib_mr_type type,
 		     u32 max_num_sg, struct ib_udata *udata)
 {
