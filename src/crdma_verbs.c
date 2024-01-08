@@ -3306,7 +3306,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     .create_ah          = crdma_create_ah,
     .create_cq          = crdma_create_cq,
     .create_qp          = crdma_create_qp,
-#if (VER_NON_RHEL_GE(5,11) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_OR_KYL_GE(5,11) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
     .create_user_ah     = crdma_create_ah,
 #endif
     .dealloc_pd         = crdma_dealloc_pd,
