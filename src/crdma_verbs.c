@@ -1397,7 +1397,7 @@ static int crdma_create_qp(struct ib_qp *qp,
 				to_crdma_uctxt(pd->uobject->context);
 		struct crdma_ib_create_qp_resp resp;
 
-		resp.wq_base_addr = sg_dma_address(cqp->mem->alloc);
+		resp.wq_base_addr = virt_to_phys(sg_virt(cqp->mem->alloc));
 		resp.wq_size = cqp->mem->tot_len;
 		if (cqp->sq.length >= cqp->rq.length) {
 			resp.sq_offset = 0;
@@ -1568,7 +1568,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 				to_crdma_uctxt(pd->uobject->context);
 		struct crdma_ib_create_qp_resp resp;
 
-		resp.wq_base_addr = sg_dma_address(cqp->mem->alloc);
+		resp.wq_base_addr = virt_to_phys(sg_virt(cqp->mem->alloc));
 		resp.wq_size = cqp->mem->tot_len;
 		if (cqp->sq.length >= cqp->rq.length) {
 			resp.sq_offset = 0;
@@ -2313,13 +2313,19 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 	 * have multiple CQ mailboxes for the same context share pages
 	 * to reduce overhead.
 	 */
-	ccq->ci_mbox = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
-			PAGE_SIZE, &ccq->ci_mbox_paddr, GFP_KERNEL);
+	ccq->ci_mbox = alloc_pages_exact(PAGE_SIZE, GFP_KERNEL | __GFP_ZERO);
 	if (!ccq->ci_mbox) {
 		crdma_warn("ci_mbox allocation failed\n");
 		err = -ENOMEM;
 		goto free_queue_mem;
 	}
+	ccq->ci_mbox_paddr = dma_map_single(&dev->nfp_info->pdev->dev,
+                        ccq->ci_mbox, PAGE_SIZE, DMA_TO_DEVICE);
+	if (dma_mapping_error(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr)) {
+		crdma_warn("Failed to map DMA address\n");
+		err = -ENOMEM;
+		goto free_ci_mbox;
+        }
 	ccq->ci_mbox->ci = 0;
 	ccq->ci_mbox->last_db_state = 0;
 	wmb();
@@ -2339,9 +2345,9 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 			crdma_err("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
-		resp.cq_base_addr = sg_dma_address(ccq->mem->alloc);
+		resp.cq_base_addr = virt_to_phys(ccq->cqe_buf);
 		resp.cq_size = ccq->mem->tot_len;
-		resp.ci_mbox_base_addr = ccq->ci_mbox_paddr;
+		resp.ci_mbox_base_addr = virt_to_phys(ccq->ci_mbox);
 		resp.ci_mbox_size = PAGE_SIZE;
 		resp.cqn = ccq->cqn;
 		resp.num_cqe = ccq->num_cqe;
@@ -2388,8 +2394,10 @@ cq_destroy:
 	crdma_cq_destroy_cmd(dev, ccq);
 cmd_fail:
 	dev->cq_table[ccq->cqn] = NULL;
-	dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-			ccq->ci_mbox, ccq->ci_mbox_paddr);
+	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+			PAGE_SIZE, DMA_BIDIRECTIONAL);
+free_ci_mbox:
+	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
 free_queue_mem:
 	crdma_free_hw_queue(dev, ccq->mem);
 free_cq:
@@ -2466,12 +2474,18 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 	 * have multiple CQ mailboxes for the same context share pages
 	 * to reduce overhead.
 	 */
-	ccq->ci_mbox = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
-			PAGE_SIZE, &ccq->ci_mbox_paddr, GFP_KERNEL);
+	ccq->ci_mbox = alloc_pages_exact(PAGE_SIZE, GFP_KERNEL | __GFP_ZERO);
 	if (!ccq->ci_mbox) {
 		crdma_warn("ci_mbox allocation failed\n");
 		err = -ENOMEM;
 		goto free_queue_mem;
+	}
+	ccq->ci_mbox_paddr = dma_map_single(&dev->nfp_info->pdev->dev,
+                        ccq->ci_mbox, PAGE_SIZE, DMA_TO_DEVICE);
+	if (dma_mapping_error(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr)) {
+		crdma_warn("Failed to map DMA address\n");
+		err = -ENOMEM;
+		goto free_ci_mbox;
 	}
 	ccq->ci_mbox->ci = 0;
 	ccq->ci_mbox->last_db_state = 0;
@@ -2491,7 +2505,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 			crdma_err("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
-		resp.cq_base_addr = sg_dma_address(ccq->mem->alloc);
+		resp.cq_base_addr = virt_to_phys(ccq->cqe_buf);
 		resp.cq_size = ccq->mem->tot_len;
 		resp.ci_mbox_base_addr = ccq->ci_mbox_paddr;
 		resp.ci_mbox_size = PAGE_SIZE;
@@ -2594,8 +2608,9 @@ static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
                 complete(&ccq->free);
         wait_for_completion(&ccq->free);
 
-        dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-                        ccq->ci_mbox, ccq->ci_mbox_paddr);
+	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+			PAGE_SIZE, DMA_BIDIRECTIONAL);
+	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
         crdma_free_hw_queue(dev, ccq->mem);
         crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
 
@@ -2628,8 +2643,9 @@ static void crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
                 complete(&ccq->free);
         wait_for_completion(&ccq->free);
 
-        dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-                        ccq->ci_mbox, ccq->ci_mbox_paddr);
+	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+			PAGE_SIZE, DMA_BIDIRECTIONAL);
+	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
         crdma_free_hw_queue(dev, ccq->mem);
         crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
 
@@ -2663,8 +2679,9 @@ static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
                 complete(&ccq->free);
         wait_for_completion(&ccq->free);
 
-        dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-                        ccq->ci_mbox, ccq->ci_mbox_paddr);
+	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+			PAGE_SIZE, DMA_BIDIRECTIONAL);
+	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
         crdma_free_hw_queue(dev, ccq->mem);
         crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
 
@@ -2700,8 +2717,9 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 		complete(&ccq->free);
 	wait_for_completion(&ccq->free);
 
-	dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-			ccq->ci_mbox, ccq->ci_mbox_paddr);
+	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+			PAGE_SIZE, DMA_BIDIRECTIONAL);
+	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
 	crdma_free_hw_queue(dev, ccq->mem);
 	crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
 
@@ -2760,8 +2778,9 @@ static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
 	if (ret) {
 
 		crdma_warn("Microcode resize CQ command failed\n");
-		dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-			ccq->ci_mbox, ccq->ci_mbox_paddr);
+		dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+				PAGE_SIZE, DMA_BIDIRECTIONAL);
+		free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
 		ret = -EINVAL;
 		goto out;
 	}

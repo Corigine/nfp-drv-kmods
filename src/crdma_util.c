@@ -156,16 +156,16 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	while ((1 << mem->min_order) < num_pages)
 		mem->min_order++;
 
-	/*
-	 * In early driver development we require that a coherent memory
-	 * allocation be backed by a single block of coherent memory.
-	 */
-	buf = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
-			PAGE_SIZE << mem->min_order,
-			&sg_dma_address(mem->alloc),
-			GFP_KERNEL | GFP_TRANSHUGE);
+	buf = alloc_pages_exact(PAGE_SIZE << mem->min_order, GFP_KERNEL | __GFP_ZERO);
 	if (!buf)
 		return -ENOMEM;
+	sg_dma_address(mem->alloc) = dma_map_single(&dev->nfp_info->pdev->dev,
+			buf, PAGE_SIZE << mem->min_order, DMA_BIDIRECTIONAL);
+	if (dma_mapping_error(&dev->nfp_info->pdev->dev, sg_dma_address(mem->alloc))) {
+		crdma_warn("Failed to map DMA address\n");
+		free_pages_exact(buf, PAGE_SIZE << mem->min_order);
+		return -ENOMEM;
+	}
 
 #ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	pr_info("dma_alloc_coherent information:\n");
@@ -188,8 +188,9 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	return 0;
 
 alloc_err:
-	dma_free_coherent(&dev->nfp_info->pdev->dev, sg_dma_len(mem->alloc),
-			sg_virt(mem->alloc), sg_dma_address(mem->alloc));
+	dma_unmap_single(&dev->nfp_info->pdev->dev, sg_dma_address(mem->alloc),
+			mem->tot_len, DMA_BIDIRECTIONAL);
+	free_pages_exact(sg_virt(mem->alloc), mem->tot_len);
 	return -ENOMEM;
 }
 
@@ -306,10 +307,9 @@ void crdma_free_dma_mem(struct crdma_ibdev *dev, struct crdma_mem *mem)
 				mem->base_mtt_ndx, mem->num_mtt);
 
 	if (mem->coherent) {
-		dma_free_coherent(&dev->nfp_info->pdev->dev,
-				sg_dma_len(mem->alloc),
-				sg_virt(mem->alloc),
-				sg_dma_address(mem->alloc));
+		dma_unmap_single(&dev->nfp_info->pdev->dev, sg_dma_address(mem->alloc),
+				mem->tot_len, DMA_BIDIRECTIONAL);
+		free_pages_exact(sg_virt(mem->alloc), mem->tot_len);
 	} else {
 		if (mem->num_sg)
 #if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,394,0,0))
