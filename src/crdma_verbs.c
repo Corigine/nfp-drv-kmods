@@ -154,15 +154,6 @@ static struct crdma_mem *crdma_alloc_hw_queue(struct crdma_ibdev *dev,
 		return mem;
 	}
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_dev_info(dev, "Dump HWQ information: \n");
-	crdma_dev_info(dev, "Memory Size              %d\n", mem->tot_len);
-	crdma_dev_info(dev, "Number Allocs            %d\n", mem->num_allocs);
-	crdma_dev_info(dev, "Min Order                %d\n", mem->min_order);
-	crdma_dev_info(dev, "Number of SG             %d\n", mem->num_sg);
-	crdma_dev_info(dev, "Number of MTT entries    %d\n", mem->num_mtt);
-	crdma_dev_info(dev, "Base_mtt_ndx             %d\n", mem->base_mtt_ndx);
-#endif
 	err = crdma_mtt_write_sg(dev, mem->alloc, mem->num_sg,
 			mem->base_mtt_ndx, mem->num_mtt,
 			mem->min_order + PAGE_SHIFT,
@@ -512,10 +503,6 @@ static int crdma_query_device(struct ib_device *ibdev,
 int crdma_modify_port(struct ib_device *ibdev, u8 port, int mask,
 		       struct ib_port_modify *props)
 {
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_info("ibdev=%p,  port=%d, mask=0x%x, set_mask=0x%x\n",
-		ibdev, port, mask, props->set_port_cap_mask);
-#endif
 	return 0;
 }
 
@@ -876,24 +863,12 @@ static int crdma_mmap(struct ib_ucontext *ib_uctxt,
 	u64 offset = vma->vm_pgoff << PAGE_SHIFT;
 	u64 length = vma->vm_end - vma->vm_start;
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_dev_info(dev, "uctxt           0x%p\n", crdma_uctxt);
-	crdma_dev_info(dev, "vma->vm_pgoff   %ld\n", vma->vm_pgoff);
-	crdma_dev_info(dev, "offset          0x%016llX\n", offset);
-	crdma_dev_info(dev, "length          0x%lld\n", length);
-#endif
-
 	if (vma->vm_start & (PAGE_SIZE -1))
 		return -EINVAL;
 
 	/* First page offset is for user context UAR used for doorbells */
 	if (vma->vm_pgoff == 0) {
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-		crdma_dev_info(dev, "Map user context UAR, index: %d\n",
-			crdma_uctxt->uar.index);
-#endif
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
-
 		return io_remap_pfn_range(vma, vma->vm_start,
 				crdma_uar_pfn(dev, &crdma_uctxt->uar),
 				PAGE_SIZE, vma->vm_page_prot);
@@ -1268,17 +1243,6 @@ static int crdma_qp_set_wq_sizes(struct crdma_ibdev *dev,
 		qp->sq_offset = qp->rq.length;
 	}
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_dev_info(dev, "Dump WQ information\n");
-	crdma_dev_info(dev, "SQ WQE size      %d\n", qp->sq.wqe_size);
-	crdma_dev_info(dev, "SQ WQE count     %d\n", qp->sq.wqe_cnt);
-	crdma_dev_info(dev, "SQ WQE num SG    %d\n", qp->sq.max_sg);
-	crdma_dev_info(dev, "SQ byte length   %d\n", qp->sq.length);
-	crdma_dev_info(dev, "RQ WQE size      %d\n", qp->rq.wqe_size);
-	crdma_dev_info(dev, "RQ WQE count     %d\n", qp->rq.wqe_cnt);
-	crdma_dev_info(dev, "RQ WQE num SG    %d\n", qp->rq.max_sg);
-	crdma_dev_info(dev, "RQ byte length   %d\n", qp->rq.length);
-#endif
 	return 0;
 }
 
@@ -2118,11 +2082,6 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		wmb();
 		swqe->ctrl.owner.word = owner.word;
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG /* Extra debug only */
-		print_hex_dump(KERN_DEBUG, "SWQE:", DUMP_PREFIX_OFFSET, 8, 1,
-			       swqe, 128, 0);
-#endif
-
 		/* Advance to the next SWQE to consume */
 		wr_cnt++;
 		cqp->sq.tail = (cqp->sq.tail + 1) & cqp->sq.mask;
@@ -2257,9 +2216,6 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 
 static void crdma_drain_rq(struct ib_qp *qp)
 {
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("crdma_drain_rq \n");
-#endif
 	return;
 }
 
@@ -2283,10 +2239,6 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 	spin_lock_init(&ccq->lock);
 	ccq->num_cqe = roundup_pow_of_two(num_cqe + 1);
 	ccq->ib_cq.cqe = ccq->num_cqe - 1;
-
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("Rounded up CQE count %d\n", ccq->num_cqe);
-#endif
 
 	/* Allocate resource index for the CQ control object */
 	if (crdma_alloc_bitmap_index(&dev->cq_map, &ccq->cqn)) {
@@ -2444,10 +2396,6 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 	spin_lock_init(&ccq->lock);
 	ccq->num_cqe = roundup_pow_of_two(num_cqe + 1);
 	ccq->ib_cq.cqe = ccq->num_cqe - 1;
-
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_info("Rounded up CQE count %d\n", ccq->num_cqe);
-#endif
 
 	/* Allocate resource index for the CQ control object */
 	if (crdma_alloc_bitmap_index(&dev->cq_map, &ccq->cqn)) {
@@ -2846,10 +2794,6 @@ static int crdma_poll_cq(struct ib_cq *cq, int num_entries,
 
 		ccq->consumer_cnt++;
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-		print_hex_dump(KERN_DEBUG, "CQE:", DUMP_PREFIX_OFFSET, 8, 1,
-			cqe, 32, 0);
-#endif
 		ret = crdma_process_cqe(ccq, cqe, &last_qp, &wc[polled]);
 		if (ret == 0)
 			polled++;
@@ -2969,9 +2913,6 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 #else
 	log2_page_sz = cmr->umem->page_shift;
 #endif
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_dev_info(dev, "User Memory Page Size %d\n", log2_page_sz);
-#endif
 	/*
 	 * Find the largest compound page size that can be used
 	 * for the physical page list, limiting to the supported
@@ -2979,22 +2920,13 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 	 */
 	crdma_compound_order(cmr->umem, start, &count, &num_comp,
 			&shift, &order);
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_dev_info(dev, "User Memory Pages                 %d\n", count);
-	crdma_dev_info(dev, "User Memory Compound Pages        %d\n", num_comp);
-	crdma_dev_info(dev, "User Memory Compound Page Shift   %d\n", shift);
-	crdma_dev_info(dev, "User Memory Compound Page Order   %d\n", order);
-#endif
 	if (order + log2_page_sz > CRDMA_MTT_MAX_PAGESIZE_LOG2) {
 		num_comp <<= order  + log2_page_sz -
 				CRDMA_MTT_MAX_PAGESIZE_LOG2;
 		order -=  order + log2_page_sz -
 				CRDMA_MTT_MAX_PAGESIZE_LOG2;
 	}
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_dev_info(dev, "Adjusted number of compound pages %d\n", num_comp);
-	crdma_dev_info(dev, "Adjusted compound order           %d\n", order);
-#endif
+
 	cmr->pdn = to_crdma_pd(pd)->pd_index;
 	cmr->io_vaddr = virt_addr;
 	cmr->len = length;
@@ -3252,21 +3184,6 @@ int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u32 port,
                       const struct ib_mad *in_mad, struct ib_mad *out_mad,
                       size_t *out_mad_size, u16 *out_mad_pkey_index)
 {
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	const struct ib_mad_hdr *in_mad_hdr = &in_mad->mad_hdr;
-
-	crdma_info("Dump MAD information\n");
-	crdma_info("base_version=0x%x mgmt_class=0x%x\n",
-		in_mad_hdr->base_version, in_mad_hdr->mgmt_class);
-	crdma_info("class_version=0x%x method=0x%x\n",
-		in_mad_hdr->class_version, in_mad_hdr->method);
-	crdma_info("status=0x%x class_specific=0x%x\n",
-		in_mad_hdr->status, in_mad_hdr->class_specific);
-	crdma_info("tid=0x%llx attr_id=0x%x\n",
-		in_mad_hdr->tid, in_mad_hdr->attr_id);
-	crdma_info("attr_mod=0x%x\n", in_mad_hdr->attr_mod);
-#endif
-
        return IB_MAD_RESULT_SUCCESS;
 }
 #elif (VER_NON_RHEL_OR_KYL_GE(5,5) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
@@ -3275,21 +3192,6 @@ int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
                       const struct ib_mad *in_mad, struct ib_mad *out_mad,
 		      size_t *out_mad_size, u16 *out_mad_pkey_index)
 {
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	const struct ib_mad_hdr *in_mad_hdr = &in_mad->mad_hdr;
-
-	crdma_info("Dump MAD information\n");
-	crdma_info("base_version=0x%x mgmt_class=0x%x\n",
-		in_mad_hdr->base_version, in_mad_hdr->mgmt_class);
-	crdma_info("class_version=0x%x method=0x%x\n",
-		in_mad_hdr->class_version, in_mad_hdr->method);
-	crdma_info("status=0x%x class_specific=0x%x\n",
-		in_mad_hdr->status, in_mad_hdr->class_specific);
-	crdma_info("tid=0x%llx attr_id=0x%x\n",
-		in_mad_hdr->tid, in_mad_hdr->attr_id);
-	crdma_info("attr_mod=0x%x\n", in_mad_hdr->attr_mod);
-#endif
-
        return IB_MAD_RESULT_SUCCESS;
 }
 
@@ -3300,19 +3202,6 @@ int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
                     struct ib_mad_hdr *out_mad_hdr, size_t *out_mad_size,
                     u16 *out_mad_pkey_index)
 {
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_info("Dump MAD information\n");
-	crdma_info("base_version=0x%x mgmt_class=0x%x\n",
-		in_mad_hdr->base_version, in_mad_hdr->mgmt_class);
-	crdma_info("class_version=0x%x method=0x%x\n",
-		in_mad_hdr->class_version, in_mad_hdr->method);
-	crdma_info("status=0x%x class_specific=0x%x\n",
-		in_mad_hdr->status, in_mad_hdr->class_specific);
-	crdma_info("tid=0x%llx attr_id=0x%x\n",
-		in_mad_hdr->tid, in_mad_hdr->attr_id);
-	crdma_info("attr_mod=0x%x\n", in_mad_hdr->attr_mod);
-#endif
-
        return IB_MAD_RESULT_SUCCESS;
 }
 #endif
@@ -3363,7 +3252,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     .req_notify_cq      = crdma_req_notify_cq,
     .resize_cq          = crdma_resize_cq,
     .process_mad        = crdma_process_mad,
-    .drain_rq		 = crdma_drain_rq,
+    .drain_rq           = crdma_drain_rq,
 
     INIT_RDMA_OBJ_SIZE(ib_pd, crdma_pd, ib_pd),
     INIT_RDMA_OBJ_SIZE(ib_cq, crdma_cq, ib_cq),

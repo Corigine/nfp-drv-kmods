@@ -130,10 +130,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 		return -EINVAL;
 	}
 	dev->cap.uc_mhz_clock = le32_to_cpu(attr.mhz_clock);
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "UCode firmware:%d.%d\n",
-			dev->cap.uc_maj_rev, dev->cap.uc_min_rev);
-#endif
+
 	cap = kzalloc(sizeof(*cap), GFP_KERNEL);
 	if (!cap) {
 		crdma_dev_warn(dev, "kzalloc failure\n");
@@ -149,11 +146,6 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	}
 
 	dev->cap.opt_flags = cap->flags;
-
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "Device cap flags %x\n", dev->cap.opt_flags);
-#endif
-
 	dev->cap.n_ports = (cap->ports_rsvd >> CRDMA_DEV_CAP_PORT_SHIFT) &
 				CRDMA_DEV_CAP_PORT_MASK;
 	/*
@@ -694,20 +686,7 @@ static int crdma_init_maps(struct crdma_ibdev *dev)
 		crdma_dev_warn(dev, "Unable to allocate QP map\n");
 		goto cleanup_cq_mem;
 	}
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_info("Allocate UAR bitmap min %d, max %d\n",
-		0, dev->cap.max_uar_pages - 1);
-	crdma_info("Allocate MPT bitmap min %d, max %d\n",
-		0, dev->cap.max_mpt - 1);
-	crdma_info("Allocate MTT bitmap min %d, max %d\n",
-		0, dev->cap.max_mtt - 1);
-	crdma_info("Allocate PD bitmap min %d, max %d\n",
-		0, dev->cap.ib.max_pd - 1);
-	crdma_info("Allocate CQ bitmap min %d, max %d\n",
-		1, dev->cap.ib.max_cq - 1);
-	crdma_info("Allocate QP bitmap min %d, max %d\n",
-		2, dev->cap.ib.max_qp - 1);
-#endif
+
 	INIT_RADIX_TREE(&dev->qp_tree, GFP_ATOMIC);
 
 	return 0;

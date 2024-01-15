@@ -167,13 +167,6 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 		return -ENOMEM;
 	}
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	pr_info("dma_alloc_coherent information:\n");
-	pr_info("Order:         %d\n", mem->min_order);
-	pr_info("Size:          %ld\n",PAGE_SIZE << mem->min_order);
-	pr_info("Virtual Addr:  0x%p\n", buf);
-	pr_info("DMA Addr:      0x%016llx\n", sg_dma_address(mem->alloc));
-#endif
 	mem->tot_len = PAGE_SIZE << mem->min_order;
 	mem->num_allocs++;
 

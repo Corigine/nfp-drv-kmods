@@ -58,14 +58,6 @@
 #define CRDMA_UVERBS_ABI_VERSION	1
 
 /*
-   All debug flags are off by default,
-   open these as you want in debugging mode.
-   All debug codes will be removed when upstreamed into community.
-*/
-//#define CRDMA_DEBUG_FLAG
-//#define CRDMA_DETAIL_INFO_DEBUG_FLAG
-
-/*
  * Maximum limits placed on IB resources by the driver.
  */
 enum {

@@ -72,10 +72,6 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 		}
 	}
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "Opcode (%s)\n", crdma_opcode_to_str(opcode));
-#endif
-
 	/*
 	 * We are manually swapping from CPU to LE right now since we
 	 * want to explicitly control it. Also we are using raw I/O
@@ -178,10 +174,6 @@ void crdma_set_sq_db(struct crdma_ibdev *dev, u32 qpn)
 	__raw_writel((__force u32) cpu_to_le32(db), addr);
 	mb();
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "Write SQ_Doorbell %p with 0x%08X\n",
-		addr, cpu_to_le32(db));
-#endif
 	return;
 }
 
@@ -205,10 +197,6 @@ void crdma_set_cq_db(struct crdma_ibdev *dev, u32 cqn, bool solicited)
 	__raw_writel((__force u32) cpu_to_le32(db), addr);
 	mb();
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "Write CQ_Doorbell %p with 0x%08X\n",
-		addr, cpu_to_le32(db));
-#endif
 	return;
 }
 
@@ -225,10 +213,6 @@ inline void crdma_set_eq_ci(struct crdma_ibdev *dev,  u32 eqn,
 	__raw_writel((__force u32) cpu_to_le32(ci), addr);
 	mb();
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "Write EQ_Doorbell %p with 0x%08X\n",
-		addr, cpu_to_le32(ci));
-#endif
 	return;
 }
 

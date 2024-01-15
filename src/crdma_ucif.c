@@ -510,9 +510,6 @@ static void crdma_qp_async_event(struct crdma_ibdev *dev,
 	struct ib_event event;
 
 	qpn = le32_to_cpu(eqe->affiliated.obj_num & (dev->cap.ib.max_qp - 1));
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "QPN %d, %s\n", qpn, crdma_event_to_str(eqe->type));
-#endif
 
 	spin_lock(&dev->qp_lock);
 	cqp = radix_tree_lookup(&dev->qp_tree, qpn);
@@ -599,26 +596,18 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 				break;
 			}
 			ccq = dev->cq_table[cqn];
-#ifdef CRDMA_DEBUG_FLAG
-			/* XXX: Just for debug, will remove */
-			if (!ccq->ib_cq.comp_handler) {
-				crdma_dev_warn(dev, "No CQ handler CQN %d\n",
-						cqn);
-				break;
-			}
-#endif
+
 			ccq->arm_seqn++;
 			atomic_inc(&ccq->ref_cnt);
-#ifdef CRDMA_DEBUG_FLAG
-			crdma_dev_info(dev, "CQN %d, %s\n", cqn,
-					crdma_event_to_str(eqe->type));
-#endif
+
 			/*
 			 * Call back into the Verbs core to dispatch
 			 * the completion notification.
 			 */
-			ccq->ib_cq.comp_handler(&ccq->ib_cq,
+			if (ccq->ib_cq.comp_handler) {
+				ccq->ib_cq.comp_handler(&ccq->ib_cq,
 					ccq->ib_cq.cq_context);
+			}
 
 			if (atomic_dec_and_test(&ccq->ref_cnt))
 				complete(&ccq->free);
@@ -632,10 +621,7 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 			}
 			ccq = dev->cq_table[cqn];
 			atomic_inc(&ccq->ref_cnt);
-#ifdef CRDMA_DEBUG_FLAG
-			crdma_dev_info(dev, "CQN %d, %s\n", cqn,
-					crdma_event_to_str(eqe->type));
-#endif
+
 			/*
 			 * Call back into the Verbs core to dispatch
 			 * the asynchronous event.
@@ -747,16 +733,6 @@ int crdma_init_eq(struct crdma_ibdev *dev, int index, int entries_log2,
 		return -ENOMEM;
 	}
 
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "EQN                   %d\n", index);
-	crdma_dev_info(dev, "IRQ                   %03d/%03d\n", vector, intr);
-	crdma_dev_info(dev, "Number EQE            %d\n", 1 << entries_log2);
-	crdma_dev_info(dev, "Memory Size of EQ     %d\n", eq->mem->tot_len);
-	crdma_dev_info(dev, "Number allocs         %d\n", eq->mem->num_allocs);
-	crdma_dev_info(dev, "EQ min order          %d\n", eq->mem->min_order);
-	crdma_dev_info(dev, "EQ num SG             %d\n", eq->mem->num_sg);
-	crdma_dev_info(dev, "MTT num entry of EQ   %d\n", eq->mem->num_mtt);
-#endif
 	ret = crdma_mtt_write_sg(dev, eq->mem->alloc, eq->mem->num_sg,
 			eq->mem->base_mtt_ndx, eq->mem->num_mtt,
 			eq->mem->min_order + PAGE_SHIFT,
@@ -873,29 +849,6 @@ int crdma_noop(struct crdma_ibdev *dev)
 			CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
-#ifdef CRDMA_DEBUG_FLAG
-/**
- * Dump microcode attributes structure
- *
- * @attr: Structure that has been initialized with microcode attributes.
- */
-static void crdma_dump_query_ucode(struct crdma_query_ucode_attr *attr)
-{
-	crdma_info("Dump of query ucode results in default order\n");
-
-	pr_info("UC maj_rev:       0x%04X\n", le16_to_cpu(attr->maj_rev));
-	pr_info("UC min_rev:       0x%04X\n", le16_to_cpu(attr->min_rev));
-	pr_info("cmd_abi_rev:      0x%04X\n", le16_to_cpu(attr->cmd_abi_rev));
-	pr_info("max_cmds_out:     0x%04X\n", le16_to_cpu(attr->max_cmds_out));
-	pr_info("build_id_high:    0x%08X\n", le32_to_cpu(attr->build_id_high));
-	pr_info("build_id_low:     0x%08X\n", le32_to_cpu(attr->build_id_low));
-	pr_info("rsvd1:            0x%08X\n", le32_to_cpu(attr->deprecated_1));
-	pr_info("rsvd2:            0x%08X\n", le32_to_cpu(attr->deprecated_2));
-	pr_info("mhz_clock:        0x%08X\n", le32_to_cpu(attr->mhz_clock));
-	return;
-}
-#endif
-
 int crdma_query_ucode(struct crdma_ibdev *dev,
 		struct crdma_query_ucode_attr *attr)
 {
@@ -917,87 +870,10 @@ int crdma_query_ucode(struct crdma_ibdev *dev,
 
 	memcpy(attr, out_mbox.buf, sizeof(*attr));
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_info("QP_QUERY Output Mailbox\n");
-	print_hex_dump(KERN_DEBUG, "OUT:", DUMP_PREFIX_OFFSET, 8, 1,
-			out_mbox.buf, sizeof(*attr), 0);
-#endif
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dump_query_ucode(attr);
-#endif
 free_mbox:
 	crdma_cleanup_mailbox(dev, &out_mbox);
 	return status;
 }
-
-#ifdef CRDMA_DEBUG_FLAG
-/**
- * Dump microcode capabilities for device.
- *
- * @caps: Initialized capabilities structure to dump.
- */
-static void crdma_dump_query_dev_cap(struct crdma_dev_cap_param *cap)
-{
-	pr_info("flags:                      0x%02X\n", cap->flags);
-	pr_info("ports_rsvd:                 %d\n", cap->ports_rsvd);
-	pr_info("max_qp_log2:                %d\n", cap->max_qp_log2);
-	pr_info("max_qp:                     %d\n", 1 << cap->max_qp_log2);
-	pr_info("max_qp_wr_log2:             %d\n", cap->max_qp_wr_log2);
-	pr_info("max_qp_wr:                  %d\n", 1 << cap->max_qp_wr_log2);
-	pr_info("max_sq_sge:                 %d\n", cap->max_sq_sge);
-	pr_info("max_rq_sge:                 %d\n", cap->max_rq_sge);
-	pr_info("max_swqe_size_log2:         %d\n", cap->max_swqe_size_log2);
-        pr_info("max_swqe_size:              %d\n", 1 << cap->max_swqe_size_log2);
-	pr_info("max_rwqe_size_log2:         %d\n", cap->max_rwqe_size_log2);
-	pr_info("max_rwqe_size:              %d\n", 1 << cap->max_rwqe_size_log2);
-	pr_info("rsvd_qp:                    %d\n", cap->rsvd_qp);
-	pr_info("max_rdma_res_log2:          %d\n", cap->max_rdma_res_log2);
-	pr_info("max_rdma_res:               %d\n", 1 << cap->max_rdma_res_log2);
-	pr_info("max_qp_req_res_log2:        %d\n", cap->max_qp_req_res_log2);
-	pr_info("max_qp_req_res:             %d\n", 1 << cap->max_qp_req_res_log2);
-	pr_info("max_qp_rsp_res_log2:        %d\n", cap->max_qp_rsp_res_log2);
-	pr_info("max_qp_rsp_res:             %d\n", 1 << cap->max_qp_rsp_res_log2);
-	pr_info("max_cq_log2:                %d\n", cap->max_cq_log2);
-	pr_info("max_cq:                     %d\n", 1 << cap->max_cq_log2);
-	pr_info("max_cqe_log2:               %d\n", cap->max_cqe_log2);
-	pr_info("max_cqe:                    %d\n", 1 << cap->max_cqe_log2);
-	pr_info("cqe_size_log2:              %d\n", cap->cqe_size_log2);
-	pr_info("cqe_size:                   %d\n", 1 << cap->cqe_size_log2);
-	pr_info("max_eq_log2:                %d\n", cap->max_eq_log2);
-	pr_info("max_eq:                     %d\n", 1 << cap->max_eq_log2);
-	pr_info("max_eqe_log2:               %d\n", cap->max_eqe_log2);
-	pr_info("max_eqe:                    %d\n", 1 << cap->max_eqe_log2);
-	pr_info("eqe_size_log2:              %d\n", cap->eqe_size_log2);
-	pr_info("eqe_size:                   %d\n", 1 << cap->eqe_size_log2);
-	pr_info("max_srq_log2:               %d\n", cap->max_srq_log2);
-	pr_info("max_srq:                    %d\n", 1 << cap->max_srq_log2);
-	pr_info("max_srq_wr_log2:            %d\n", cap->max_srq_wr_log2);
-	pr_info("max_srq_wr:                 %d\n", 1 << cap->max_srq_wr_log2);
-	pr_info("max_srq_rwqe_size_log2:     %d\n",
-			cap->max_srq_rwqe_size_log2);
-	pr_info("max_srq_rwqe_size:          %d\n",
-			1 << cap->max_srq_rwqe_size_log2);
-	pr_info("max_mcg_log2:               %d\n", cap->max_mcg_log2);
-	pr_info("max_mcg:                    %d\n", 1 << cap->max_mcg_log2);
-	pr_info("max_mcg_qp_log2:            %d\n", cap->max_mcg_qp_log2);
-	pr_info("max_mcg_qp:                 %d\n", 1 << cap->max_mcg_qp_log2);
-	pr_info("max_mr_size_log2:           %d\n", cap->max_mr_size_log2);
-	pr_info("max_mr_size:                %d\n", 1 << cap->max_mr_size_log2);
-	pr_info("vlan_table_size_log2:       %d\n", cap->vlan_table_size_log2);
-	pr_info("vlan_table_size:            %d\n", 1 << cap->vlan_table_size_log2);
-	pr_info("smac_table_size:            %d\n", cap->smac_table_size);
-	pr_info("sgid_table_size:            %d\n", cap->sgid_table_size);
-	pr_info("max_uar_pages_log2:         %d\n", cap->max_uar_pages_log2);
-	pr_info("max_uar_pages:              %d\n", 1 << cap->max_uar_pages_log2);
-	pr_info("min_page_size_log2:         %d\n", cap->min_page_size_log2);
-	pr_info("min_page_size:              %d\n", 1 << cap->min_page_size_log2);
-	pr_info("max_inline_data:            %d\n", le16_to_cpu(cap->max_inline_data));
-	pr_info("max_mpt:                    %d\n", cap->max_mpt);
-	pr_info("max_mtt:                    %d\n", cap->max_mtt);
-
-	return;
-}
-#endif
 
 int crdma_query_dev_cap(struct crdma_ibdev *dev,
 		struct crdma_dev_cap_param *cap)
@@ -1020,15 +896,6 @@ int crdma_query_dev_cap(struct crdma_ibdev *dev,
 
 	memcpy(cap, out_mbox.buf, sizeof(*cap));
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_info("QUERY_DEV_CAP Output MBox\n");
-	print_hex_dump(KERN_DEBUG, "OUT:", DUMP_PREFIX_OFFSET, 8, 1,
-			out_mbox.buf, sizeof(*cap), 0);
-#endif
-#ifdef CRDMA_DEBUG_FLAG
-	crdma_dev_info(dev, "Dump crdma device cap information\n");
-	crdma_dump_query_dev_cap(cap);
-#endif
 free_mbox:
 	crdma_cleanup_mailbox(dev, &out_mbox);
 	return status;
@@ -1112,9 +979,7 @@ int __crdma_mtt_write(struct crdma_ibdev *dev, u32 base_mtt,
 	struct crdma_mtt_write_param *mtt_param = in_mbox->buf;
 	struct crdma_cmd cmd;
 	int status;
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	int i;
-#endif
+
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = CRDMA_CMD_MTT_WRITE;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
@@ -1124,15 +989,6 @@ int __crdma_mtt_write(struct crdma_ibdev *dev, u32 base_mtt,
 	mtt_param->rsvd = 0;
 	mtt_param->base_mtt_ndx = cpu_to_le32(base_mtt);
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_dev_info(dev, "Dump Information\n");
-	crdma_dev_info(dev, "MTT ndx: 0x%08X\n", mtt_param->base_mtt_ndx);
-	crdma_dev_info(dev, "MTT num:  %d\n", num_mtt);
-	for (i = 0; i < num_mtt; i++)
-		crdma_dev_info(dev, "LE paddr_h 0x%08X paddr_l 0x%08X\n",
-				mtt_param->entry[i].paddr_h,
-				mtt_param->entry[i].paddr_l);
-#endif
 	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-code response */
@@ -1407,24 +1263,6 @@ int crdma_cq_create_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq,
 	param->uar_pfn_high = cpu_to_le32(pfn >> 32);
 	param->uar_pfn_low = cpu_to_le32((pfn & 0x0FFFFFFFFull) << PAGE_SHIFT);
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_dev_info(dev, "CQ create values (LE)\n");
-	crdma_dev_info(dev, "CQN:          %d\n", param->rsvd_cqn);
-	crdma_dev_info(dev, "EQN:          %d\n", param->eqn);
-	crdma_dev_info(dev, "Num CQE:      %d\n", 1 << param->cqe_log2);
-	crdma_dev_info(dev, "Pg_Info_Word: 0x%08x", param->page_info);
-	crdma_dev_info(dev, "MTT Index:    0x%08X\n", param->mtt_index);
-	crdma_dev_info(dev, "CI addr high: 0x%08X\n", param->ci_addr_high);
-	crdma_dev_info(dev, "CI addr low:  0x%08X\n", param->ci_addr_low);
-	crdma_dev_info(dev, "UAR PFN high: 0x%08X\n", param->uar_pfn_high);
-	crdma_dev_info(dev, "UAR PFN low:  0x%08X\n", param->uar_pfn_low);
-#endif
-
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	print_hex_dump(KERN_DEBUG, "IN:",
-			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf, 16, 0);
-#endif
-
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = CRDMA_CMD_CQ_CREATE;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
@@ -1542,29 +1380,6 @@ static void crdma_set_qp_ctrl(struct crdma_ibdev *dev,
 	ctrl->uar_pfn_low = cpu_to_le32((pfn & 0x0FFFFFFFFull) <<
 					PAGE_SHIFT);
 
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	crdma_dev_info(dev, "QP MODIFY control object values (LE)\n");
-	if (unlikely(qp->ib_qp.qp_type == IB_QPT_GSI))
-		pr_info("       GSI QP: physical port %d, control object %d\n",
-					qp->qp1_port, qp->qp1_port);
-	pr_info("          QPN: 0x%08x\n", qp->qp_index);
-	pr_info("    flags_qpn: 0x%08X\n", ctrl->flags_qpn);
-	pr_info("       wqe_pd: 0x%08X\n", ctrl->wqe_pd);
-	pr_info("    type_scqn: 0x%08X\n", ctrl->type_send_cqn);
-	pr_info("         rcqn: 0x%08X\n", ctrl->recv_cqn);
-	pr_info("  max_recv_wr: 0x%04X\n", ctrl->max_recv_wr);
-	pr_info("  max_send_wr: 0x%04X\n", ctrl->max_send_wr);
-	pr_info("  inline_data: 0x%04X\n", ctrl->max_inline_data);
-	pr_info("  max_recv_sg: 0x%02X\n", ctrl->max_recv_sge);
-	pr_info("  max_send_sg: 0x%02X\n", ctrl->max_send_sge);
-	pr_info("    page_info: 0x%08X\n", ctrl->page_info);
-	pr_info("    mtt_index: 0x%08X\n", ctrl->mtt_index);
-	pr_info("  sq_base_off: 0x%08X\n", ctrl->sq_base_off);
-	pr_info("  rq_base_off: 0x%08X\n", ctrl->rq_base_off);
-	pr_info("         srqn: 0x%08X\n", ctrl->srqn);
-	pr_info("     pfn_high: 0x%08X\n", ctrl->uar_pfn_high);
-	pr_info("      pfn_low: 0x%08X\n", ctrl->uar_pfn_low);
-#endif
 	return;
 }
 
@@ -1690,10 +1505,7 @@ int crdma_qp_modify_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 		status = -EINVAL;
 		goto out;
 	}
-#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
-	print_hex_dump(KERN_DEBUG, "IN:", DUMP_PREFIX_OFFSET, 8, 1,
-			in_mbox.buf, sizeof(*param), 0);
-#endif
+
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = CRDMA_CMD_QP_MODIFY;
 	cmd.opcode_mod = modifier;
