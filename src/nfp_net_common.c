@@ -3439,6 +3439,9 @@ int nfp_net_init(struct nfp_net *nn)
 		nn->dp.ctrl_w1 |= (nn_readl(nn, NFP_NET_CFG_CTRL_WORD1) &
 				   NFP_NET_CFG_CTRL_MULTI_PF);
 
+	if (nn->cap_w1 & NFP_NET_CFG_CTRL_TC_MQPRIO)
+		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_TC_MQPRIO;
+
 	/* Enable metadata padding for dma alignment, if supported */
 	if (nn->cap_w1 & NFP_NET_CFG_CTRL_META_PAD)
 		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_META_PAD;

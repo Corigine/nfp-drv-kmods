@@ -96,6 +96,79 @@ static bool nfp_nic_pfc_is_enable(struct nfp_app *app, struct nfp_net *nn)
 	return nfp_dcb_pfc_is_enable(app, nn);
 }
 
+int nfp_configure_tc_ring(struct nfp_net *nn)
+{
+	struct nfp_net_dp *dp;
+
+	dp = nfp_net_clone_dp(nn);
+	if (!dp)
+		return -ENOMEM;
+
+	return nfp_net_ring_reconfig(nn, dp, NULL);
+}
+
+static int nfp_setup_tc_mqprio_channel(struct nfp_net *nn, u8 tc,
+				       struct tc_mqprio_qopt *qopt)
+{
+	unsigned int max_qcount;
+	int i;
+
+	max_qcount = nn->dp.num_stack_tx_rings;
+	if (qopt->offset[0] != 0 || qopt->num_tc < 1 ||
+			qopt->num_tc > TC_MAX_QUEUE)
+		return -EINVAL;
+
+	for (i = 0; i < TC_MAX_QUEUE; i++) {
+		if (max_qcount < (qopt->offset[i] + qopt->count[i]))
+			return -EINVAL;
+
+		nn->tc_config[i].offset = qopt->offset[i];
+		nn->tc_config[i].count = qopt->count[i];
+	}
+	return nfp_configure_tc_ring(nn);
+}
+
+static int nfp_setup_tc_mqprio(struct nfp_net *nn, void *type_data)
+{
+	struct tc_mqprio_qopt_offload *mqprio_qopt = type_data;
+	struct tc_mqprio_qopt *qopt = &mqprio_qopt->qopt;
+	u8 num_tc;
+	int ret;
+
+	if (!(nn->cap_w1 & NFP_NET_CFG_CTRL_TC_MQPRIO))
+		return -EOPNOTSUPP;
+
+	num_tc = qopt->num_tc;
+
+	if (!qopt->hw)
+		return -EOPNOTSUPP;
+
+	switch (mqprio_qopt->mode) {
+	case TC_MQPRIO_MODE_DCB:
+		ret = nfp_setup_tc_mqprio_dcb(nn, num_tc);
+		break;
+	case TC_MQPRIO_MODE_CHANNEL:
+		ret = nfp_setup_tc_mqprio_channel(nn, num_tc, qopt);
+		break;
+	default:
+		ret = -EOPNOTSUPP;
+		break;
+	}
+
+	return ret;
+}
+
+static int nfp_nic_setup_tc(struct nfp_app *app, struct net_device *netdev,
+			    enum tc_setup_type type, void *type_data)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+
+	if (type == TC_SETUP_QDISC_MQPRIO)
+		return nfp_setup_tc_mqprio(nn, type_data);
+
+	return -EOPNOTSUPP;
+}
+
 const struct nfp_app_type app_nic = {
 	.id		= NFP_APP_CORE_NIC,
 	.name		= "nic",
@@ -106,6 +179,7 @@ const struct nfp_app_type app_nic = {
 	.sriov_enable	= nfp_nic_sriov_enable,
 	.sriov_disable	= nfp_nic_sriov_disable,
 
+	.setup_tc	= nfp_nic_setup_tc,
 	.pfc_is_enable  = nfp_nic_pfc_is_enable,
 	.select_tclass  = nfp_nic_select_tclass,
 	.vnic_init      = nfp_nic_vnic_init,

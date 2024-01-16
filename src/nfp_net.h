@@ -210,6 +210,7 @@ struct nfp_net_tx_ring {
 	dma_addr_t dma;
 	size_t size;
 	bool is_xdp;
+	u8 prio;
 } ____cacheline_aligned;
 
 /* RX and freelist descriptor format */

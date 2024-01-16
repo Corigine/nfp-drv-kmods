@@ -6,6 +6,7 @@
 
 #include <linux/netdevice.h>
 
+int nfp_configure_tc_ring(struct nfp_net *nn);
 #ifdef CONFIG_DCB
 /* DCB feature definitions */
 #define NFP_NET_MAX_DSCP	64
@@ -38,11 +39,17 @@ void nfp_nic_dcb_clean(struct nfp_net *nn);
 int nfp_dcb_select_tclass(struct nfp_app *app, struct nfp_net *nn,
 			  struct sk_buff *skb);
 bool nfp_dcb_pfc_is_enable(struct nfp_app *app, struct nfp_net *nn);
+int nfp_setup_tc_mqprio_dcb(struct nfp_net *nn, u8 tc);
 #else
 static inline int nfp_nic_dcb_init(struct nfp_net *nn) { return 0; }
 static inline void nfp_nic_dcb_clean(struct nfp_net *nn) {}
 static inline int nfp_dcb_select_tclass(struct nfp_app *app, struct nfp_net *nn,
 					struct sk_buff *skb)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int nfp_setup_tc_mqprio_dcb(struct nfp_net *nn, u8 tc)
 {
 	return -EOPNOTSUPP;
 }

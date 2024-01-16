@@ -41,6 +41,18 @@ void *nfp_net_rx_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr)
 	return frag;
 }
 
+static u8 nfp_net_tx_ring_prio(struct nfp_net *nn, unsigned int idx)
+{
+	int i;
+
+	for (i = 0; i < TC_MAX_QUEUE; i++) {
+		if (idx < (nn->tc_config[i].count + nn->tc_config[i].offset)
+				&& idx >= nn->tc_config[i].offset)
+			return i;
+	}
+	return 0;
+}
+
 /**
  * nfp_net_tx_ring_init() - Fill in the boilerplate for a TX ring
  * @tx_ring:  TX ring structure
@@ -61,6 +73,7 @@ nfp_net_tx_ring_init(struct nfp_net_tx_ring *tx_ring, struct nfp_net_dp *dp,
 	tx_ring->is_xdp = is_xdp;
 	u64_stats_init(&tx_ring->r_vec->tx_sync);
 
+	tx_ring->prio  = nfp_net_tx_ring_prio(nn, idx);
 	tx_ring->qcidx = tx_ring->idx * nn->stride_tx;
 	tx_ring->txrwb = dp->txrwb ? &dp->txrwb[idx] : NULL;
 	tx_ring->qcp_q = nn->tx_bar + NFP_QCP_QUEUE_OFF(tx_ring->qcidx);
@@ -416,6 +429,7 @@ nfp_net_tx_ring_hw_cfg_write(struct nfp_net *nn,
 		nn_writeq(nn, NFP_NET_CFG_TXR_WB_ADDR(idx),
 			  nn->dp.txrwb_dma + idx * sizeof(u64));
 	}
+	nn_writeb(nn, NFP_NET_CFG_TXR_PRIO(idx), tx_ring->prio);
 	nn_writeb(nn, NFP_NET_CFG_TXR_SZ(idx), ilog2(tx_ring->cnt));
 	nn_writeb(nn, NFP_NET_CFG_TXR_VEC(idx), tx_ring->r_vec->irq_entry);
 }
