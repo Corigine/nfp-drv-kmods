@@ -5,6 +5,7 @@
 #include <linux/netdevice.h>
 #include <net/dcbnl.h>
 #include <net/dsfield.h>
+#include <net/pkt_sched.h>
 
 #include "../nfp_app.h"
 #include "../nfp_net.h"
@@ -546,6 +547,20 @@ static int nfp_nic_dcbnl_ieee_delapp(struct net_device *dev,
 	return 0;
 }
 
+int nfp_setup_tc_mqprio_dcb(struct nfp_net *nn, u8 tc)
+{
+	unsigned int i;
+
+	if (tc && tc != NFP_NET_MAX_TC)
+		return -EINVAL;
+
+	for (i = 0; i < tc; i++) {
+		nn->tc_config[i].offset = i;
+		nn->tc_config[i].count = 1;
+	}
+	return nfp_configure_tc_ring(nn);
+}
+
 static int nfp_dcb_config_num_tc(struct nfp_net *nn, struct nfp_dcb *dcb, struct ieee_pfc *pfc)
 {
 	u8 num_pfc_tc = 0;
@@ -577,6 +592,28 @@ static int nfp_dcb_config_num_tc(struct nfp_net *nn, struct nfp_dcb *dcb, struct
 		}
 	}
 	return 0;
+}
+
+static int nfp_dcb_config_default_set_tc(struct nfp_net *nn,
+					 struct nfp_dcb *dcb, struct ieee_pfc *pfc)
+{
+	unsigned int i;
+	u16 qcount;
+
+	if (!(nn->cap_w1 & NFP_NET_CFG_CTRL_TC_MQPRIO))
+		return nfp_dcb_config_num_tc(nn, dcb, pfc);
+
+	qcount = nn->dp.num_stack_tx_rings;
+	if (qcount <= NFP_NET_MAX_PFC_QUEUE_NUM)
+		return -EOPNOTSUPP;
+
+	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
+		nn->tc_config[i].count = 1;
+		nn->tc_config[i].offset = i;
+		if (i == IEEE_8021QAZ_MAX_TCS - 1)
+			nn->tc_config[i].count = qcount - i;
+	}
+	return nfp_configure_tc_ring(nn);
 }
 
 static int nfp_nic_dcbnl_ieee_getpfc(struct net_device *dev, struct ieee_pfc *pfc)
@@ -658,7 +695,7 @@ static int nfp_nic_dcbnl_ieee_setpfc(struct net_device *dev, struct ieee_pfc *pf
 	if (err)
 		return err;
 
-	return nfp_dcb_config_num_tc(nn, dcb, pfc);
+	return nfp_dcb_config_default_set_tc(nn, dcb, pfc);
 }
 
 static int nfp_nic_ieee_ets_init(struct nfp_net *nn, struct nfp_dcb *dcb)

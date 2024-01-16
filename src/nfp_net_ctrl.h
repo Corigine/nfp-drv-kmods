@@ -271,6 +271,7 @@
 #define   NFP_NET_CFG_CTRL_FREELIST_EN	  (0x1 << 6) /* Freelist enable flag bit */
 #define   NFP_NET_CFG_CTRL_FLOW_STEER	  (0x1 << 8) /* Flow steering */
 #define   NFP_NET_CFG_CTRL_USO		  (0x1 << 16) /* UDP segmentation offload */
+#define   NFP_NET_CFG_CTRL_TC_MQPRIO	  (0x1 << 17) /* TC priority */
 
 #define NFP_NET_CFG_CAP_WORD1		0x00a4
 

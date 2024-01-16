@@ -3424,6 +3424,9 @@ int nfp_net_init(struct nfp_net *nn)
 		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_MCAST_FILTER;
 #endif
 
+	if (nn->cap_w1 & NFP_NET_CFG_CTRL_TC_MQPRIO)
+		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_TC_MQPRIO;
+
 	/* Stash the re-configuration queue away.  First odd queue in TX Bar */
 	nn->qcp_cfg = nn->tx_bar + NFP_QCP_QUEUE_ADDR_SZ;
 
