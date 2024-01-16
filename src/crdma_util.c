@@ -507,7 +507,6 @@ void crdma_ring_db32(struct crdma_ibdev *dev, uint32_t value, int offset)
 
 void crdma_sq_ring_db32(struct crdma_ibdev *dev, uint32_t value)
 {
-	value  = value & CRDMA_DB_SQ_MASK;
 	crdma_ring_db32(dev, value, CRDMA_DB_SQ_ADDR_OFFSET);
 	return;
 }

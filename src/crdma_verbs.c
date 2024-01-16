@@ -1990,8 +1990,9 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 	struct crdma_swqe_owner owner;
 	int wr_cnt = 0;
 	int ret = 0;
+	int db_value = 0;
 	u8 flags;
-	u32 qpn = cqp->qp_index;
+	u8 is_read = 0;
 	unsigned long irq_flags;
 
 	spin_lock_irqsave(&cqp->sq.lock, irq_flags);
@@ -2068,6 +2069,9 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 			default:
 				break;
 			}
+			if (wr->opcode == IB_WR_RDMA_READ)
+				is_read = 1;
+
 			inline_data = &swqe->rc.inline_data;
 			sg = &swqe->rc.sg[0];
 			break;
@@ -2145,7 +2149,9 @@ out:
 		 * is written
 		 */
 		mb();
-		crdma_sq_ring_db32(dev, qpn);
+		db_value = (cqp->qp_index & CRDMA_DB_SQ_MASK) | cqp->sq.tail << CRDMA_DB_SQ_TAIL_SHIFT |
+                           is_read << CRDMA_DB_SWQE_TYPE_SHIFT;
+		crdma_sq_ring_db32(dev, db_value);
 
 		/*
 		 * Make sure the last spare request is set to software
