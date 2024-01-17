@@ -1329,6 +1329,8 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 		goto err_net_remove;
 	}
 
+	pci_save_state(pdev);
+
 	return 0;
 
 err_net_remove:
@@ -1494,11 +1496,99 @@ static void nfp_pci_error_reset_done(struct pci_dev *dev)
 }
 #endif
 
+/**
+ *  nfp_pci_error_detected - called when PCI error is detected
+ *  @pdev: Pointer to PCI device
+ *  @state: The current pci connection state
+ *
+ *  This function is called after a PCI bus error affecting
+ *  this device has been detected.
+ **/
+static pci_ers_result_t nfp_pci_error_detected(struct pci_dev *pdev,
+					       pci_channel_state_t state)
+{
+	struct nfp_pf *pf = pci_get_drvdata(pdev);
+
+	dev_warn(&pdev->dev, "nfp error detect reported.\n");
+	if (state == pci_channel_io_normal) {
+		dev_warn(&pdev->dev, "Non-correctable non-fatal error reported.\n");
+		return PCI_ERS_RESULT_CAN_RECOVER;
+	}
+
+	if (state == pci_channel_io_perm_failure)
+		return PCI_ERS_RESULT_DISCONNECT;
+
+	/* Only works when state is pci_channel_io_frozen */
+	if (pf) {
+		struct nfp_net *nn;
+
+		list_for_each_entry(nn, &pf->vnics, vnic_list)
+			nfp_net_recover(nn, false);
+	}
+	pci_disable_device(pdev);
+
+	/* Request a slot reset. */
+	return PCI_ERS_RESULT_NEED_RESET;
+}
+
+/**
+ *  nfp_pci_slot_reset - called after the pci bus has been reset.
+ *  @pdev: Pointer to PCI device
+ *
+ *  Restart the card from scratch, as if from a cold-boot. Implementation
+ *  resembles the first-half of the resume routine.
+ **/
+static pci_ers_result_t nfp_pci_slot_reset(struct pci_dev *pdev)
+{
+	pci_ers_result_t result;
+	int err = 0;
+
+	err = pci_enable_device(pdev);
+	if (err) {
+		dev_warn(&pdev->dev, "Can not enable pcie device.\n");
+		result = PCI_ERS_RESULT_DISCONNECT;
+		goto exit_err;
+	}
+	pci_set_master(pdev);
+	pci_restore_state(pdev);
+	pci_save_state(pdev);
+
+	result = PCI_ERS_RESULT_RECOVERED;
+
+exit_err:
+	return result;
+}
+
+/**
+ *  nfp_pci_resume - called when traffic can start flowing again.
+ *  @pdev: Pointer to PCI device
+ *
+ *  This callback is called when the error recovery driver tells us that
+ *  its OK to resume normal operation. Implementation resembles the
+ *  second-half of the resume routine.
+ */
+static void nfp_pci_resume(struct pci_dev *pdev)
+{
+	struct nfp_pf *pf = pci_get_drvdata(pdev);
+
+	if (pf) {
+		struct nfp_net *nn;
+
+		/* wait for reset to complete */
+		msleep(200);
+		list_for_each_entry(nn, &pf->vnics, vnic_list)
+			nfp_net_recover(nn, true);
+	}
+}
+
 static const struct pci_error_handlers nfp_pci_err_handler = {
 #if VER_NON_RHEL_GE(4, 13) || VER_RHEL_GE(8, 0)
         .reset_prepare = nfp_pci_error_reset_prepare,
         .reset_done = nfp_pci_error_reset_done,
 #endif
+	.error_detected = nfp_pci_error_detected,
+	.slot_reset = nfp_pci_slot_reset,
+	.resume = nfp_pci_resume
 };
 
 static struct pci_driver nfp_pci_driver = {

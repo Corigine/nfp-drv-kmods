@@ -760,6 +760,7 @@ struct nfp_net {
 	struct nfp_app *app;
 
 	bool vnic_no_name;
+	bool err_recover;
 
 	struct nfp_port *port;
 
@@ -1065,6 +1066,8 @@ int nfp_net_ring_reconfig(struct nfp_net *nn, struct nfp_net_dp *new,
 
 int nfp_net_fs_add_hw(struct nfp_net *nn, struct nfp_fs_entry *entry);
 int nfp_net_fs_del_hw(struct nfp_net *nn, struct nfp_fs_entry *entry);
+
+int nfp_net_recover(struct nfp_net *nn, bool resume);
 
 #ifdef CONFIG_NFP_DEBUG
 void nfp_net_debugfs_create(void);

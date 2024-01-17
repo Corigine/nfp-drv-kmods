@@ -1205,15 +1205,28 @@ static int nfp_net_netdev_close(struct net_device *netdev)
 	 */
 	nfp_net_close_stack(nn);
 
-	/* Step 2: Tell NFP
-	 */
+	if (!nn->err_recover) {
+		/* Step 2: Tell NFP
+		*/
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 15, 0)
-	if (nn->cap_w1 & NFP_NET_CFG_CTRL_MCAST_FILTER)
-		__dev_mc_unsync(netdev, nfp_net_mc_unsync);
+		if (nn->cap_w1 & NFP_NET_CFG_CTRL_MCAST_FILTER)
+			__dev_mc_unsync(netdev, nfp_net_mc_unsync);
 #endif
 
-	nfp_net_clear_config_and_disable(nn);
-	nfp_port_configure(netdev, false);
+		nfp_net_clear_config_and_disable(nn);
+		nfp_port_configure(netdev, false);
+	} else {
+		u32 r;
+		for (r = 0; r < nn->dp.num_rx_rings; r++) {
+			nfp_net_rx_ring_reset(&nn->dp.rx_rings[r]);
+			if (nfp_net_has_xsk_pool_slow(&nn->dp, nn->dp.rx_rings[r].idx))
+				nfp_net_xsk_rx_bufs_free(&nn->dp.rx_rings[r]);
+		}
+		for (r = 0; r < nn->dp.num_tx_rings; r++)
+			nfp_net_tx_ring_reset(&nn->dp, &nn->dp.tx_rings[r]);
+		for (r = 0; r < nn->dp.num_r_vecs; r++)
+			nfp_net_vec_clear_ring_data(nn, r);
+	}
 
 	/* Step 3: Free resources
 	 */
@@ -1413,14 +1426,15 @@ static int nfp_net_netdev_open(struct net_device *netdev)
 	err = nfp_net_open_alloc_all(nn);
 	if (err)
 		return err;
+	if (!nn->err_recover) {
+		err = netif_set_real_num_tx_queues(netdev, nn->dp.num_stack_tx_rings);
+		if (err)
+			goto err_free_all;
 
-	err = netif_set_real_num_tx_queues(netdev, nn->dp.num_stack_tx_rings);
-	if (err)
-		goto err_free_all;
-
-	err = netif_set_real_num_rx_queues(netdev, nn->dp.num_rx_rings);
-	if (err)
-		goto err_free_all;
+		err = netif_set_real_num_rx_queues(netdev, nn->dp.num_rx_rings);
+		if (err)
+			goto err_free_all;
+	}
 
 	/* Step 2: Configure the NFP
 	 * - Ifup the physical interface if it exists
@@ -3392,6 +3406,64 @@ static int nfp_net_read_caps(struct nfp_net *nn)
 		nn->cap &= nn->app->type->ctrl_cap_mask;
 
 	return 0;
+}
+
+static int nfp_net_reset(struct nfp_net *nn)
+{
+	int err;
+
+	/* Make sure the FW knows the netdev is supposed to be disabled here */
+	nn_writel(nn, NFP_NET_CFG_CTRL, 0);
+	nn_writeq(nn, NFP_NET_CFG_TXRS_ENABLE, 0);
+	nn_writeq(nn, NFP_NET_CFG_RXRS_ENABLE, 0);
+	nn_writel(nn, NFP_NET_CFG_CTRL_WORD1, 0);
+	err = nfp_net_reconfig(nn, NFP_NET_CFG_UPDATE_RING |
+				   NFP_NET_CFG_UPDATE_GEN);
+	if (err) {
+		nn_err(nn, "failed to reset nfp net\n");
+		return err;
+	}
+
+	return 0;
+}
+
+/**
+ * nfp_net_recover() - recover for the nfp_net structure
+ * @nn:		NFP Net device structure
+ * @resume:	If it is in resume process
+ * Return: 0 on success or negative errno on error.
+ */
+int nfp_net_recover(struct nfp_net *nn, bool resume)
+{
+	struct net_device *netdev;
+	int err = 0;
+
+	rtnl_lock();
+
+	if (!nn->dp.netdev) {
+		err = -EINVAL;
+		goto no_dev;
+	}
+
+	if (resume)
+		nfp_net_reset(nn);
+
+	netdev = nn->dp.netdev;
+	if (resume) {
+		if (netif_running(netdev))
+			netdev->netdev_ops->ndo_open(netdev);
+		netif_device_attach(netdev);
+		nn->err_recover = false;
+	} else {
+		nn->err_recover = true;
+		netif_device_detach(netdev);
+		if (netif_running(netdev))
+			netdev->netdev_ops->ndo_stop(netdev);
+	}
+
+no_dev:
+	rtnl_unlock();
+	return err;
 }
 
 /**
