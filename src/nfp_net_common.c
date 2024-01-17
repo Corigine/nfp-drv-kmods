@@ -1240,6 +1240,21 @@ void nfp_ctrl_close(struct nfp_net *nn)
 }
 
 #ifdef COMPAT_HAVE_DIM
+static const struct dim_cq_moder rx_profile[] = {
+	{.usec = 0, .pkts = 1},
+	{.usec = 4, .pkts = 32},
+	{.usec = 64, .pkts = 64},
+	{.usec = 128, .pkts = 256},
+	{.usec = 256, .pkts = 256},
+};
+static const struct dim_cq_moder tx_profile[] = {
+	{.usec = 0, .pkts = 1},
+	{.usec = 4, .pkts = 16},
+	{.usec = 32, .pkts = 64},
+	{.usec = 64, .pkts = 128},
+	{.usec = 128, .pkts = 128},
+};
+
 static void nfp_net_rx_dim_work(struct work_struct *work)
 {
 	struct nfp_net_r_vector *r_vec;
@@ -1249,7 +1264,7 @@ static void nfp_net_rx_dim_work(struct work_struct *work)
 	struct dim *dim;
 
 	dim = container_of(work, struct dim, work);
-	moder = net_dim_get_rx_moderation(dim->mode, dim->profile_ix);
+	moder = rx_profile[dim->profile_ix];
 	r_vec = container_of(dim, struct nfp_net_r_vector, rx_dim);
 	nn = r_vec->nfp_net;
 
@@ -1279,7 +1294,7 @@ static void nfp_net_tx_dim_work(struct work_struct *work)
 	struct dim *dim;
 
 	dim = container_of(work, struct dim, work);
-	moder = net_dim_get_tx_moderation(dim->mode, dim->profile_ix);
+	moder = tx_profile[dim->profile_ix];
 	r_vec = container_of(dim, struct nfp_net_r_vector, tx_dim);
 	nn = r_vec->nfp_net;
 
