@@ -1416,7 +1416,8 @@ static void nfp_pci_shutdown(struct pci_dev *pdev)
 	__nfp_pci_shutdown(pdev, false);
 }
 
-void nfp_pci_error_reset_prepare(struct pci_dev *dev)
+#if VER_NON_RHEL_GE(4, 13) || VER_RHEL_GE(8, 0)
+static void nfp_pci_error_reset_prepare(struct pci_dev *dev)
 {
 	struct nfp_pf *pf = pci_get_drvdata(dev);
 
@@ -1444,7 +1445,7 @@ void nfp_pci_error_reset_prepare(struct pci_dev *dev)
 		}
 	}
 }
-void nfp_pci_error_reset_done(struct pci_dev *dev)
+static void nfp_pci_error_reset_done(struct pci_dev *dev)
 {
 	struct nfp_pf *pf = pci_get_drvdata(dev);
 
@@ -1464,6 +1465,7 @@ void nfp_pci_error_reset_done(struct pci_dev *dev)
 			add_timer(&pf->multi_pf.beat_timer);
 	}
 }
+#endif
 
 static const struct pci_error_handlers nfp_pci_err_handler = {
 #if VER_NON_RHEL_GE(4, 13) || VER_RHEL_GE(8, 0)

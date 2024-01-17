@@ -2562,12 +2562,12 @@ static u16 nfp_skb_tx_hash(const struct sk_buff *skb, u16 num_tx_queues)
 }
 
 #if VER_NON_RHEL_LT(5, 2) || VER_RHEL_LT(9, 0)
-u16 nfp_net_select_queue(struct net_device *netdev,
+static u16 nfp_net_select_queue(struct net_device *netdev,
 			 struct sk_buff *skb,
 			 struct net_device __always_unused *sb_dev,
 			 select_queue_fallback_t fallback)
 #else
-u16 nfp_net_select_queue(struct net_device *netdev,
+static u16 nfp_net_select_queue(struct net_device *netdev,
 			 struct sk_buff *skb,
 			 struct net_device __always_unused *sb_dev)
 #endif
