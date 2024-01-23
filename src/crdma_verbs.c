@@ -2461,7 +2461,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 		}
 		resp.cq_base_addr = virt_to_phys(ccq->cqe_buf);
 		resp.cq_size = ccq->mem->tot_len;
-		resp.ci_mbox_base_addr = ccq->ci_mbox_paddr;
+		resp.ci_mbox_base_addr = virt_to_phys(ccq->ci_mbox);
 		resp.ci_mbox_size = PAGE_SIZE;
 		resp.cqn = ccq->cqn;
 		resp.num_cqe = ccq->num_cqe;
@@ -2508,8 +2508,10 @@ cq_destroy:
 	crdma_cq_destroy_cmd(dev, ccq);
 cmd_fail:
 	dev->cq_table[ccq->cqn] = NULL;
-	dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
-			ccq->ci_mbox, ccq->ci_mbox_paddr);
+	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+			PAGE_SIZE, DMA_BIDIRECTIONAL);
+free_ci_mbox:
+	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
 free_queue_mem:
 	crdma_free_hw_queue(dev, ccq->mem);
 free_cq:
