@@ -275,8 +275,12 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 
 	dev->cap.ib.max_qp = 1 << cap->max_qp_log2;
 	dev->cap.ib.max_qp_wr = 1 << cap->max_qp_wr_log2;
+#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+	dev->cap.ib.max_sge = cap->max_sq_sge;
+#else
 	dev->cap.ib.max_send_sge = cap->max_sq_sge;
 	dev->cap.ib.max_recv_sge = cap->max_sq_sge;
+#endif
 	dev->cap.ib.max_sge_rd = cap->max_rq_sge;
 	dev->cap.ib.max_cq = 1 << cap->max_cq_log2;
 

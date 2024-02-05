@@ -46,6 +46,14 @@
 #include "crdma_ib.h"
 #include "crdma_util.h"
 
+#ifdef COMPAT__HAVE_REGISTER_NETDEVICE_NOTIFIER_RH
+#define compat_register_netdevice_notifier	register_netdevice_notifier_rh
+#define compat_unregister_netdevice_notifier	unregister_netdevice_notifier_rh
+#else
+#define compat_register_netdevice_notifier	register_netdevice_notifier
+#define compat_unregister_netdevice_notifier	unregister_netdevice_notifier
+#endif
+
 int crdma_init_bitmap(struct crdma_bitmap *bitmap, u32 min, u32 max)
 {
 	size_t	size;
@@ -407,7 +415,7 @@ int crdma_init_net_notifiers(struct crdma_ibdev *dev)
 		return 0;
 	}
 	dev->nb_netdev.notifier_call = crdma_netdev_event;
-	err = register_netdevice_notifier(&dev->nb_netdev);
+	err = compat_register_netdevice_notifier(&dev->nb_netdev);
 	if (err) {
 		dev->nb_netdev.notifier_call = NULL;
 		return err;
@@ -419,7 +427,7 @@ void crdma_cleanup_net_notifiers(struct crdma_ibdev *dev)
 {
 
 	if (dev->nb_netdev.notifier_call) {
-		unregister_netdevice_notifier(&dev->nb_netdev);
+		compat_unregister_netdevice_notifier(&dev->nb_netdev);
 		dev->nb_netdev.notifier_call = NULL;
 	}
 	return;
@@ -544,6 +552,11 @@ int crdma_set_av(struct ib_pd *pd,
 {
 	const struct ib_global_route *grh = rdma_ah_read_grh(ah_attr);
 	u8 nw_type;
+#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+	union ib_gid sgid;
+	struct ib_gid_attr sgid_attr;
+	int ret;
+#endif
 	u16 vlan = 0xffff;
 
 	/* The reason of swap byte order reference the struct crdma_av */
@@ -569,7 +582,16 @@ int crdma_set_av(struct ib_pd *pd,
 				(to_crdma_pd(pd)->pd_index & CRDMA_AV_PD_MASK));
 
 	/* Get gid type */
+#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+	ret = ib_get_cached_gid(pd->device,
+		rdma_ah_get_port_num(ah_attr), grh->sgid_index, &sgid, &sgid_attr);
+	if (ret)
+		return ret;
+
+	nw_type = ib_gid_to_network_type(sgid_attr.gid_type, &sgid);
+#else
 	nw_type = rdma_gid_attr_network_type(grh->sgid_attr);
+#endif
 	if (nw_type == RDMA_NETWORK_IPV4)
 		av->gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
 	else if(nw_type == RDMA_NETWORK_IPV6)
@@ -585,6 +607,9 @@ int crdma_set_av(struct ib_pd *pd,
 		crdma_warn("Get vlan failed from gid_attr\n");
 		return -EINVAL;
 	}
+#elif (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+	if (is_vlan_dev(sgid_attr.ndev))
+		vlan = vlan_dev_vlan_id(sgid_attr.ndev);
 #else
 	if (is_vlan_dev(grh->sgid_attr->ndev))
 		vlan = vlan_dev_vlan_id(grh->sgid_attr->ndev);

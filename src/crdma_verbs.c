@@ -634,6 +634,81 @@ static enum rdma_link_layer crdma_get_link_layer(
 }
 #endif
 
+#if (VER_NON_RHEL_LT(4,17) || VER_RHEL_EQ(7,6))
+int crdma_add_gid(struct ib_device *device, u8 port_num, unsigned int index,
+				  const union ib_gid *gid, const struct ib_gid_attr *attr,
+				  void **context)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(device);
+	struct crdma_port *port = &dev->port;
+	struct crdma_gid_entry *entry;
+	int ret = 0;
+	unsigned long flags;
+
+	/* CRDMA HCA only support RoCEv2*/
+	if (!rdma_protocol_roce_udp_encap(device, port_num)) {
+		return -EINVAL;
+	}
+
+	if (port_num > 1)
+		return -EINVAL;
+
+	if (index >= dev->cap.sgid_table_size)
+		return -EINVAL;
+
+	entry = &port->gid_table_entry[index];
+	spin_lock_irqsave(&port->table_lock, flags);
+	memcpy(&entry->gid, gid, sizeof(*gid));
+	entry->type = RDMA_ROCE_V2_GID_TYPE;
+	entry->valid = 1;
+	spin_unlock_irqrestore(&port->table_lock, flags);
+
+	ret = crdma_write_sgid_table(dev, port_num - 1, port->gid_table_size);
+	if (ret) {
+		crdma_warn("Write sgid table command failed\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+#elif (VER_NON_RHEL_GE(4,17) && VER_NON_RHEL_LT(4,19))
+static int crdma_add_gid(const union ib_gid *gid,
+			 const struct ib_gid_attr *attr, void **context)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(attr->device);
+	struct crdma_port *port = &dev->port;
+	struct crdma_gid_entry *entry;
+	int ret = 0;
+	unsigned long flags;
+	u16 index = attr->index;
+
+	/* CRDMA HCA only support RoCEv2*/
+	if (!rdma_protocol_roce_udp_encap(attr->device, attr->port_num)) {
+		return -EINVAL;
+	}
+
+	if (attr->port_num > 1)
+		return -EINVAL;
+
+	if (index >= dev->cap.sgid_table_size)
+		return -EINVAL;
+
+	entry = &port->gid_table_entry[index];
+	spin_lock_irqsave(&port->table_lock, flags);
+	memcpy(&entry->gid, gid, sizeof(entry->gid));
+	entry->type = RDMA_ROCE_V2_GID_TYPE;
+	entry->valid = 1;
+	spin_unlock_irqrestore(&port->table_lock, flags);
+
+	ret = crdma_write_sgid_table(dev, attr->port_num - 1, port->gid_table_size);
+	if (ret) {
+		crdma_warn("Write sgid table command failed\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+#else
 static int crdma_add_gid(const struct ib_gid_attr *attr, void **context)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(attr->device);
@@ -670,6 +745,44 @@ static int crdma_add_gid(const struct ib_gid_attr *attr, void **context)
 	return 0;
 }
 
+#endif
+
+#if (VER_NON_RHEL_LT(4,17) || VER_RHEL_EQ(7,6))
+int crdma_del_gid(struct ib_device *device, u8 port_num, unsigned int index,
+				  void **context)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(device);
+	struct crdma_port *port = &dev->port;
+	struct crdma_gid_entry *entry;
+	int ret = 0;
+	unsigned long flags;
+
+	/* CRDMA HCA only support RoCEv2*/
+	if (!rdma_protocol_roce_udp_encap(device, port_num)) {
+		return -EINVAL;
+	}
+
+	if (port_num > 1)
+		return -EINVAL;
+
+	if (index >= dev->cap.sgid_table_size)
+		return -EINVAL;
+
+	entry = &port->gid_table_entry[index];
+	spin_lock_irqsave(&port->table_lock, flags);
+	memset(&entry->gid, 0, 16);
+	entry->valid = 0;
+	spin_unlock_irqrestore(&port->table_lock, flags);
+
+	ret = crdma_write_sgid_table(dev, port_num - 1, port->gid_table_size);
+	if (ret) {
+		crdma_warn("Write sgid table command failed\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+#else
 static int crdma_del_gid(const struct ib_gid_attr *attr, void **context)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(attr->device);
@@ -704,6 +817,7 @@ static int crdma_del_gid(const struct ib_gid_attr *attr, void **context)
 
 	return 0;
 }
+#endif
 
 #if (VER_NON_RHEL_GE(5,13) || RHEL_RELEASE_GE(8,365,0,0))
 static int crdma_query_gid(struct ib_device *ibdev, u32 port_num,
@@ -1150,7 +1264,11 @@ static int crdma_qp_val_check(struct crdma_ibdev *dev,
 	}
 
 	if (cap->max_send_sge < 1 ||
+#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+                        cap->max_send_sge > dev->cap.ib.max_sge) {
+#else
 			cap->max_send_sge > dev->cap.ib.max_send_sge) {
+#endif
 		crdma_warn("Send SG entries requested invalid %d\n",
 				cap->max_send_sge);
 		return -EINVAL;
@@ -1943,8 +2061,14 @@ static struct crdma_swqe *get_sq_tail(struct crdma_qp *cqp)
 
 #define CRDMA_SQ_DB_READY_RETRIES              20
 
+
+#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+int crdma_post_send(struct ib_qp *qp, struct ib_send_wr *wr,
+				    struct ib_send_wr **bad_wr)
+#else
 static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 			   const struct ib_send_wr **bad_wr)
+#endif
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(qp->device);
 	struct crdma_qp *cqp = to_crdma_qp(qp);
@@ -2158,8 +2282,13 @@ static struct crdma_rwqe *get_rq_tail(struct crdma_qp *cqp)
 	return cqp->rq.buf + (cqp->rq.tail << cqp->rq.wqe_size_log2);
 }
 
+#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+int crdma_post_recv(struct ib_qp *qp, struct ib_recv_wr *wr,
+					struct ib_recv_wr **bad_wr)
+#else
 static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 			   const struct ib_recv_wr **bad_wr)
+#endif
 {
 	struct crdma_qp *cqp = to_crdma_qp(qp);
 	struct crdma_rwqe *rwqe;
@@ -3317,7 +3446,9 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	ib_set_device_ops(&dev->ibdev, &crdma_dev_ops);
 #else
 	dev->ibdev.owner                = THIS_MODULE;
+#if (VER_NON_RHEL_GE(4,17) || VER_RHEL_GE(7,7))
 	dev->ibdev.driver_id            = RDMA_DRIVER_CRDMA;
+#endif
 	dev->ibdev.uverbs_abi_ver       = CRDMA_UVERBS_ABI_VERSION;
 	strlcpy(dev->ibdev.name, "crdma%d", IB_DEVICE_NAME_MAX);
 
