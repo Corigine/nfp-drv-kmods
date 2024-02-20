@@ -1720,6 +1720,13 @@ MODULE_FIRMWARE("netronome/nic_AMDA0097-0001_8x10.nffw");
 MODULE_FIRMWARE("netronome/nic_AMDA0099-0001_2x10.nffw");
 MODULE_FIRMWARE("netronome/nic_AMDA0099-0001_2x25.nffw");
 MODULE_FIRMWARE("netronome/nic_AMDA0099-0001_1x10_1x25.nffw");
+MODULE_FIRMWARE("netronome/AMDA0161-1001.nffw");
+MODULE_FIRMWARE("netronome/AMDA2000-1103.nffw");
+MODULE_FIRMWARE("netronome/AMDA2000-1104.nffw");
+MODULE_FIRMWARE("netronome/AMDA2001-1103.nffw");
+MODULE_FIRMWARE("netronome/AMDA2001-1104.nffw");
+MODULE_FIRMWARE("netronome/AMDA2002-1113.nffw");
+MODULE_FIRMWARE("netronome/AMDA2002-1114.nffw");
 
 MODULE_AUTHOR("Corigine, Inc. <oss-drivers@corigine.com>");
 MODULE_LICENSE("GPL");
