@@ -636,7 +636,7 @@ nfp_net_fw_find(struct pci_dev *pdev, struct nfp_pf *pf)
 	if (fw)
 		return fw;
 
-	/* Finally try the card type and media */
+	/* Then try the card type */
 	if (!pf->eth_tbl) {
 		dev_err(&pdev->dev, "Error: can't identify media config\n");
 		return NULL;
@@ -650,6 +650,12 @@ nfp_net_fw_find(struct pci_dev *pdev, struct nfp_pf *pf)
 		return NULL;
 	}
 
+	sprintf(fw_name, "netronome/%s.nffw", fw_model);
+	fw = nfp_net_fw_request(pdev, pf, fw_name);
+	if (fw)
+		return fw;
+
+	/* Finally try the card type and media */
 	spc = ARRAY_SIZE(fw_name);
 	spc -= snprintf(fw_name, spc, "netronome/nic_%s", fw_model);
 
