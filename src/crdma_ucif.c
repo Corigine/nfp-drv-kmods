@@ -1321,6 +1321,93 @@ int crdma_cq_destroy_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq)
 			cq->cqn, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
+int crdma_srq_create_cmd(struct crdma_ibdev *dev, struct crdma_srq *csrq)
+{
+	struct crdma_srq_params *param;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
+	u32 page_info;
+	int status;
+
+	if (crdma_init_mailbox(dev, &in_mbox))
+		return -1;
+
+	param              = in_mbox.buf;
+	param->srq_limit   = csrq->srq_limit;
+	param->max_srq_wr  = csrq->wq.wqe_cnt;
+	param->max_sge_num = csrq->wq.max_sg;
+
+	page_info = (csrq->mem->min_order + PAGE_SHIFT) <<
+		CRDMA_SRQ_CREATE_LOG2_PAGE_SZ_SHIFT;
+	page_info = (ilog2(csrq->wq.wqe_size) & CRDMA_SRQ_CREATE_LOG2_SWQE_MASK) <<
+		CRDMA_SRQ_CREATE_LOG2_SWQE_SHIFT;
+
+	/* Set PHYS flag if single block and device supports it */
+	if (csrq->mem->num_mtt == 1 &&
+			(dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_PHYS))
+		page_info |= 1 << CRDMA_SRQ_CREATE_PHYS_BIT_SHIFT;
+
+	param->page_info = cpu_to_le32(page_info);
+	param->mtt_index = cpu_to_le32(csrq->mem->base_mtt_ndx);
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opcode = CRDMA_CMD_SRQ_CREATE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
+	cmd.input_param = in_mbox.dma_addr;
+	cmd.input_mod = csrq->srq_index;
+	status = crdma_cmd(dev, &cmd);
+
+	crdma_cleanup_mailbox(dev, &in_mbox);
+	return status;
+}
+
+int crdma_srq_destroy_cmd(struct crdma_ibdev *dev, struct crdma_srq *csrq)
+{
+	struct crdma_srq_params *param;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
+	int status;
+
+	if (crdma_init_mailbox(dev, &in_mbox))
+		return -1;
+
+	param   = in_mbox.buf;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opcode = CRDMA_CMD_SRQ_DESTROY;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
+	cmd.input_param = in_mbox.dma_addr;
+	cmd.input_mod = csrq->srq_index;
+	status = crdma_cmd(dev, &cmd);
+
+	crdma_cleanup_mailbox(dev, &in_mbox);
+	return status;
+}
+
+int crdma_srq_set_arm_limit_cmd(struct crdma_ibdev *dev, struct crdma_srq *csrq)
+{
+	struct crdma_srq_params *param;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
+	int status;
+
+	if (crdma_init_mailbox(dev, &in_mbox))
+		return -1;
+
+	param = in_mbox.buf;
+	param->srq_limit = csrq->srq_limit;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opcode = CRDMA_CMD_SRQ_SET_ARM_LIMIT;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
+	cmd.input_param = in_mbox.dma_addr;
+	cmd.input_mod = csrq->srq_index;
+	status = crdma_cmd(dev, &cmd);
+
+	crdma_cleanup_mailbox(dev, &in_mbox);
+	return status;
+}
+
 /**
  * Build QP control object parameters used to initialize QP state.
  *
@@ -1341,6 +1428,8 @@ static void crdma_set_qp_ctrl(struct crdma_ibdev *dev,
 		word = 1 << CRDMA_QP_CTRL_PHYS_BIT_SHIFT;
 	if (qp->sq_sig_all)
 		word |= 1 << CRDMA_QP_CTRL_SIGALL_BIT_SHIFT;
+	if (qp->srqn)
+		word |= 1 << CRDMA_QP_CTRL_SRQ_BIT_SHIFT;
 
 	/* Special QP are a anomaly, set QP1 and add GSI flag */
 	if (unlikely(qp->ib_qp.qp_type == IB_QPT_GSI))

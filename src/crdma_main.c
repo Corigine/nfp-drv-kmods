@@ -350,10 +350,10 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.ib.max_fmr = 0;
 	dev->cap.ib.max_map_per_fmr = 0;
 #endif
-	/* SRQ is not supported */
-	dev->cap.ib.max_srq = 0;
-	dev->cap.ib.max_srq_wr = 0;
-	dev->cap.ib.max_srq_sge = 0;
+	/* SRQ is supported */
+	dev->cap.ib.max_srq = 1 << cap->max_srq_log2;;
+	dev->cap.ib.max_srq_wr = 1 << cap->max_srq_wr_log2;;
+	dev->cap.ib.max_srq_sge = 1 << cap->max_srq_rwqe_size_log2;
 
 	/*
 	 * TODO: circle back with microcode, probably need to add
@@ -740,10 +740,17 @@ static int crdma_init_maps(struct crdma_ibdev *dev)
 		goto cleanup_cq_mem;
 	}
 
+	if (crdma_init_bitmap(&dev->srq_map, 1, dev->cap.ib.max_srq - 1)) {
+		crdma_dev_warn(dev, "Unable to allocate SRQ map\n");
+		goto cleanup_qp_mem;
+	}
+
 	INIT_RADIX_TREE(&dev->qp_tree, GFP_ATOMIC);
 
 	return 0;
 
+cleanup_qp_mem:
+	crdma_cleanup_bitmap(&dev->qp_map);
 cleanup_cq_mem:
 	kfree(dev->cq_table);
 cleanup_cq:
@@ -768,6 +775,7 @@ static void crdma_cleanup_maps(struct crdma_ibdev *dev)
 	crdma_cleanup_bitmap(&dev->mtt_map);
 	crdma_cleanup_bitmap(&dev->mpt_map);
 	crdma_cleanup_bitmap(&dev->uar_map);
+	crdma_cleanup_bitmap(&dev->srq_map);
 	return;
 }
 

@@ -837,8 +837,27 @@ struct crdma_ci_mbox {
 	__le32		last_db_state;
 };
 
+/*
+ * Create a microcode shared receive queue.
+ */
+enum {
+	CRDMA_SRQ_CREATE_LOG2_SWQE_MASK		= 0xFF,
+	CRDMA_SRQ_CREATE_LOG2_PAGE_SZ_SHIFT	= 27,
+	CRDMA_SRQ_CREATE_PHYS_BIT_SHIFT		= 24,
+	CRDMA_SRQ_CREATE_LOG2_SWQE_SHIFT	= 16,
+};
+
+struct crdma_srq_params {
+	__le16		max_srq_wr;
+	__le16		max_sge_num;
+	__le32		srq_limit;
+	__le32		page_info;
+	__le32		mtt_index;
+} __packed;
+
 struct crdma_cq;
 struct crdma_uar;
+struct crdma_srq;
 
 /**
  * Create a completion queue control object.
@@ -871,6 +890,36 @@ int crdma_cq_resize_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq);
  * Returns 0 on success, otherwise an error.
  */
 int crdma_cq_destroy_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq);
+
+/**
+ * Create a share receive queue control object.
+ *
+ * @dev: RoCE IB device.
+ * @csrq: The driver SRQ object.
+ *
+ * Returns 0 on success, otherwise an error.
+ */
+int crdma_srq_create_cmd(struct crdma_ibdev *dev, struct crdma_srq *csrq);
+
+/**
+ * Set arm limit for  a share receive queue.
+ *
+ * @dev: RoCE IB device.
+ * @csrq: The driver SRQ object.
+ *
+ * Returns 0 on success, otherwise an error.
+ */
+int crdma_srq_set_arm_limit_cmd(struct crdma_ibdev *dev, struct crdma_srq *csrq);
+
+/**
+ * Destroy a share receive queue control object.
+ *
+ * @dev: RoCE IB device.
+ * @csrq: The driver SRQ object.
+ *
+ * Returns 0 on success, otherwise an error.
+ */
+int crdma_srq_destroy_cmd(struct crdma_ibdev *dev, struct crdma_srq *csrq);
 
 /* Queue Pair attributes that can be set and modified. */
 /* QP control object parameters set on QP RESET to INIT transition */

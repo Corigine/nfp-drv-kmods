@@ -66,15 +66,15 @@ enum {
 	CRDMA_IB_MAX_PKEY_TABLE_SIZE	= 1,
 	CRDMA_IB_MAX_GID_TABLE_SIZE	= 4,
 	CRDMA_IB_MAX_MAC_TABLE_SIZE	= 8,
-	CRDMA_IB_MAX_FAST_REG_PAGES     = 64
+	CRDMA_IB_MAX_FAST_REG_PAGES	= 64
 };
 
 /*
  * Expect that something like these will be defined in ib_addr.h eventually.
  */
 enum {
-       RDMA_ROCE_V1_GID_TYPE           = 0,
-       RDMA_ROCE_V2_GID_TYPE           = 1
+	RDMA_ROCE_V1_GID_TYPE		= 0,
+	RDMA_ROCE_V2_GID_TYPE		= 1
 };
 
 /*
@@ -82,8 +82,8 @@ enum {
  * that both types indicate RoCEv2.
  */
 enum {
-       CRDMA_ROCE_V2_IPV4_GID_TYPE     = 1,
-       CRDMA_ROCE_V2_IPV6_GID_TYPE     = 2
+	CRDMA_ROCE_V2_IPV4_GID_TYPE	= 1,
+	CRDMA_ROCE_V2_IPV6_GID_TYPE	= 2
 };
 
 /*
@@ -131,7 +131,7 @@ enum {
 	/* MTT page sizes range expressed log2 values 4K to 16MB. */
 	CRDMA_MTT_MIN_PAGESIZE_LOG2	= 12,
 	CRDMA_MTT_MAX_PAGESIZE_LOG2	= 24,
-	CRDMA_MTT_MAX_PAGESIZE          = 1 << CRDMA_MTT_MAX_PAGESIZE_LOG2
+	CRDMA_MTT_MAX_PAGESIZE		= 1 << CRDMA_MTT_MAX_PAGESIZE_LOG2
 };
 
 struct crdma_mem;
@@ -160,32 +160,32 @@ struct crdma_pd {
 };
 
 struct crdma_ah {
-	struct ib_ah            ib_ah;
-	struct crdma_av         av;
-	u8                      smac[6];
+	struct ib_ah		ib_ah;
+	struct crdma_av		av;
+	u8			smac[6];
 };
 
 struct crdma_cq {
-	struct ib_cq             ib_cq;
-	spinlock_t               lock;
+	struct ib_cq		ib_cq;
+	spinlock_t		lock;
 
-	u32                      cqn;            /* Control object index */
-	atomic_t                 ref_cnt;
-	u32                      eq_num;         /* EQ used for notifications */
-	struct completion        free;
+	u32			cqn;		/* Control object index */
+	atomic_t		ref_cnt;
+	u32			eq_num;		/* EQ used for notifications */
+	struct completion	free;
 
-	struct crdma_mem        *mem;            /* CQ memory */
-	struct crdma_cqe        *cqe_buf;        /* vaddr for kernel of above */
+	struct crdma_mem	*mem;		/* CQ memory */
+	struct crdma_cqe	*cqe_buf;	/* vaddr for kernel of above */
 
-	int                      arm_seqn;       /* Rolling sequence number */
-	u32                      num_cqe;        /* Power of 2 */
-	u32                      num_cqe_log2;   /* Above as a log2 value */
-	u32                      consumer_cnt;   /* S/W consumer counter */
-	u32                      mask;           /* CQE count -> CQE index */
+	int			arm_seqn;	/* Rolling sequence number */
+	u32			num_cqe;	/* Power of 2 */
+	u32			num_cqe_log2;	/* Above as a log2 value */
+	u32			consumer_cnt;	/* S/W consumer counter */
+	u32			mask;		/* CQE count -> CQE index */
 
 	/* Event and time interrupt moderation values */
-	u16                      event_mod;
-	u16                      time_mod;
+	u16			event_mod;
+	u16			time_mod;
 
 	/*
 	 * Software maintains the state of the CQ at the time of the
@@ -193,33 +193,28 @@ struct crdma_cq {
 	 * values to microcode.
 	 */
 	struct crdma_ci_mbox	*ci_mbox;
-	dma_addr_t               ci_mbox_paddr;
-};
-
-struct crdma_srq {
-	struct ib_srq		ib_srq;
-	u32			srq_index;	/* Assigned control object */
+	dma_addr_t		ci_mbox_paddr;
 };
 
 struct crdma_hw_workq {
-	spinlock_t              lock;
-	void                    *buf;
-	u64                     *wrid_map;      /* WQE index to WRID map */
-	u32                     wqe_cnt;        /* Rounded up to power of 2 */
-	u32                     wqe_size;       /* Rounded up to power of 2 */
-	u32                     wqe_size_log2;  /* Above log 2 value */
-	u32                     max_sg;         /* Maximum SG entries */
-	u32                     head;           /* SW Consumer */
-	u32                     tail;           /* SW Producer */
-	u32                     length;         /* Queue size in bytes */
-	u32                     mask;           /* Num WQE - 1 */
+	spinlock_t		lock;
+	void			*buf;
+	u64			*wrid_map;	/* WQE index to WRID map */
+	u32			wqe_cnt;	/* Rounded up to power of 2 */
+	u32			wqe_size;	/* Rounded up to power of 2 */
+	u32			wqe_size_log2;	/* Above log 2 value */
+	u32			max_sg;		/* Maximum SG entries */
+	u32			head;		/* SW Consumer */
+	u32			tail;		/* SW Producer */
+	u32			length;		/* Queue size in bytes */
+	u32			mask;		/* Num WQE - 1 */
 };
 
 struct crdma_qp {
 	struct ib_qp		ib_qp;		/* IB QPN stored here */
 	struct mutex		mutex;
 
-	u32			        qp_index;  /* Microcode control object */
+	u32			qp_index;	/* Microcode control object */
 
 	/*
 	* If this QP is a GSI QP (i.e. QP1), then qp1_port indicates
@@ -229,11 +224,11 @@ struct crdma_qp {
 	* index used to manage that QP1. NOTE: for special QP the
 	* above "qp_index" is not used.
 	*/
-	int                     qp1_port;
+	int			qp1_port;
 
 	enum ib_qp_state	qp_state;
 	int			sq_sig_all;
-	u32                     max_inline;
+	u32			max_inline;
 	u32			pdn;
 	u32			send_cqn;
 	u32			recv_cqn;
@@ -248,8 +243,17 @@ struct crdma_qp {
 	u32			rq_offset;
 
 	/* Work queues, RQ only valid if QP is not attached to SRQ */
-	struct crdma_hw_workq   sq;
-	struct crdma_hw_workq   rq;
+	struct crdma_hw_workq	sq;
+	struct crdma_hw_workq	rq;
+};
+
+struct crdma_srq {
+	struct ib_srq		ib_srq;
+	u32			srq_index;
+	u32			srq_limit;
+	u32			max_wr;
+	struct crdma_mem	*mem;
+	struct crdma_hw_workq	wq;
 };
 
 struct crdma_mr {
@@ -291,21 +295,21 @@ struct crdma_mr {
 
 /* Software formatted copy of microcode GID table entries */
 struct crdma_gid_entry {
-       u8              type;
-       u8              valid;
-       u8              rsvd[2];
-       union ib_gid    gid;
+	u8			type;
+	u8			valid;
+	u8			rsvd[2];
+	union ib_gid		gid;
 };
 
 /* Software formatted copy of microcode SMAC table entries */
 struct crdma_mac_entry {
-       int             ref_cnt;
-       u8              mac[ETH_ALEN];
+	int			ref_cnt;
+	u8			mac[ETH_ALEN];
 };
 
 struct crdma_port {
-	struct net_device       *netdev;
-	u8                      mac[ETH_ALEN];
+	struct net_device	*netdev;
+	u8			mac[ETH_ALEN];
 
 	/*
 		* Ports in host memory Ethernet source addressing information.
@@ -315,11 +319,11 @@ struct crdma_port {
 		* but ultimately the provider will need the ability to push
 		* SGID and SMAC tables to microcode.
 		*/
-	spinlock_t              table_lock;
-	int                     gid_table_size;
-	struct crdma_gid_entry  gid_table_entry[CRDMA_IB_MAX_GID_TABLE_SIZE];
-	int                     mac_table_size;
-	struct crdma_mac_entry  mac_table_entry[CRDMA_IB_MAX_MAC_TABLE_SIZE];
+	spinlock_t		table_lock;
+	int			gid_table_size;
+	struct crdma_gid_entry	gid_table_entry[CRDMA_IB_MAX_GID_TABLE_SIZE];
+	int			mac_table_size;
+	struct crdma_mac_entry	mac_table_entry[CRDMA_IB_MAX_MAC_TABLE_SIZE];
 };
 
 struct crdma_ibdev {
@@ -346,6 +350,7 @@ struct crdma_ibdev {
 	struct crdma_bitmap	uar_map;
 	struct crdma_bitmap	pd_map;
 	struct crdma_bitmap	qp_map;
+	struct crdma_bitmap	srq_map;
 	spinlock_t		qp_lock;
 	struct radix_tree_root	qp_tree;
 
@@ -405,14 +410,14 @@ struct crdma_ibdev {
 	 */
 	struct crdma_uar	priv_eq_uar;	/* Kernel EQ doorbells */
 	struct crdma_uar	priv_uar;	/* Kernel SQ/CQ UAR */
-	spinlock_t              priv_uar_lock;  /* For CQ on 32-bit systems */
+	spinlock_t		priv_uar_lock;	/* For CQ on 32-bit systems */
 
 	int			numa_node;
 
 	/* Linkage back to net_device notification chain */
-	struct notifier_block   nb_netdev;
+	struct notifier_block	nb_netdev;
 
-	struct crdma_port       port;
+	struct crdma_port	port;
 };
 
 /**

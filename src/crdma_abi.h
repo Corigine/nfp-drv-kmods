@@ -79,12 +79,22 @@ struct crdma_ib_create_qp_resp {
 };
 
 struct crdma_ib_create_ah_resp {
-	__u16  vlan;                    /* VLAN ID */
-	__u8   v_id;                    /* VLAN is valid or not */
-	__u8   gid_type;
-	__u8   d_mac[6];
-	__u8   traffic_class;           /* Used for Traffic class */
-	__u8   rsvd[5];
+	__u16		vlan;			/* VLAN ID */
+	__u8		v_id;			/* VLAN is valid or not */
+	__u8		gid_type;
+	__u8		d_mac[6];
+	__u8		traffic_class;		/* Used for Traffic class */
+	__u8		rsvd[5];
+};
+
+struct crdma_ib_create_srq_resp {
+	__aligned_u64	wq_base_addr;		/* WQE memory base address */
+	__u32		wq_size;		/* WQE memory map size */
+	__u32		wqe_size;		/* Size of WQE */
+	__u32		wqe_cnt;		/* Actual number of WQE in Queque */
+	__u32		srq_id;			/* Share receive queue ID */
+	__u32		spares;			/* Runway of unused WQE */
+	__u32		rsvd;
 };
 
 extern bool dcqcn_enable;

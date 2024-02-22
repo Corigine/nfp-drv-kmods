@@ -327,6 +327,7 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ccq->ib_cq.device);
 	struct crdma_hw_workq *wq;
+	struct crdma_srq *csrq;
 	u32 qpn_index = le32_to_cpu(cqe->qpn & CRDMA_CQE_QPN_MASK);
 	u16 wqe_index;
 
@@ -365,12 +366,12 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 		wq->head = wqe_index;
 		wc->wr_id = wq->wrid_map[wq->head & wq->mask];
 		wq->head = (wq->head + 1) & wq->mask;
+	} else if ((*last_qp)->ib_qp.srq) {
+		csrq = to_crdma_srq((*last_qp)->ib_qp.srq);
+		wq = &csrq->wq;
+		wc->wr_id = wq->wrid_map[wq->head & wq->mask];
+		wq->head = (wq->head + 1) & wq->mask;
 	} else {
-		/*
-		 * TODO: We will need to handle the case where
-		 * the QP is attached to a SRQ here, once SRQ
-		 * are implemented.
-		 */
 		wq = &(*last_qp)->rq;
 		wc->wr_id = wq->wrid_map[wq->head & wq->mask];
 		wq->head = (wq->head + 1) & wq->mask;
@@ -1337,6 +1338,7 @@ static int crdma_qp_val_check(struct crdma_ibdev *dev,
 		return -EINVAL;
 	}
 
+	/* max_recv_wr and max_recv_sge are ignored if the Queue Pair is associated with an SRQ */
 	if (!use_srq) {
 		/* Note we advertise 1 less than actual hardware maximum */
 		if (cap->max_recv_wr >= dev->cap.ib.max_qp_wr) {
@@ -1350,13 +1352,6 @@ static int crdma_qp_val_check(struct crdma_ibdev *dev,
 					dev->cap.ib.max_sge_rd);
 			return -EINVAL;
 		}
-	} else {
-		if (cap->max_recv_wr) {
-			crdma_warn("Recv WR must be 0 when using SRQ\n");
-			return -EINVAL;
-		}
-		crdma_warn("SRQ not yet supported\n");
-		return -EINVAL;
 	}
 
 	if (cap->max_inline_data > dev->cap.max_inline_data) {
@@ -1944,6 +1939,351 @@ out:
 }
 
 #if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
+int crdma_create_srq(struct ib_srq *ib_srq, struct ib_srq_init_attr *attrs,
+                    struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(ib_srq->device);
+	struct crdma_srq *csrq = to_crdma_srq(ib_srq);
+	struct ib_pd *pd = ib_srq->pd;
+	int err;
+
+	if (attrs->srq_type != IB_SRQT_BASIC) {
+		err = -EOPNOTSUPP;
+		goto failed;
+	}
+
+	if (attrs->attr.max_wr > dev->cap.ib.max_srq) {
+		err = -E2BIG;
+		crdma_warn("Required number of WR %d exceeds max SRQ %d\n",
+			attrs->attr.max_wr, dev->cap.ib.max_srq);
+		goto failed;
+	}
+
+	if (attrs->attr.max_sge > dev->cap.ib.max_srq_sge) {
+		err = -E2BIG;
+		crdma_warn("Required number of SGE %d exceeds max SRQ SGE %d\n",
+			attrs->attr.max_sge, dev->cap.ib.max_srq_sge);
+		goto failed;
+	}
+
+	/* Allocate resource index for the SRQ control object */
+	if (crdma_alloc_bitmap_index(&dev->srq_map, &csrq->srq_index)) {
+		crdma_warn("No SRQ index available\n");
+		err = -ENOMEM;
+		goto failed;
+	}
+
+	/*
+	* Control information and space for the requested maximum
+	* number of scatter entries.
+	*/
+	csrq->wq.wqe_size = sizeof(struct crdma_rwqe) +
+			    sizeof(struct crdma_wqe_sge) *
+			    attrs->attr.max_sge;
+	csrq->wq.wqe_size = roundup_pow_of_two(csrq->wq.wqe_size);
+	csrq->wq.wqe_cnt = roundup_pow_of_two(attrs->attr.max_wr +
+					CRDMA_WQ_WQE_SPARES);
+	csrq->wq.max_sg = attrs->attr.max_sge;
+	if (csrq->wq.wqe_size > dev->cap.max_srq_rwqe_size) {
+		crdma_warn("Required SRWQE size %d exceeds max %d\n",
+			csrq->wq.wqe_size, dev->cap.max_srq_rwqe_size);
+		err = -EINVAL;
+		goto free_srq_index;
+	}
+
+	csrq->srq_limit = attrs->attr.srq_limit;
+	spin_lock_init(&csrq->wq.lock);
+	csrq->mem = crdma_alloc_hw_queue(dev,
+			csrq->wq.wqe_cnt * csrq->wq.wqe_size);
+	if (IS_ERR(csrq->mem)) {
+		crdma_dev_err(dev, "Unable to allocate CQ HW queue\n");
+		err = -ENOMEM;
+		goto free_srq_index;
+	}
+
+	crdma_init_wq_ownership(csrq->mem, 0, csrq->wq.wqe_cnt,
+				csrq->wq.wqe_size);
+
+	err = crdma_srq_create_cmd(dev, csrq);
+	if (err) {
+		crdma_err("Microcode error creating SRQ, %d\n", err);
+		goto free_dma_memory;
+	}
+
+	/* return response */
+	if (udata) {
+		struct crdma_ucontext *crdma_uctxt =
+			to_crdma_uctxt(pd->uobject->context);
+		struct crdma_ib_create_srq_resp resp;
+
+		resp.wq_base_addr = virt_to_phys(sg_virt(csrq->mem->alloc));
+		resp.wq_size = csrq->mem->tot_len;
+		resp.wqe_size = csrq->wq.wqe_size;
+		resp.wqe_cnt = csrq->wq.wqe_cnt;
+		resp.srq_id = csrq->srq_index;
+		resp.spares = CRDMA_WQ_WQE_SPARES;
+
+		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
+		if (err) {
+			crdma_warn("Copy of UDATA failed, %d\n", err);
+			goto free_dma_memory;
+		}
+		err = crdma_add_mmap_req(crdma_uctxt, resp.wq_base_addr,
+			csrq->mem->tot_len);
+		if (err) {
+			crdma_warn("Failed to add pending mmap, %d\n", err);
+			goto free_dma_memory;
+		}
+	} else {
+		csrq->wq.buf = sg_virt(csrq->mem->alloc);
+		csrq->wq.mask = csrq->wq.wqe_cnt - 1;
+		csrq->wq.wqe_size_log2 = ilog2(csrq->wq.wqe_size);
+		csrq->wq.wrid_map = kcalloc(csrq->wq.wqe_cnt, sizeof(u64),
+					GFP_KERNEL);
+		if (!csrq->wq.wrid_map) {
+			crdma_warn("Could not allocate SQ WRID map\n");
+			err = -ENOMEM;
+			goto free_dma_memory;
+		}
+	}
+
+	return 0;
+
+free_dma_memory:
+	crdma_free_hw_queue(dev, csrq->mem);
+free_srq_index:
+	crdma_free_bitmap_index(&dev->srq_map, csrq->srq_index);
+failed:
+	return err;
+}
+#else
+struct ib_srq * crdma_create_srq(struct ib_pd *pd,
+                                    struct ib_srq_init_attr *attrs,
+                                    struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
+	struct crdma_srq *csrq;
+	int err;
+
+	if (attrs->srq_type != IB_SRQT_BASIC) {
+		err = -EOPNOTSUPP;
+		goto failed;
+	}
+
+	if (attrs->attr.max_wr > dev->cap.ib.max_srq) {
+		err = -E2BIG;
+		crdma_warn("Required number of WR %d exceeds max SRQ %d\n",
+			attrs->attr.max_wr, dev->cap.ib.max_srq);
+		goto failed;
+	}
+
+	if (attrs->attr.max_sge > dev->cap.ib.max_srq_sge) {
+		err = -E2BIG;
+		crdma_warn("Required number of SGE %d exceeds max SRQ SGE %d\n",
+			attrs->attr.max_sge, dev->cap.ib.max_srq_sge);
+		goto failed;
+	}
+
+	csrq = kzalloc(sizeof(*csrq), GFP_KERNEL);
+	if (!csrq) {
+		err = -ENOMEM;
+		goto failed;
+	}
+
+	/* Allocate resource index for the SRQ control object */
+	if (crdma_alloc_bitmap_index(&dev->srq_map, &csrq->srq_index)) {
+		crdma_warn("No SRQ index available\n");
+		err = -ENOMEM;
+		goto free_srq_memory;
+	}
+
+	/*
+	 * Control information and space for the requested maximum
+	 * number of scatter entries.
+	*/
+	csrq->wq.wqe_size =  sizeof(struct crdma_rwqe) +
+			sizeof(struct crdma_wqe_sge) *
+			attrs->attr.max_sge;
+	csrq->wq.wqe_size = roundup_pow_of_two(csrq->wq.wqe_size);
+	csrq->wq.wqe_cnt = roundup_pow_of_two(attrs->attr.max_wr +
+				CRDMA_WQ_WQE_SPARES);
+	csrq->wq.max_sg = attrs->attr.max_sge;
+	csrq->max_wr = csrq->wq.wqe_cnt - CRDMA_WQ_WQE_SPARES;
+	if (csrq->wq.wqe_size > dev->cap.max_srq_rwqe_size) {
+		crdma_warn("Required SRWQE size %d exceeds max %d\n",
+			csrq->wq.wqe_size, dev->cap.max_srq_rwqe_size);
+		err = -EINVAL;
+		goto free_srq_index;
+	}
+
+	csrq->srq_limit = attrs->attr.srq_limit;
+	spin_lock_init(&csrq->wq.lock);
+	csrq->mem = crdma_alloc_hw_queue(dev,
+				csrq->wq.wqe_cnt * csrq->wq.wqe_size);
+	if (IS_ERR(csrq->mem)) {
+		crdma_dev_err(dev, "Unable to allocate CQ HW queue\n");
+		err = -ENOMEM;
+		goto free_srq_index;
+	}
+	crdma_init_wq_ownership(csrq->mem, 0, csrq->wq.wqe_cnt,
+				csrq->wq.wqe_size);
+
+	err = crdma_srq_create_cmd(dev, csrq);
+	if (err) {
+		crdma_err("Microcode error creating SRQ, %d\n", err);
+		goto free_dma_memory;
+	}
+
+	/* return response */
+	if (udata) {
+		struct crdma_ucontext *crdma_uctxt =
+				to_crdma_uctxt(pd->uobject->context);
+		struct crdma_ib_create_srq_resp resp;
+
+		resp.wq_base_addr = virt_to_phys(sg_virt(csrq->mem->alloc));
+		resp.wq_size = csrq->mem->tot_len;
+		resp.wqe_size = csrq->wq.wqe_size;
+		resp.wqe_cnt = csrq->wq.wqe_cnt;
+		resp.srq_id = csrq->srq_index;
+		resp.spares = CRDMA_WQ_WQE_SPARES;
+
+		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
+		if (err) {
+			crdma_warn("Copy of UDATA failed, %d\n", err);
+			goto free_dma_memory;
+		}
+		err = crdma_add_mmap_req(crdma_uctxt, resp.wq_base_addr,
+			csrq->mem->tot_len);
+		if (err) {
+			crdma_warn("Failed to add pending mmap, %d\n", err);
+			goto free_dma_memory;
+		}
+	} else {
+		csrq->wq.buf = sg_virt(csrq->mem->alloc);
+		csrq->wq.mask = csrq->wq.wqe_cnt - 1;
+		csrq->wq.wqe_size_log2 = ilog2(csrq->wq.wqe_size);
+		csrq->wq.wrid_map = kcalloc(csrq->wq.wqe_cnt, sizeof(u64),
+					GFP_KERNEL);
+		if (!csrq->wq.wrid_map) {
+			crdma_warn("Could not allocate SQ WRID map\n");
+			err = -ENOMEM;
+			goto free_dma_memory;
+		}
+	}
+
+	return &csrq->ib_srq;
+
+free_dma_memory:
+	crdma_free_hw_queue(dev, csrq->mem);
+free_srq_index:
+	crdma_free_bitmap_index(&dev->srq_map, csrq->srq_index);
+free_srq_memory:
+	kfree(csrq);
+failed:
+	return ERR_PTR(err);
+}
+#endif
+
+int crdma_modify_srq(struct ib_srq *ib_srq, struct ib_srq_attr *srq_attr,
+		     enum ib_srq_attr_mask srq_attr_mask,
+		     struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(ib_srq->device);
+	struct crdma_srq *csrq = to_crdma_srq(ib_srq);
+	int rc;
+
+	/* Don't support resizing SRQs yet */
+	if (srq_attr_mask & IB_SRQ_MAX_WR) {
+		crdma_err("Unsupported srq_attr_mask 0x%x", srq_attr_mask);
+		return -EINVAL;
+	}
+
+	if (srq_attr_mask & IB_SRQ_LIMIT) {
+		if (srq_attr->srq_limit > csrq->wq.wqe_cnt)
+			return -EINVAL;
+
+		csrq->srq_limit = srq_attr->srq_limit;
+		rc = crdma_srq_set_arm_limit_cmd(dev, csrq);
+		if (rc) {
+			crdma_err("Modify HW SRQ failed!");
+			csrq->srq_limit = 0;
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
+int crdma_query_srq(struct ib_srq *ib_srq, struct ib_srq_attr *srq_attr)
+{
+	struct crdma_srq *csrq = to_crdma_srq(ib_srq);
+
+	srq_attr->srq_limit = csrq->srq_limit;
+	srq_attr->max_wr  = csrq->max_wr - 1;
+	srq_attr->max_sge = csrq->wq.max_sg;
+
+	/* No need to send to firmware side */
+
+	return 0;
+}
+
+#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,5) || VER_KYL_GE(10,4))
+int crdma_destroy_srq(struct ib_srq *ib_srq, struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(ib_srq->device);
+	struct crdma_srq *csrq = to_crdma_srq(ib_srq);
+	int rc;
+
+	rc = crdma_srq_destroy_cmd(dev, csrq);
+	if (rc) {
+		crdma_warn("Microcode destroy SRQ command failed\n");
+		return -EINVAL;
+	}
+
+	crdma_free_hw_queue(dev, csrq->mem);
+	crdma_free_bitmap_index(&dev->srq_map, csrq->srq_index);
+
+	return 0;
+}
+#elif (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
+void crdma_destroy_srq(struct ib_srq *ib_srq, struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(ib_srq->device);
+	struct crdma_srq *csrq = to_crdma_srq(ib_srq);
+	int rc;
+
+	rc = crdma_srq_destroy_cmd(dev, csrq);
+	if (rc) {
+		crdma_warn("Microcode destroy SRQ command failed\n");
+		return;
+	}
+
+	crdma_free_hw_queue(dev, csrq->mem);
+	crdma_free_bitmap_index(&dev->srq_map, csrq->srq_index);
+
+	return;
+}
+#else
+int crdma_destroy_srq(struct ib_srq *ib_srq)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(ib_srq->device);
+	struct crdma_srq *csrq = to_crdma_srq(ib_srq);
+	int rc;
+
+	rc = crdma_srq_destroy_cmd(dev, csrq);
+	if (rc) {
+		crdma_warn("Microcode destroy SRQ command failed\n");
+		return -EINVAL;
+	}
+
+	crdma_free_hw_queue(dev, csrq->mem);
+	crdma_free_bitmap_index(&dev->srq_map, csrq->srq_index);
+
+	return 0;
+}
+#endif
+
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static int crdma_destroy_qp(struct ib_qp *qp, struct ib_udata *udata)
 #else
 static int crdma_destroy_qp(struct ib_qp *qp)
@@ -2404,6 +2744,78 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 
 	return ret;
 
+}
+
+static struct crdma_rwqe *get_srq_tail(struct crdma_srq *csrq)
+{
+	u32 next = (csrq->wq.tail + CRDMA_WQ_WQE_SPARES) & csrq->wq.mask;
+
+	if (next == csrq->wq.head) {
+		return NULL;
+	}
+
+	/* Post RWQE at the software producer tail */
+	return csrq->wq.buf + (csrq->wq.tail << csrq->wq.wqe_size_log2);
+}
+
+#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_LT(8,1))
+static int crdma_post_srq_recv(struct ib_srq *ib_srq, struct ib_recv_wr *wr,
+			       struct ib_recv_wr **bad_wr)
+#else
+static int crdma_post_srq_recv(struct ib_srq *ib_srq, const struct ib_recv_wr *wr,
+			       const struct ib_recv_wr **bad_wr)
+#endif
+{
+	struct crdma_srq *csrq = to_crdma_srq(ib_srq);
+	struct crdma_rwqe *rwqe;
+	int rc = 0;
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&csrq->wq.lock, irq_flags);
+	while(wr) {
+		if (wr->num_sge > csrq->wq.max_sg) {
+			crdma_warn("SRQ work request SG entries too large %d\n",
+				wr->num_sge);
+			*bad_wr = wr;
+			rc = -EINVAL;
+			break;
+		}
+
+		rwqe = get_srq_tail(csrq);
+		if (!rwqe) {
+			crdma_warn("SRQ overflow\n");
+			*bad_wr = wr;
+			rc = -ENOMEM;
+			break;
+		}
+
+		/*
+		* Build the RWQE making sure not to clear the software
+		* ownership word prior to all of the rest of the WQE
+		* being written.
+		*/
+		crdma_set_wqe_sge(&rwqe->sg[0], wr->num_sge, wr->sg_list);
+		rwqe->ctrl.num_sge = wr->num_sge;
+		rwqe->ctrl.next_srq_wqe_ndx = 0;
+		csrq->wq.wrid_map[csrq->wq.tail] = wr->wr_id;
+		wmb();
+
+		rwqe->ctrl.ownership = 0;
+
+		/*
+		* We maintain a sliding block of spare RWQE so that there
+		* is always more than one RWQE in software ownership, allowing
+		* the new RWQE to be added prior to updating the last
+		* RWQE in the sliding block to indicate software ownership.
+		*/
+		set_wqe_sw_ownership(&csrq->wq, csrq->wq.tail +
+					CRDMA_WQ_WQE_SPARES);
+		csrq->wq.tail = (csrq->wq.tail + 1) & csrq->wq.mask;
+		wr = wr->next;
+	}
+	spin_unlock_irqrestore(&csrq->wq.lock, irq_flags);
+
+	return rc;
 }
 
 static void crdma_drain_rq(struct ib_qp *qp)
@@ -3415,6 +3827,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     .create_ah          = crdma_create_ah,
     .create_cq          = crdma_create_cq,
     .create_qp          = crdma_create_qp,
+    .create_srq         = crdma_create_srq,
 #if (VER_NON_RHEL_OR_KYL_GE(5,11) || VER_RHEL_GE(8,5) || VER_KYL_GE(10,4))
     .create_user_ah     = crdma_create_ah,
 #endif
@@ -3425,6 +3838,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     .destroy_ah         = crdma_destroy_ah,
     .destroy_cq         = crdma_destroy_cq,
     .destroy_qp         = crdma_destroy_qp,
+    .destroy_srq        = crdma_destroy_srq,
     .detach_mcast       = crdma_detach_mcast,
     .get_dev_fw_str     = crdma_get_dev_fw_str,
     .get_dma_mr         = crdma_get_dma_mr,
@@ -3434,8 +3848,10 @@ static const struct ib_device_ops crdma_dev_ops = {
     .mmap               = crdma_mmap,
     .modify_cq          = crdma_modify_cq,
     .modify_qp          = crdma_modify_qp,
+    .modify_srq         = crdma_modify_srq,
     .poll_cq            = crdma_poll_cq,
     .post_recv          = crdma_post_recv,
+    .post_srq_recv      = crdma_post_srq_recv,
     .post_send          = crdma_post_send,
     .query_ah           = crdma_query_ah,
     .query_device       = crdma_query_device,
@@ -3446,6 +3862,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     .get_netdev         = crdma_get_netdev,
 #endif
     .query_qp           = crdma_query_qp,
+    .query_srq          = crdma_query_srq,
     .reg_user_mr        = crdma_reg_user_mr,
     .req_notify_cq      = crdma_req_notify_cq,
     .resize_cq          = crdma_resize_cq,
@@ -3456,6 +3873,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     INIT_RDMA_OBJ_SIZE(ib_cq, crdma_cq, ib_cq),
     INIT_RDMA_OBJ_SIZE(ib_ucontext, crdma_ucontext, ib_uctxt),
     INIT_RDMA_OBJ_SIZE(ib_ah, crdma_ah, ib_ah),
+    INIT_RDMA_OBJ_SIZE(ib_srq, crdma_srq, ib_srq),
 #if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,394,0,0))
     INIT_RDMA_OBJ_SIZE(ib_qp, crdma_qp, ib_qp),
 #endif
@@ -3538,6 +3956,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.create_ah            = crdma_create_ah;
 	dev->ibdev.create_cq            = crdma_create_cq;
 	dev->ibdev.create_qp            = crdma_create_qp;
+	dev->ibdev.create_srq           = crdma_create_srq;
 	dev->ibdev.dealloc_pd           = crdma_dealloc_pd;
 	dev->ibdev.dealloc_ucontext     = crdma_dealloc_ucontext;
 	dev->ibdev.del_gid		= crdma_del_gid;
@@ -3545,6 +3964,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.destroy_ah           = crdma_destroy_ah;
 	dev->ibdev.destroy_cq           = crdma_destroy_cq;
 	dev->ibdev.destroy_qp           = crdma_destroy_qp;
+	dev->ibdev.destroy_srq          = crdma_destroy_srq;
 	dev->ibdev.detach_mcast         = crdma_detach_mcast;
 	dev->ibdev.get_dev_fw_str       = crdma_get_dev_fw_str;
 	dev->ibdev.get_dma_mr           = crdma_get_dma_mr;
@@ -3557,14 +3977,17 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.mmap                 = crdma_mmap;
 	dev->ibdev.modify_cq            = crdma_modify_cq;
 	dev->ibdev.modify_qp            = crdma_modify_qp;
+	dev->ibdev.modify_srq           = crdma_modify_srq;
 	dev->ibdev.poll_cq              = crdma_poll_cq;
 	dev->ibdev.post_recv            = crdma_post_recv;
+	dev->ibdev.post_srq_recv        = crdma_post_srq_recv;
 	dev->ibdev.post_send            = crdma_post_send;
 	dev->ibdev.query_ah             = crdma_query_ah;
 	dev->ibdev.query_device         = crdma_query_device;
 	dev->ibdev.query_gid            = crdma_query_gid;
 	dev->ibdev.query_pkey           = crdma_query_pkey;
 	dev->ibdev.query_port           = crdma_query_port;
+	dev->ibdev.query_srq            = crdma_query_srq;
 	dev->ibdev.modify_port          = crdma_modify_port;
 	dev->ibdev.query_qp             = crdma_query_qp;
 	dev->ibdev.reg_user_mr          = crdma_reg_user_mr;
