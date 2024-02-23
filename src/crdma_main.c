@@ -894,7 +894,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		return NULL;
 	}
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,1) || VER_KYL_GE(10,3))
 	dev = ib_alloc_device(crdma_ibdev, ibdev);
 #else
 	dev = (struct crdma_ibdev *) ib_alloc_device(
@@ -935,7 +935,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		goto err_unregister_verbs;
 	dev->ibdev.phys_port_cnt = dev->cap.n_ports;
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 	if (ib_device_set_netdev(&dev->ibdev, dev->nfp_info->netdev, 1))
 		goto err_free_idr;
 #endif

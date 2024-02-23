@@ -671,7 +671,7 @@ int crdma_add_gid(struct ib_device *device, u8 port_num, unsigned int index,
 
 	return 0;
 }
-#elif (VER_NON_RHEL_GE(4,17) && VER_NON_RHEL_LT(4,19))
+#elif (VER_NON_RHEL_GE(4,17) && VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(8,0))
 static int crdma_add_gid(const union ib_gid *gid,
 			 const struct ib_gid_attr *attr, void **context)
 {
@@ -848,7 +848,7 @@ static int crdma_query_pkey(struct ib_device *ibdev, u8 port_num,
 	return 0;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static int crdma_alloc_ucontext(struct ib_ucontext *ib_uctxt,
 				struct ib_udata *udata)
 {
@@ -934,7 +934,7 @@ free_uctxt:
 }
 #endif
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static void crdma_dealloc_ucontext(struct ib_ucontext *ib_uctxt)
 #else
 static int crdma_dealloc_ucontext(struct ib_ucontext *ib_uctxt)
@@ -954,7 +954,7 @@ static int crdma_dealloc_ucontext(struct ib_ucontext *ib_uctxt)
 	}
 	mutex_unlock(&crdma_uctxt->mmap_pending_lock);
 
-#if (!(VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3)))
+#if (!(VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3)))
 	kfree(crdma_uctxt);
 	return 0;
 #endif
@@ -1004,7 +1004,7 @@ static int crdma_mmap(struct ib_ucontext *ib_uctxt,
 	return -EINVAL;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static int crdma_alloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
 {
 	struct ib_device *ibdev = ibpd->device;
@@ -1060,7 +1060,7 @@ free_mem:
 }
 #endif
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,3) || VER_KYL_GE(10,4))
+#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,5) || VER_KYL_GE(10,4))
 static int crdma_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
@@ -1070,7 +1070,7 @@ static int crdma_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata)
 
 	return 0;
 }
-#elif (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_EQ(8,2) || VER_KYL_GE(10,3))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static void crdma_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
@@ -1094,7 +1094,7 @@ static int crdma_dealloc_pd(struct ib_pd *pd)
 }
 #endif
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,8) || VER_RHEL_GE(8,3) || VER_KYL_GE(10,4))
+#if (VER_NON_RHEL_OR_KYL_GE(5,8) || VER_RHEL_GE(8,4) || VER_KYL_GE(10,4))
 static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr,
 			struct ib_udata *udata)
 {
@@ -1129,7 +1129,7 @@ static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr
 
 	return 0;
 }
-#elif (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_EQ(8,2) || VER_KYL_GE(10,3))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr,
 			u32 flags, struct ib_udata *udata)
 {
@@ -1163,16 +1163,14 @@ static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr,
 
 	return 0;
 }
-#else
-static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
-			struct rdma_ah_attr *ah_attr,
-			struct ib_udata *udata)
+#elif (VER_NON_RHEL_GE(5,0) || VER_RHEL_GE(8,1))
+static struct ib_ah *crdma_create_ah(struct ib_pd *pd, struct rdma_ah_attr *ah_attr,
+			u32 flags, struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
 	struct crdma_ib_create_ah_resp resp = {};
 	struct crdma_ah *cah;
 	int err;
-
 
 	if (crdma_check_ah_attr(dev, ah_attr)) {
 		crdma_warn("CRDMA ah attr check failed\n");
@@ -1183,8 +1181,10 @@ static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 	if (!cah)
 		return ERR_PTR(-ENOMEM);
 
-	if (crdma_set_av(pd, &cah->av, ah_attr))
+	if (crdma_set_av(pd, &cah->av, ah_attr)) {
+		kfree(cah);
 		return ERR_PTR(-EINVAL);
+	}
 
 	if (udata) {
 		resp.vlan     = le32_to_cpu(cah->av.vlan);
@@ -1194,8 +1194,51 @@ static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 		resp.traffic_class = cah->av.traffic_class;
 
 		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
-		if (err)
+		if (err) {
+			kfree(cah);
 			return ERR_PTR(-EINVAL);
+		}
+
+	}
+
+	return &cah->ib_ah;
+}
+#else
+static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
+			struct rdma_ah_attr *ah_attr,
+			struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
+	struct crdma_ib_create_ah_resp resp = {};
+	struct crdma_ah *cah;
+	int err;
+
+	if (crdma_check_ah_attr(dev, ah_attr)) {
+		crdma_warn("CRDMA ah attr check failed\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	cah = kzalloc(sizeof(*cah), GFP_ATOMIC);
+	if (!cah)
+		return ERR_PTR(-ENOMEM);
+
+	if (crdma_set_av(pd, &cah->av, ah_attr)) {
+		kfree(cah);
+		return ERR_PTR(-EINVAL);
+	}
+
+	if (udata) {
+		resp.vlan     = le32_to_cpu(cah->av.vlan);
+		resp.v_id     = cah->av.v_id;
+		resp.gid_type = cah->av.gid_type;
+		memcpy(resp.d_mac, cah->av.d_mac, ETH_ALEN);
+		resp.traffic_class = cah->av.traffic_class;
+
+		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
+		if (err) {
+			kfree(cah);
+			return ERR_PTR(-EINVAL);
+		}
 	}
 
 	return &cah->ib_ah;
@@ -1229,17 +1272,17 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 	return 0;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,3) || VER_KYL_GE(10,4))
+#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,5) || VER_KYL_GE(10,4))
 static int crdma_destroy_ah(struct ib_ah *ah, u32 flags)
 {
 	return 0;
 }
-#elif (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_EQ(8,2) || VER_KYL_GE(10,3))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static void crdma_destroy_ah(struct ib_ah *ah, u32 flags)
 {
 	return;
 }
-#elif VER_KERN_GE(5,0)
+#elif (VER_NON_RHEL_OR_KYL_GE(5,0) || VER_RHEL_GE(8,1))
 static int crdma_destroy_ah(struct ib_ah *ah, u32 flags)
 {
 	kfree(to_crdma_ah(ah));
@@ -1761,7 +1804,7 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 
 	/* State transition attribute/transport type validation */
 	ret = -EINVAL;
-#if (VER_NON_RHEL_OR_KYL_GE(4,20) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(4,20) || VER_RHEL_GE(8,1) || VER_KYL_GE(10,3))
 	if (!ib_modify_qp_is_ok(cur_state, new_state,
 			qp->qp_type, qp_attr_mask)) {
 #else
@@ -1823,7 +1866,7 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 		goto out;
 	}
 
-#if (VER_NON_RHEL_GE(5,6) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_GE(5,6) || VER_RHEL_GE(8,2))
 	crdma_uctxt = rdma_udata_to_drv_context(udata,
 				struct crdma_ucontext, ib_uctxt);
 #else
@@ -1880,7 +1923,7 @@ out:
 	return ret;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static int crdma_destroy_qp(struct ib_qp *qp, struct ib_udata *udata)
 #else
 static int crdma_destroy_qp(struct ib_qp *qp)
@@ -1908,7 +1951,7 @@ static int crdma_destroy_qp(struct ib_qp *qp)
 	spin_unlock_irq(&dev->qp_lock);
 
 	/* Free resources specific to kernel based QP */
-#if (VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0))
+#if (VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,2))
 	if (!udata) {
 #else
 	if (!qp->uobject) {
@@ -2062,7 +2105,7 @@ static struct crdma_swqe *get_sq_tail(struct crdma_qp *cqp)
 #define CRDMA_SQ_DB_READY_RETRIES              20
 
 
-#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_LT(8,1))
 int crdma_post_send(struct ib_qp *qp, struct ib_send_wr *wr,
 				    struct ib_send_wr **bad_wr)
 #else
@@ -2282,7 +2325,7 @@ static struct crdma_rwqe *get_rq_tail(struct crdma_qp *cqp)
 	return cqp->rq.buf + (cqp->rq.tail << cqp->rq.wqe_size_log2);
 }
 
-#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_LT(8,1))
 int crdma_post_recv(struct ib_qp *qp, struct ib_recv_wr *wr,
 					struct ib_recv_wr **bad_wr)
 #else
@@ -2348,7 +2391,7 @@ static void crdma_drain_rq(struct ib_qp *qp)
 	return;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 				  struct ib_udata *udata)
 {
@@ -2666,7 +2709,7 @@ static int crdma_modify_cq(struct ib_cq *cq, u16 cq_count, u16 cq_period)
 	return 0;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,8) || VER_RHEL_GE(8,3) || VER_KYL_GE(10,4))
+#if (VER_NON_RHEL_OR_KYL_GE(5,8) || VER_RHEL_GE(8,5) || VER_KYL_GE(10,4))
 static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
 {
         struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
@@ -2701,7 +2744,7 @@ static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
 
         return 0;
 }
-#elif (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_EQ(8,2) || VER_KYL_GE(10,3))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static void crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
 {
         struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
@@ -3090,7 +3133,7 @@ free_mem:
 	return ERR_PTR(err);
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
 static int crdma_dereg_mr(struct ib_mr *mr, struct ib_udata *udata)
 #else
 static int crdma_dereg_mr(struct ib_mr *mr)
@@ -3109,9 +3152,9 @@ static int crdma_dereg_mr(struct ib_mr *mr)
 	return 0;
 }
 
-#if ((VER_NON_KYL_GE(5,2) && VER_NON_KYL_LT(5,9)) || VER_RHEL_EQ(8,2) || VER_KYL_EQ(10,3))
-static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd, enum ib_mr_type type,
-		     u32 max_num_sg, struct ib_udata *udata)
+#if ((VER_NON_RHEL_OR_KYL_GE(5,9) || VER_NON_RHEL_OR_KYL_LT(5,2) || VER_RHEL_GE(8,4) || VER_RHEL_LT(8,2)))
+static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
+			enum ib_mr_type type, u32 max_num_sg)
 {
 	struct crdma_ibdev *cdev = to_crdma_ibdev(pd->device);
 	struct crdma_mr *cmr;
@@ -3172,8 +3215,8 @@ free_mem:
 	return ERR_PTR(err);
 }
 #else
-static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
-			enum ib_mr_type type, u32 max_num_sg)
+static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd, enum ib_mr_type type,
+		     u32 max_num_sg, struct ib_udata *udata)
 {
 	struct crdma_ibdev *cdev = to_crdma_ibdev(pd->device);
 	struct crdma_mr *cmr;
@@ -3337,12 +3380,13 @@ int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
 }
 #endif
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,0) || VER_RHEL_GE(8,1) || VER_KYL_GE(10,3))
 static const struct ib_device_ops crdma_dev_ops = {
+#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
     .owner              = THIS_MODULE,
     .driver_id          = RDMA_DRIVER_CRDMA,
     .uverbs_abi_ver     = CRDMA_UVERBS_ABI_VERSION,
-
+#endif
     .add_gid            = crdma_add_gid,
     .alloc_mr           = crdma_alloc_mr,
     .alloc_pd           = crdma_alloc_pd,
@@ -3351,7 +3395,7 @@ static const struct ib_device_ops crdma_dev_ops = {
     .create_ah          = crdma_create_ah,
     .create_cq          = crdma_create_cq,
     .create_qp          = crdma_create_qp,
-#if (VER_NON_RHEL_OR_KYL_GE(5,11) || VER_RHEL_GE(8,3) || VER_KYL_GE(10,4))
+#if (VER_NON_RHEL_OR_KYL_GE(5,11) || VER_RHEL_GE(8,5) || VER_KYL_GE(10,4))
     .create_user_ah     = crdma_create_ah,
 #endif
     .dealloc_pd         = crdma_dealloc_pd,
@@ -3384,13 +3428,14 @@ static const struct ib_device_ops crdma_dev_ops = {
     .resize_cq          = crdma_resize_cq,
     .process_mad        = crdma_process_mad,
     .drain_rq           = crdma_drain_rq,
-
+#if (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
     INIT_RDMA_OBJ_SIZE(ib_pd, crdma_pd, ib_pd),
     INIT_RDMA_OBJ_SIZE(ib_cq, crdma_cq, ib_cq),
     INIT_RDMA_OBJ_SIZE(ib_ucontext, crdma_ucontext, ib_uctxt),
     INIT_RDMA_OBJ_SIZE(ib_ah, crdma_ah, ib_ah),
 #if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,394,0,0))
     INIT_RDMA_OBJ_SIZE(ib_qp, crdma_qp, ib_qp),
+#endif
 #endif
 };
 #endif
@@ -3442,8 +3487,12 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 #endif
 	dev->ibdev.dev.parent			= &dev->nfp_info->pdev->dev;
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,0) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5,0) || VER_RHEL_GE(8,1) || VER_KYL_GE(10,3))
 	ib_set_device_ops(&dev->ibdev, &crdma_dev_ops);
+#if (VER_NON_RHEL_OR_KYL_LT(5,3) || VER_RHEL_EQ(8,1))
+	dev->ibdev.owner                = THIS_MODULE;
+	dev->ibdev.driver_id            = RDMA_DRIVER_CRDMA;
+#endif
 #else
 	dev->ibdev.owner                = THIS_MODULE;
 #if (VER_NON_RHEL_GE(4,17) || VER_RHEL_GE(7,7))
@@ -3496,12 +3545,12 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.drain_rq		= crdma_drain_rq;
 #endif
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,3) || VER_KYL_GE(10,4))
+#if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,5) || VER_KYL_GE(10,4))
         ret = ib_register_device(&dev->ibdev, "crdma%d",
 		&dev->nfp_info->pdev->dev);
-#elif (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_EQ(8,2) || VER_KYL_GE(10,3))
+#elif (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
         ret = ib_register_device(&dev->ibdev, "crdma%d");
-#elif (VER_NON_KYL_GE(4,20) || VER_KYL_GE(10,2))
+#elif (VER_NON_KYL_GE(4,20) || VER_RHEL_GE(8,1) || VER_KYL_GE(10,2))
 	ret = ib_register_device(&dev->ibdev, "crdma%d", NULL);
 #else
 	ret = ib_register_device(&dev->ibdev, NULL);
