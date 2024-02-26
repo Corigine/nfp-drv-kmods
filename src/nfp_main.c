@@ -994,6 +994,15 @@ static int nfp_nsp_init(struct pci_dev *pdev, struct nfp_pf *pf)
 	if (err < 0)
 		goto exit_close_nsp;
 
+	if (pf->multi_pf.en && pf->multi_pf.id) {
+		err = nfp_nsp_device_activate(nsp);
+		if (err < 0 && err != -EOPNOTSUPP) {
+			dev_err(&pdev->dev,
+				"Failed to activate the NFP device: %d\n", err);
+			goto exit_close_nsp;
+		}
+	}
+
 	nfp_nsp_init_ports(pdev, pf, nsp);
 
 	pf->nspi = __nfp_nsp_identify(nsp);
@@ -1364,12 +1373,14 @@ err_pci_disable:
 
 static void __nfp_pci_shutdown(struct pci_dev *pdev, bool unload_fw)
 {
+	bool keep_device_active;
 	struct nfp_pf *pf;
 
 	pf = pci_get_drvdata(pdev);
 	if (!pf)
 		return;
 
+	keep_device_active = pf->multi_pf.en && !pf->multi_pf.id;
 	nfp_hwmon_unregister(pf);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0) && defined(CONFIG_PCI_IOV)
@@ -1409,7 +1420,13 @@ static void __nfp_pci_shutdown(struct pci_dev *pdev, bool unload_fw)
 #endif
 	devlink_free(priv_to_devlink(pf));
 	pci_release_regions(pdev);
-	pci_disable_device(pdev);
+
+	/* In multiple pfs case, we need to keep master flag of pf 0
+	 * to ensure vfs of other pfs work normally because of
+	 * hardware limitation.
+	 */
+	if (!keep_device_active)
+		pci_disable_device(pdev);
 }
 
 static void nfp_pci_remove(struct pci_dev *pdev)

@@ -107,6 +107,7 @@ enum nfp_nsp_cmd {
 	SPCODE_VERSIONS		= 21, /* Report FW versions */
 	SPCODE_READ_SFF_EEPROM	= 22, /* Read module EEPROM */
 	SPCODE_READ_MEDIA	= 23, /* Get either the supported or advertised media for a port */
+	SPCODE_DEV_ACTIVATE	= 29, /* Activate hardware for multiple pfs case */
 };
 
 struct nfp_nsp_dma_buf {
@@ -735,6 +736,17 @@ int nfp_nsp_wait(struct nfp_nsp *state)
 int nfp_nsp_device_soft_reset(struct nfp_nsp *state)
 {
 	return nfp_nsp_command(state, SPCODE_SOFT_RESET);
+}
+
+int nfp_nsp_device_activate(struct nfp_nsp *state)
+{
+	/* Older ABI versions did support this feature, however this has only
+	 * been reliable since ABI 38.
+	 */
+	if (nfp_nsp_get_abi_ver_minor(state) < 38)
+		return -EOPNOTSUPP;
+
+	return nfp_nsp_command(state, SPCODE_DEV_ACTIVATE);
 }
 
 int nfp_nsp_mac_reinit(struct nfp_nsp *state)
