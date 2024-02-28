@@ -157,6 +157,7 @@ int nfp_net_refresh_eth_port(struct nfp_port *port);
 void nfp_net_refresh_port_table(struct nfp_port *port);
 int nfp_net_refresh_port_table_sync(struct nfp_pf *pf);
 
+bool nfp_devlink_is_port_registered(struct nfp_port *port);
 int nfp_devlink_port_register(struct nfp_app *app, struct nfp_port *port);
 void nfp_devlink_port_unregister(struct nfp_port *port);
 #if (VER_NON_RHEL_LT(6, 2)) || (RHEL_RELEASE_LT(9, 305, 0, 0))

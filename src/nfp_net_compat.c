@@ -112,6 +112,11 @@ int compat__flow_block_cb_setup_simple(struct tc_block_offload *f,
 #endif
 
 #if !COMPAT__HAS_DEVLINK
+bool nfp_devlink_is_port_registered(struct nfp_port *port)
+{
+	return false;
+}
+
 int nfp_devlink_port_register(struct nfp_app *app, struct nfp_port *port)
 {
 	return 0;

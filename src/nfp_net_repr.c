@@ -310,6 +310,12 @@ nfp_repr_transfer_features(struct net_device *netdev, struct net_device *lower)
 static void nfp_repr_clean(struct nfp_repr *repr)
 {
 	unregister_netdev(repr->netdev);
+	if (nfp_devlink_is_port_registered(repr->port)) {
+#if (VER_NON_RHEL_LT(6, 2)) || (RHEL_RELEASE_LT(9, 305, 0, 0))
+		nfp_devlink_port_type_clear(repr->port);
+#endif
+		nfp_devlink_port_unregister(repr->port);
+	}
 	nfp_app_repr_clean(repr->app, repr->netdev);
 	dst_release((struct dst_entry *)repr->dst);
 	nfp_port_free(repr->port);
