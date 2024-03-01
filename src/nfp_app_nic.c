@@ -14,7 +14,7 @@ int nfp_app_nic_vnic_init_phy_port(struct nfp_pf *pf, struct nfp_app *app,
 	int err;
 
 	if (!pf->eth_tbl)
-		return 0;
+		return -ENOENT;
 
 	nn->port = nfp_port_alloc(app, NFP_PORT_PHYS_PORT, nn->dp.netdev);
 	if (IS_ERR(nn->port))

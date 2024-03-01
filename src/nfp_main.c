@@ -1004,6 +1004,10 @@ static int nfp_nsp_init(struct pci_dev *pdev, struct nfp_pf *pf)
 	}
 
 	nfp_nsp_init_ports(pdev, pf, nsp);
+	if (!pf->eth_tbl) {
+		err = -ENOENT;
+		goto exit_close_nsp;
+	}
 
 	pf->nspi = __nfp_nsp_identify(nsp);
 	if (pf->nspi)
