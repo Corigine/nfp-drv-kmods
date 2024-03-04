@@ -96,7 +96,8 @@ enum {
 	CRDMA_CMD_MCG_DETACH		= 43,
 	CRDMA_CMD_SET_PORT_MTU		= 49,
 	CRDMA_CMD_DCQCN_ENABLE		= 50,
-	CRDMA_CMD_RETRANS_ENABLE	= 51
+	CRDMA_CMD_RETRANS_ENABLE	= 51,
+	CRDMA_CMD_BOND_CONFIG		= 52
 };
 
 /* Microcode QP Modify opcode modifiers */
@@ -112,6 +113,12 @@ enum {
 	CRDMA_QP_MODIFY_SQD2RTS		= 9,
 	CRDMA_QP_MODIFY_2ERR		= 10,
 	CRDMA_QP_MODIFY_2RST		= 11
+};
+
+enum {
+	CRDMA_BOND_MOD_CREATE	= 0,
+	CRDMA_BOND_MOD_UPDATE,
+	CRDMA_BOND_MOD_DESTROY
 };
 
 /* Microcode command interface status values returned by microcode */
@@ -1194,6 +1201,18 @@ struct crdma_mac_entry_param {
  */
 int crdma_write_smac_table(struct crdma_ibdev *dev,
 			int port_num, int num_entries);
+
+/**
+ * Config roce bond.
+ *
+ * @dev: The IB RoCE device for roce bond function.
+ * @mod: Action for the roce bond configure.
+ * @tx_bm: Physical ports used for roce bond's traffic, represented by bitmap.
+ *
+ * Returns 0 on success; otherwise an error.
+ */
+int crdma_bond_config_cmd(struct crdma_ibdev *dev,
+			u8 mod, u64 tx_bm);
 
 /**
  * Simple development test to force microcode to generate EQE and

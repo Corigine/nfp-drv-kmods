@@ -47,6 +47,7 @@
 #include "crdma_verbs.h"
 #include "crdma_ucif.h"
 #include "crdma_util.h"
+#include "crdma_bond.h"
 
 #define DRV_NAME	CRDMA_IB_HCA_DRV_NAME
 #define DRV_VERSION	"0.5"
@@ -902,6 +903,7 @@ static void crdma_cleanup_hca(struct crdma_ibdev *dev)
 
 	crdma_free_uar(dev, &dev->priv_eq_uar);
 	crdma_cleanup_maps(dev);
+	crdma_cleanup_cmdif(dev);
 	crdma_free_pci_resources(dev);
 }
 
@@ -1047,6 +1049,8 @@ static struct nfp_roce_drv crdma_drv = {
 	.add_device	= crdma_add_dev,
 	.remove_device	= crdma_remove_dev,
 	.event_notifier	= crdma_event_notifier,
+	.bond_add_ibdev	= crdma_bond_add_ibdev,
+	.bond_del_ibdev	= crdma_bond_del_ibdev,
 };
 
 static int __init crdma_init(void)

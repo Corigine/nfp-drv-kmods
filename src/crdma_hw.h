@@ -120,6 +120,15 @@ int __crdma_read_cmdif_results(struct crdma_ibdev *dev,
  */
 bool crdma_cmdif_busy(struct crdma_ibdev *dev);
 
+/**
+ * Read toggle value from the micro-code command interface.
+ *
+ * @dev: RoCE IB device.
+ *
+ * Return toggle value.
+ */
+int crdma_read_toggle(struct crdma_ibdev *dev);
+
 /*
  * Microcode provides a User Access Region (UAR) in the PCI BAR space
  * that contains doorbell register pages that may be mapped at the page level.

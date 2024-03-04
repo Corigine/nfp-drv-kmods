@@ -163,7 +163,8 @@ const char *crdma_opcode_to_str(u8 opcode)
 		[CRDMA_CMD_MCG_DETACH]          = "MCG_DETACH",
 		[CRDMA_CMD_SET_PORT_MTU]	= "SET_PORT_MTU",
 		[CRDMA_CMD_DCQCN_ENABLE]	= "DCQCN_ENABLE",
-		[CRDMA_CMD_RETRANS_ENABLE]	= "RETRANS_ENABLE"
+		[CRDMA_CMD_RETRANS_ENABLE]	= "RETRANS_ENABLE",
+		[CRDMA_CMD_BOND_CONFIG]		= "BOND_CONFIG"
 	};
 
 	if (opcode < ARRAY_SIZE(cmd_to_str))
@@ -1673,6 +1674,30 @@ int crdma_set_port_mtu_cmd(struct crdma_ibdev *dev, u8 port, u32 mtu)
 }
 
 /**
+ * Config roce bond.
+ *
+ * @dev: The IB RoCE device for roce bond function.
+ * @mod: Action for the roce bond configure.
+ * @tx_bm: Physical ports used for roce bond's traffic, represented by bitmap.
+ *
+ * Returns 0 on success; otherwise an error.
+ */
+int crdma_bond_config_cmd(struct crdma_ibdev *dev, u8 mod, u64 tx_bm)
+{
+	struct crdma_cmd cmd;
+	int status;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opcode = CRDMA_CMD_BOND_CONFIG;
+	cmd.opcode_mod = mod;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
+	cmd.input_param = tx_bm;
+	status = crdma_cmd(dev, &cmd);
+
+	return status;
+}
+
+/**
  * Issue microcode MPT create command.
  *
  * @dev: The IB RoCE device.
@@ -2036,7 +2061,8 @@ int crdma_init_cmdif(struct crdma_ibdev *dev)
 	mutex_init(&dev->cmdif_mutex);
 	sema_init(&dev->poll_sem, 1);
 
-	dev->toggle = 1;
+	// synchronize toggle value from firmware
+	dev->toggle = crdma_read_toggle(dev);
 	dev->token = 1;
 	dev->use_event_cmds = false;
 	dev->max_cmds_out = CRDMA_CMDIF_DRIVER_MAX_CMDS;

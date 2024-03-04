@@ -49,7 +49,7 @@
 #include "crdma_ib.h"
 #include "crdma_abi.h"
 #include "crdma_verbs.h"
-
+#include "crdma_bond.h"
 
 static bool mad_cq_event_wa = false;
 module_param(mad_cq_event_wa, bool, 0444);
@@ -515,7 +515,7 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 #endif
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
-	struct net_device *netdev;
+	struct net_device *netdev, *upper;
 
 	if (port_num != 1) {
 		crdma_dev_warn(dev, "invalid port=%d\n", port_num);
@@ -523,6 +523,18 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 	}
 
 	netdev = dev->nfp_info->netdev;
+	dev_hold(netdev);
+
+	if (crdma_bond_is_actived(dev)) {
+		rcu_read_lock();
+		upper = netdev_master_upper_dev_get_rcu(netdev);
+		if (upper) {
+			dev_put(netdev);
+			netdev = upper;
+			dev_hold(netdev);
+		}
+		rcu_read_unlock();
+	}
 	/*
 	 * The following code exist for early integration and is
 	 * not the final query port code. TODO: get correct netdev
@@ -544,6 +556,7 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 
 	/* Limit active IB MTU to Ethernet MTU */
 	port_attr->active_mtu   = iboe_get_mtu(netdev->mtu);
+	dev_put(netdev);
 
 	port_attr->lid		= 0;
 	port_attr->lmc		= 0;
@@ -568,7 +581,8 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 
 	return 0;
 }
-#if !(VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
+
+#if !(VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0)) || VER_RHEL_EQ(8, 5)
 struct net_device *crdma_get_netdev(struct ib_device *ibdev, u8 port_num)
 {
 	struct crdma_ibdev *crdma_dev = to_crdma_ibdev(ibdev);
@@ -579,12 +593,18 @@ struct net_device *crdma_get_netdev(struct ib_device *ibdev, u8 port_num)
 		return NULL;
 	}
 
+	netdev = crdma_bond_get_netdev(crdma_dev);
+	if (netdev)
+		goto out;
+
 	rcu_read_lock();
 	netdev = crdma_dev->nfp_info->netdev;
 	if (netdev)
 		dev_hold(netdev);
 
 	rcu_read_unlock();
+
+out:
 	return netdev;
 }
 #endif
@@ -3422,6 +3442,9 @@ static const struct ib_device_ops crdma_dev_ops = {
     .query_gid          = crdma_query_gid,
     .query_pkey         = crdma_query_pkey,
     .query_port         = crdma_query_port,
+#if VER_RHEL_EQ(8, 5)
+    .get_netdev         = crdma_get_netdev,
+#endif
     .query_qp           = crdma_query_qp,
     .reg_user_mr        = crdma_reg_user_mr,
     .req_notify_cq      = crdma_req_notify_cq,
@@ -3443,6 +3466,7 @@ static const struct ib_device_ops crdma_dev_ops = {
 int crdma_register_verbs(struct crdma_ibdev *dev)
 {
 	int ret;
+	const char *name;
 
 	dev->ibdev.node_type = RDMA_NODE_IB_CA;
 	memcpy(dev->ibdev.node_desc, CRDMA_IB_NODE_DESC,
@@ -3457,6 +3481,11 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 
 	/* Currently do not support local DMA key */
 	dev->ibdev.local_dma_lkey = 0;
+
+	if (crdma_bond_is_actived(dev))
+		name = "crdma_bond%d";
+	else
+		name = "crdma%d";
 
 #if !(VER_NON_RHEL_GE(5,11) || VER_RHEL_GE(8,5))
 	dev->ibdev.uverbs_cmd_mask =
@@ -3499,7 +3528,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.driver_id            = RDMA_DRIVER_CRDMA;
 #endif
 	dev->ibdev.uverbs_abi_ver       = CRDMA_UVERBS_ABI_VERSION;
-	strlcpy(dev->ibdev.name, "crdma%d", IB_DEVICE_NAME_MAX);
+	strlcpy(dev->ibdev.name, name, IB_DEVICE_NAME_MAX);
 
 	dev->ibdev.add_gid		= crdma_add_gid;
 	dev->ibdev.alloc_mr             = crdma_alloc_mr;
@@ -3546,12 +3575,12 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 #endif
 
 #if (VER_NON_RHEL_OR_KYL_GE(5,10) || VER_RHEL_GE(8,5) || VER_KYL_GE(10,4))
-        ret = ib_register_device(&dev->ibdev, "crdma%d",
+        ret = ib_register_device(&dev->ibdev, name,
 		&dev->nfp_info->pdev->dev);
 #elif (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
-        ret = ib_register_device(&dev->ibdev, "crdma%d");
+        ret = ib_register_device(&dev->ibdev, name);
 #elif (VER_NON_KYL_GE(4,20) || VER_RHEL_GE(8,1) || VER_KYL_GE(10,2))
-	ret = ib_register_device(&dev->ibdev, "crdma%d", NULL);
+	ret = ib_register_device(&dev->ibdev, name, NULL);
 #else
 	ret = ib_register_device(&dev->ibdev, NULL);
 #endif

@@ -119,6 +119,18 @@ bool crdma_cmdif_busy(struct crdma_ibdev *dev)
 		(dev->toggle != !!(status & (1 << CRDMA_CMDIF_TOGGLE_BIT)));
 }
 
+int crdma_read_toggle(struct crdma_ibdev *dev)
+{
+	struct cmdif_reg __iomem *reg = dev->cmdif;
+	u32 status;
+
+	if (!reg || pci_channel_offline(dev->nfp_info->pdev))
+		return -EIO;
+
+	status = le32_to_cpu(__raw_readl(&reg->cmd_status));
+	return !!(status & (1 << CRDMA_CMDIF_TOGGLE_BIT));
+}
+
 int __crdma_read_cmdif_results(struct crdma_ibdev *dev,
 		u64 *output_param, u8 *status)
 {
