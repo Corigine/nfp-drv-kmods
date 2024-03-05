@@ -17,13 +17,8 @@
 
 #include "nfp6000/nfp6000.h"
 
-struct nfp_roce {
-	struct list_head list;
-	struct nfp_roce_info *info;
-	struct crdma_ibdev *ibdev;
-};
-
-static LIST_HEAD(nfp_roce_list);
+LIST_HEAD(nfp_roce_list);
+EXPORT_SYMBOL(nfp_roce_list);
 
 static DEFINE_MUTEX(roce_driver_mutex);
 static struct nfp_roce_drv *roce_driver;
@@ -65,6 +60,9 @@ int nfp_register_roce_driver(struct nfp_roce_drv *drv)
 				 "RoCE: Can't register device: %d\n", err);
 			roce->ibdev = NULL;
 		}
+
+		if (roce_driver->bond_add_ibdev)
+			roce_driver->bond_add_ibdev(roce);
 	}
 
 	mutex_unlock(&roce_driver_mutex);
@@ -90,16 +88,53 @@ void nfp_unregister_roce_driver(struct nfp_roce_drv *drv)
 		struct nfp_roce *roce;
 
 		list_for_each_entry(roce, &nfp_roce_list, list) {
-			if (!roce->ibdev)
-				continue;
-			roce_driver->remove_device(roce->ibdev);
-			roce->ibdev = NULL;
+			if (roce->ibdev) {
+				roce_driver->remove_device(roce->ibdev);
+				roce->ibdev = NULL;
+			}
+
+			if (roce_driver->bond_del_ibdev)
+				roce_driver->bond_del_ibdev(roce);
 		}
 		roce_driver = NULL;
 	}
 	mutex_unlock(&roce_driver_mutex);
 }
 EXPORT_SYMBOL_GPL(nfp_unregister_roce_driver);
+
+/**
+ * nfp_unregister_roce_ibdev() - Unregister the RoCE device.
+ * @roce:       The RoCE info used to unregister a RoCE device.
+ *
+ * This routine is called by the Corigine RoCEv2 driver to unregister a
+ * RoCE device.
+ */
+void nfp_unregister_roce_ibdev(struct nfp_roce *roce)
+{
+	mutex_lock(&roce_driver_mutex);
+	if (roce_driver && roce->ibdev) {
+		roce_driver->remove_device(roce->ibdev);
+		roce->ibdev = NULL;
+	}
+	mutex_unlock(&roce_driver_mutex);
+}
+EXPORT_SYMBOL_GPL(nfp_unregister_roce_ibdev);
+
+/**
+ * nfp_register_roce_ibdev() - Register the RoCE device.
+ * @roce:       The RoCE info used to register a RoCE device.
+ *
+ * This routine is called by the Corigine RoCEv2 driver to register a
+ * RoCE device.
+ */
+void nfp_register_roce_ibdev(struct nfp_roce *roce)
+{
+	mutex_lock(&roce_driver_mutex);
+	if (roce_driver && !roce->ibdev)
+		roce->ibdev = roce_driver->add_device(roce->info);
+	mutex_unlock(&roce_driver_mutex);
+}
+EXPORT_SYMBOL_GPL(nfp_register_roce_ibdev);
 
 /**
  * nfp_roce_acquire_configure_resource() - Acquire configure resources for RoCE.
@@ -295,7 +330,11 @@ int nfp_net_add_roce(struct nfp_pf *pf, struct nfp_net *nn)
 				"RoCE: Can't create interface: %d\n", err);
 			roce->ibdev = NULL;
 		}
+
+		if (roce_driver->bond_add_ibdev)
+			roce_driver->bond_add_ibdev(roce);
 	}
+
 	mutex_unlock(&roce_driver_mutex);
 
 	nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_ROCEV2;
@@ -317,8 +356,11 @@ void nfp_net_remove_roce(struct nfp_net *nn)
 	mutex_lock(&roce_driver_mutex);
 	list_del(&nn->roce->list);
 
-	if (nn->roce->ibdev)
+	if (nn->roce->ibdev) {
 		roce_driver->remove_device(nn->roce->ibdev);
+		if (roce_driver->bond_del_ibdev)
+			roce_driver->bond_del_ibdev(nn->roce);
+	}
 
 	kfree(nn->roce->info);
 	kfree(nn->roce);
