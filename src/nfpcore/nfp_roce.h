@@ -33,6 +33,7 @@ struct nfp_net;
  * struct nfp_roce_info - NFP RoCE subdriver interface
  * @pdev:		PCI Device parent of CPP interface
  * @netdev:		Network devices to attach RoCE ports to
+ * @bdev:		Pointer to crdma_bond structure
  * @cmdif:		Command interface iomem
  * @db_base:		DMAable page area
  * @db_length:		Size of DMAable page area
@@ -42,6 +43,7 @@ struct nfp_net;
 struct nfp_roce_info {
 	struct pci_dev	*pdev;
 	struct net_device *netdev;
+	struct crdma_bond *bdev;
 
 	/*
 	 * PCI Resources allocated by the NFP core and
@@ -62,6 +64,13 @@ struct nfp_roce_info {
 };
 
 struct crdma_ibdev;
+
+struct nfp_roce {
+	struct list_head list;
+	struct nfp_roce_info *info;
+	struct crdma_bond *bdev;
+	struct crdma_ibdev *ibdev;
+};
 
 /**
  * struct nfp_roce_drv - NFP RoCE driver interface
@@ -87,10 +96,15 @@ struct nfp_roce_drv {
 	void	(*remove_device)(struct crdma_ibdev *ibdev);
 	void	(*event_notifier)(struct crdma_ibdev *ibdev,
 				  int port, u32 state);
+	int 	(*bond_add_ibdev)(struct nfp_roce *roce);
+	void	(*bond_del_ibdev)(struct nfp_roce *roce);
 };
 
 int nfp_register_roce_driver(struct nfp_roce_drv *drv);
 void nfp_unregister_roce_driver(struct nfp_roce_drv *drv);
+void nfp_register_roce_ibdev(struct nfp_roce *roce);
+void nfp_unregister_roce_ibdev(struct nfp_roce *roce);
+extern struct list_head nfp_roce_list;
 
 #ifdef CONFIG_NFP_ROCE
 extern unsigned int nfp_roce_ints_num;
