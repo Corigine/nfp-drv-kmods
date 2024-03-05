@@ -256,6 +256,24 @@ $(eval $(call add_compat_flag,$(utsrelease_h_path),oe,COMPAT_OELINUX=1))
 $(eval $(call add_compat_var_flag,$(utsrelease_h_path),ky,COMPAT_KYLINUX,COMPAT_KYLINUX=1))
 # Check for Anolis Linux
 $(eval $(call add_compat_var_flag,$(utsrelease_h_path),an8,COMPAT_ANOLISLINUX,COMPAT_ANOLISLINUX=1))
+# Check for SUSE linux
+$(eval $(call add_compat_flag,$(srctree)/include/generated/uapi/linux/suse_version.h,SUSE_VERSION,COMPAT_SLELINUX=1))
+
+SUSE_VERSION := $(shell awk '/SUSE_VERSION / {print $$3; found=1} END {if (found != 1) print 0}' \
+		$(srctree)/include/generated/uapi/linux/suse_version.h 2>/dev/null || echo 0)
+ifneq ($(SUSE_VERSION),0)
+	local_version=$(shell echo $(CONFIG_LOCALVERSION) | cut -f 2 -d "-")
+	dot.cnt=$(shell echo $(CONFIG_LOCALVERSION) | grep -o '\.' | wc -l)
+	ifeq ($(dot.cnt),0)
+		SLEL_LOCALVER_STANDARDIZE=$(shell echo $(local_version).0)
+	else
+		SLEL_LOCALVER_STANDARDIZE=$(local_version)
+	endif
+else
+	SLEL_LOCALVER_STANDARDIZE="0.0"
+endif
+ccflags-y += -DSLEL_LOCALVER_X=$(shell echo $(SLEL_LOCALVER_STANDARDIZE) | cut -d '.' -f 1)
+ccflags-y += -DSLEL_LOCALVER_Y=$(shell echo $(SLEL_LOCALVER_STANDARDIZE) | cut -d '.' -f 2)
 
 VER_IS_NON_RHEL_OR_KYL := \
 	$(shell [ $(RHEL_MAJOR) -eq 0 ] && [ -z $(COMPAT_KYLINUX) ] && echo y)
