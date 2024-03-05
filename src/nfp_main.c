@@ -724,7 +724,8 @@ nfp_get_beat_addr(struct nfp_pf *pf, int pf_id)
 }
 
 static void
-#if VER_NON_RHEL_LT(4, 14) || VER_RHEL_LT(7, 6)
+#if VER_NON_RHEL_OR_SLEL_LT(4, 14) || VER_RHEL_LT(7, 6) || \
+    SLEL_LOCALVER_LT(4, 12, 14, 122, 37)
 nfp_nsp_beat_timer(unsigned long t)
 #else
 nfp_nsp_beat_timer(struct timer_list *t)
