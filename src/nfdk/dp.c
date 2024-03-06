@@ -335,7 +335,8 @@ nfp_nfdk_align_first_frag(struct sk_buff *skb)
 	 * to the skb inline section.
 	 */
 	frag = &skb_shinfo(skb)->frags[0];
-#if VER_NON_RHEL_OR_KYL_GE(5, 4) || VER_KYL_GE(10, 3) || VER_RHEL_GE(9, 0)
+#if (!COMPAT_SLELINUX && VER_NON_RHEL_OR_KYL_GE(5, 4)) || VER_KYL_GE(10, 3) || \
+    VER_RHEL_GE(9, 0) || VER_SLEL_GE(5, 3, 18)
 	cur_phys = page_to_phys(skb_frag_page(frag)) + skb_frag_off(frag);
 #else
 	cur_phys = page_to_phys(skb_frag_page(frag)) + frag->page_offset;
