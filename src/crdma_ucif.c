@@ -161,7 +161,9 @@ const char *crdma_opcode_to_str(u8 opcode)
 		[CRDMA_CMD_MCG_DESTROY]         = "MCG_DESTROY",
 		[CRDMA_CMD_MCG_ATTACH]          = "MCG_ATTACH",
 		[CRDMA_CMD_MCG_DETACH]          = "MCG_DETACH",
-		[CRDMA_CMD_SET_PORT_MTU]	= "SET_PORT_MTU"
+		[CRDMA_CMD_SET_PORT_MTU]	= "SET_PORT_MTU",
+		[CRDMA_CMD_DCQCN_ENABLE]	= "DCQCN_ENABLE",
+		[CRDMA_CMD_RETRANS_ENABLE]	= "RETRANS_ENABLE"
 	};
 
 	if (opcode < ARRAY_SIZE(cmd_to_str))
@@ -1646,6 +1648,12 @@ int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port)
 int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enbaled)
 {
 	return __crdma_no_param_cmd(dev, CRDMA_CMD_DCQCN_ENABLE, 0,
+			enbaled, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+}
+
+int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enbaled)
+{
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_RETRANS_ENABLE, 0,
 			enbaled, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 

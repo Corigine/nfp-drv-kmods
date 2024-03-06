@@ -95,7 +95,8 @@ enum {
 	CRDMA_CMD_MCG_ATTACH		= 42,
 	CRDMA_CMD_MCG_DETACH		= 43,
 	CRDMA_CMD_SET_PORT_MTU		= 49,
-	CRDMA_CMD_DCQCN_ENABLE		= 50
+	CRDMA_CMD_DCQCN_ENABLE		= 50,
+	CRDMA_CMD_RETRANS_ENABLE	= 51
 };
 
 /* Microcode QP Modify opcode modifiers */
@@ -1024,6 +1025,15 @@ int crdma_set_port_mtu_cmd(struct crdma_ibdev *dev, u8 port, u32 mtu);
  * Returns 0 on success, otherwise an error.
  */
 int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
+
+/**
+ * Enable or Disable ooo/timeout retransmit to microcode.
+ *
+ * @dev: RoCE IB device.
+ * @enbaled: high 4bits: ooo, low 4bits: timeout; 0x1: to enable, 0x0: to disable
+ * Returns 0 on success, otherwise an error.
+ */
+int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
 
 /**
  * Issue microcode MPT create command.
