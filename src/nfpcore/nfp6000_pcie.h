@@ -11,6 +11,10 @@
 
 #include "nfp_cpp.h"
 
+/* Vendor specific register layout */
+#define NFP_VNDR_HEADER_OFFSET	0x0
+#define NFP_VNDR_PF_ID_OFFSET	0x4
+
 struct nfp_pf;
 
 struct nfp_cpp *

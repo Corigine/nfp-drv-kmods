@@ -1154,6 +1154,18 @@ end:
 	nfp_nsp_close(nsp);
 }
 
+static u8 nfp_init_pf_id(struct pci_dev *pdev)
+{
+	int vndr = pci_find_capability(pdev, PCI_CAP_ID_VNDR);
+	u8 id = 0;
+
+	if (!vndr)
+		return PCI_FUNC(pdev->devfn);
+
+	pci_read_config_byte(pdev, vndr + NFP_VNDR_PF_ID_OFFSET, &id);
+	return id;
+}
+
 static int nfp_pci_probe(struct pci_dev *pdev,
 			 const struct pci_device_id *pci_id)
 {
@@ -1225,15 +1237,15 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 		irq = -1;
 	}
 
+	pf->multi_pf.en = pdev->multifunction;
+	pf->multi_pf.id = nfp_init_pf_id(pdev);
+	dev_info(&pdev->dev, "%s-PF detected\n", pf->multi_pf.en ? "Multi" : "Single");
+
 	pf->cpp = nfp_cpp_from_nfp6000_pcie(pdev, dev_info, irq, pf);
 	if (IS_ERR(pf->cpp)) {
 		err = PTR_ERR(pf->cpp);
 		goto err_disable_msix;
 	}
-
-	pf->multi_pf.en = pdev->multifunction;
-	pf->multi_pf.id = PCI_FUNC(pdev->devfn);
-	dev_info(&pdev->dev, "%s-PF detected\n", pf->multi_pf.en ? "Multi" : "Single");
 
 	/* Only PF0 has the right to reclaim locked resources. */
 	if (!pf->multi_pf.id) {

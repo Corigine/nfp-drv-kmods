@@ -821,7 +821,7 @@ static int enable_bars(struct nfp6000_pcie *nfp, u16 interface,
 		bar->iomem = ioremap(nfp_bar_resource_start(bar),
 				     nfp_bar_resource_len(bar));
 	if (bar->iomem) {
-		int pf;
+		int pf_id;
 
 		msg += scnprintf(msg, end - msg, "0.0: General/MSI-X SRAM, ");
 		atomic_inc(&bar->refcnt);
@@ -834,8 +834,8 @@ static int enable_bars(struct nfp6000_pcie *nfp, u16 interface,
 
 		switch (nfp->pdev->device) {
 		case PCI_DEVICE_ID_NFP3800:
-			pf = nfp->pdev->devfn & 7;
-			nfp->iomem.csr = bar->iomem + NFP_PCIE_BAR(pf);
+			pf_id = pf->multi_pf.id;
+			nfp->iomem.csr = bar->iomem + NFP_PCIE_BAR(pf_id);
 			break;
 		case PCI_DEVICE_ID_NFP4000:
 		case PCI_DEVICE_ID_NFP5000:
