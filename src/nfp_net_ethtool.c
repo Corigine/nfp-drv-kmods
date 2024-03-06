@@ -2824,6 +2824,10 @@ nfp_net_set_port_mac_by_hwinfo(struct net_device *netdev,
 	u32 index;
 	int err;
 
+	/* Disallow setting multicast bit */
+	if (mac_addr[0] & 0x01)
+		return -EINVAL;
+
 	err = nfp_net_get_nsp_hwindex(netdev, &nsp, &index);
 	if (err)
 		return err;
@@ -2880,10 +2884,7 @@ nfp_net_set_eeprom(struct net_device *netdev,
 		return -EINVAL;
 
 	memcpy(buf + eeprom->offset, bytes, eeprom->len);
-	if (nfp_net_set_port_mac_by_hwinfo(netdev, buf))
-		return -EOPNOTSUPP;
-
-	return 0;
+	return nfp_net_set_port_mac_by_hwinfo(netdev, buf);
 }
 
 static const struct ethtool_ops nfp_net_ethtool_ops = {
