@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 /* Copyright (C) 2017 Netronome Systems, Inc. */
 
+#include <net/pkt_cls.h>
+#include <net/pkt_sched.h>
 #include "../nfpcore/nfp_cpp.h"
 #include "../nfpcore/nfp_nsp.h"
 #include "../nfp_app.h"
@@ -107,6 +109,7 @@ int nfp_configure_tc_ring(struct nfp_net *nn)
 	return nfp_net_ring_reconfig(nn, dp, NULL);
 }
 
+#if VER_NON_RHEL_GE(4, 19) || VER_RHEL_GE(7, 6)
 static int nfp_setup_tc_mqprio_channel(struct nfp_net *nn, u8 tc,
 				       struct tc_mqprio_qopt *qopt)
 {
@@ -168,6 +171,13 @@ static int nfp_nic_setup_tc(struct nfp_app *app, struct net_device *netdev,
 
 	return -EOPNOTSUPP;
 }
+#else
+static int nfp_nic_setup_tc(struct nfp_app *app, struct net_device *netdev,
+			    enum tc_setup_type type, void *type_data)
+{
+	return -EOPNOTSUPP;
+}
+#endif
 
 const struct nfp_app_type app_nic = {
 	.id		= NFP_APP_CORE_NIC,
