@@ -339,10 +339,100 @@ static void nfp_netvf_pci_remove(struct pci_dev *pdev)
 	kfree(vf);
 }
 
+/**
+ *  nfp_pci_vf_error_detected - called when PCI error is detected
+ *  @pdev: Pointer to PCI device
+ *  @state: The current pci connection state
+ *
+ *  This function is called after a PCI bus error affecting
+ *  this device has been detected.
+ **/
+static pci_ers_result_t nfp_pci_vf_error_detected(struct pci_dev *pdev,
+					       pci_channel_state_t state)
+{
+	struct nfp_net_vf *vf;
+	struct nfp_net *nn;
+
+	dev_warn(&pdev->dev, "nfp vf error detect reported.\n");
+	if (state == pci_channel_io_normal) {
+		dev_warn(&pdev->dev, "Non-correctable non-fatal error reported.\n");
+		return PCI_ERS_RESULT_CAN_RECOVER;
+	}
+
+	vf = pci_get_drvdata(pdev);
+	if (!vf || !vf->nn)
+		return PCI_ERS_RESULT_DISCONNECT;
+	nn = vf->nn;
+
+	if (state == pci_channel_io_perm_failure)
+		return PCI_ERS_RESULT_DISCONNECT;
+
+	nfp_net_recover(nn, false);
+	pci_disable_device(pdev);
+
+	/* Request a slot reset. */
+	return PCI_ERS_RESULT_NEED_RESET;
+}
+
+/**
+ *  nfp_pci_slot_reset - called after the pci bus has been reset.
+ *  @pdev: Pointer to PCI device
+ *
+ *  Restart the card from scratch, as if from a cold-boot. Implementation
+ *  resembles the first-half of the resume routine.
+ **/
+static pci_ers_result_t nfp_pci_vf_slot_reset(struct pci_dev *pdev)
+{
+	pci_ers_result_t result;
+
+	if (pci_enable_device_mem(pdev)) {
+		dev_err(&pdev->dev,
+			"Cannot re-enable PCI device after reset.\n");
+		result = PCI_ERS_RESULT_DISCONNECT;
+	} else {
+		pci_set_master(pdev);
+
+		result = PCI_ERS_RESULT_RECOVERED;
+	}
+
+	return result;
+}
+
+/**
+ *  nfp_pci_vf_resume - called when traffic can start flowing again.
+ *  @pdev: Pointer to PCI device
+ *
+ *  This callback is called when the error recovery driver tells us that
+ *  its OK to resume normal operation. Implementation resembles the
+ *  second-half of the resume routine.
+ */
+static void nfp_pci_vf_resume(struct pci_dev *pdev)
+{
+	struct nfp_net_vf *vf;
+	struct nfp_net *nn;
+
+	dev_warn(&pdev->dev, "nfp vf error resuming.\n");
+	vf = pci_get_drvdata(pdev);
+	if (!vf || !vf->nn)
+		return;
+
+	/* wait for reset to complete */
+	msleep(200);
+	nn = vf->nn;
+	nfp_net_recover(nn, true);
+}
+
+static const struct pci_error_handlers nfp_pci_vf_err_handler = {
+	.error_detected = nfp_pci_vf_error_detected,
+	.slot_reset = nfp_pci_vf_slot_reset,
+	.resume = nfp_pci_vf_resume,
+};
+
 struct pci_driver nfp_netvf_pci_driver = {
 	.name        = nfp_net_driver_name,
 	.id_table    = nfp_netvf_pci_device_ids,
 	.probe       = nfp_netvf_pci_probe,
 	.remove      = nfp_netvf_pci_remove,
 	.shutdown    = nfp_netvf_pci_remove,
+	.err_handler = &nfp_pci_vf_err_handler,
 };
