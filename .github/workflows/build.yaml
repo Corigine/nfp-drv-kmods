@@ -14,6 +14,14 @@ on:
   # Schedule run at midnight daily
   schedule:
     - cron: '0 0 * * *'
+  # External calling
+  workflow_call:
+    inputs:
+      target_ref:
+        description: >
+          SHA, Branch, or Tag to build.
+        type: string
+        required: true
 
 env:
   DOWNLOAD: ".download"
@@ -42,6 +50,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+        with:
+          ref: '${{ inputs.target_ref }}'
 
       - name: Set HWE Environment (Ubuntu 20.04/22.04)
         if: matrix.release.hwe != ''
@@ -138,6 +148,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+        with:
+          ref: '${{ inputs.target_ref }}'
 
       - name: Set Download Environment
         env:
@@ -340,6 +352,8 @@ jobs:
 
       - name: Check out repository
         uses: actions/checkout@v3
+        with:
+          ref: '${{ inputs.target_ref }}'
 
       - name: Filter latest BCLinux stream kernel
         if: startsWith(matrix.release.name, 'el8')
@@ -448,6 +462,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+        with:
+          ref: '${{ inputs.target_ref }}'
 
       - name: Set Environment (Release)
         if: startsWith(matrix.release.name, 'net') != true
@@ -561,6 +577,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+        with:
+          ref: '${{ inputs.target_ref }}'
 
       - name: Set Environment (Release)
         run: |
@@ -667,6 +685,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+        with:
+          ref: '${{ inputs.target_ref }}'
 
       - name: Set Environment (Release)
         run: |
