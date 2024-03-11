@@ -775,6 +775,17 @@ static int nfp_flower_init(struct nfp_app *app)
 		return -EINVAL;
 	}
 
+	if (pf->multi_pf.en) {
+		nfp_rtsym_read_le(app->pf->rtbl, "_FC_WC_HOST_CTX_RING_EMU_0",
+				  &err);
+		if (err) {
+			nfp_warn(app->cpp,
+				 "FlowerNIC: unsupported firmware for multi-pf, please upgrade: %d\n",
+				 err);
+			return -EOPNOTSUPP;
+		}
+	}
+
 	if (!pf->mac_stats_bar) {
 		nfp_warn(app->cpp, "FlowerNIC requires mac_stats BAR\n");
 		return -EINVAL;
