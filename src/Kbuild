@@ -372,7 +372,7 @@ ifneq (,$(filter y,$(CONFIG_NFP_NET_PF) $(CONFIG_NFP_NET_VF)))
 	endif
 
 	ifeq ($(call kern_ge,5,0),y)
-	  ccflags-y += -DCONFIG_NFP_APP_ABM_NIC
+	  ccflags-y += -DCOMPAT__HAVE_NFP_APP_ABM_NIC
 	  nfp-objs += \
 		abm/cls.o \
 		abm/ctrl.o \

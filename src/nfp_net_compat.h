@@ -1057,10 +1057,6 @@ __netdev_tx_sent_queue(struct netdev_queue *nd_q, u32 len, bool xmit_more)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
-#undef CONFIG_NFP_APP_ABM_NIC
-#endif
-
 #if VER_NON_RHEL_OR_KYL_LT(5, 0) || VER_RHEL_LT(8, 1) || VER_KYL_LT(10, 3)
 static inline bool netif_is_geneve(const struct net_device *dev)
 {
