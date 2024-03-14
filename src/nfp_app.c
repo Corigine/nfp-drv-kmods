@@ -26,7 +26,7 @@ static const struct nfp_app_type *apps[] = {
 #else
 	[NFP_APP_BPF_NIC]	= &app_nic,
 #endif
-#ifdef CONFIG_NFP_APP_FLOWER
+#ifdef COMPAT__HAVE_NFP_APP_FLOWER
 	[NFP_APP_FLOWER_NIC]	= &app_flower,
 #endif
 #ifdef COMPAT__HAVE_NFP_APP_ABM_NIC

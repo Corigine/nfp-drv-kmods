@@ -1037,14 +1037,6 @@ static inline u64 pci_get_dsn(struct pci_dev *dev)
 #endif
 #endif
 
-/* Kconfig will add this variable for RHEL 7.5+ and KYLIN,
- * however, we intentionally disable support for this feature
- * for RHEL versions < 8.0 and KYLIN.
- */
-#if (VER_RHEL_GE(7, 5) && VER_RHEL_LT(8, 0)) || COMPAT_KYLINUX
-#undef CONFIG_NFP_APP_FLOWER
-#endif
-
 #if VER_NON_RHEL_LT(5, 3) || VER_RHEL_LT(8, 2)
 #define in_dev_for_each_ifa_rtnl(ifa, in_dev)                   \
 	for (ifa = rtnl_dereference((in_dev)->ifa_list); ifa;   \

@@ -346,7 +346,7 @@ ifneq (,$(filter y,$(CONFIG_NFP_NET_PF) $(CONFIG_NFP_NET_VF)))
 		nfp_net_repr.o
 
 	ifeq ($(CONFIG_NET_SWITCHDEV),y)
-	  ccflags-y += -DCONFIG_NFP_APP_FLOWER
+	  ccflags-y += -DCOMPAT__HAVE_NFP_APP_FLOWER
 	  nfp-objs += \
 		flower/action.o \
 		flower/cmsg.o \
