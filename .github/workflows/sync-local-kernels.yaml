@@ -1,0 +1,113 @@
+name: Sync local kernels
+
+# ========== TRIGGER ==========
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    secrets:
+      GHUB_TOKEN:
+        required: true
+      AZ_SAS_TOK:
+        required: true
+
+jobs:
+  sync-local:
+    name: Sync local kernels
+    runs-on:
+      - self-hosted
+      - ci-linter-vm
+    env:
+      LOCAL_KERNELS: tmp/misc/kernel-devel-c4c
+    steps:
+      # --- PREPARE ENVIRONMENT ---
+      - name: Clean up the working directory
+        run: sudo find -delete
+
+      # --- CLONE REPOSITORIES ---
+      - name: Checkout repo
+        uses: Corigine/ci-libs/github_actions/utilities/checkout_corigine@main
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GHUB_TOKEN }}
+
+      - name: Clone ci-libs (for other GH actions)
+        uses: Corigine/ci-libs/github_actions/utilities/checkout_corigine@main
+        with:
+          repository: Corigine/ci-libs
+          token: ${{ secrets.GHUB_TOKEN }}
+          path: ci-libs
+
+      - name: Get local kernel-devel packages
+        id: local-kernels
+        uses: Corigine/ci-libs/github_actions/azure/azcopy_list@main
+        with:
+          connection-string: ${{ secrets.AZ_SAS_TOK }}
+          src: ${{ env.LOCAL_KERNELS }}
+
+      - name: Get latest kernel-devel rpms
+        id: up-to-date
+        shell: bash
+        run: |
+          declare -A kernels=( ["anolis-7.9"]="mirrors.openanolis.cn/anolis/7.9/os/x86_64/os/Packages" \
+                               ["anolis-8.8"]="mirrors.openanolis.cn/anolis/8.8/kernel-5.10/x86_64/os/Packages" \
+                               ["anolis-8.6"]="mirrors.openanolis.cn/anolis/8.6/BaseOS/x86_64/os/Packages/" \
+                               ["bclinux-8"]="mirrors.cmecloud.cn/bclinux/el8/BaseOS/x86_64/os/Packages" \
+                               ["bclinux-8.1"]="mirrors.cmecloud.cn/bclinux/el8.1/BaseOS/x86_64/os/Packages" \
+                               ["bclinux-8.2"]="mirrors.cmecloud.cn/bclinux/el8.2/BaseOS/x86_64/os/Packages" \
+                               ["kylinos-v10sp1"]="update.cs2c.com.cn/NS/V10/V10SP1/os/adv/lic/base/x86_64/Packages" \
+                               ["kylinos-v10sp2"]="update.cs2c.com.cn/NS/V10/V10SP2/os/adv/lic/base/x86_64/Packages" \
+                               ["kylinos-v10sp3"]="update.cs2c.com.cn/NS/V10/V10SP3/os/adv/lic/base/x86_64/Packages" \
+                               ["opencloudos-8.5"]="mirrors.opencloudos.org/opencloudos/8.5/BaseOS/x86_64/os/Packages" \
+                               ["opencloudos-8.6"]="mirrors.opencloudos.org/opencloudos/8.6/BaseOS/x86_64/os/Packages" \
+                               ["opencloudos-9.0"]="mirrors.opencloudos.org/opencloudos/9.0/AppStream/x86_64/os/Packages" \
+                               ["openeuler-20.03-lts"]="mirrors.dotsrc.org/openeuler/openEuler-20.03-LTS/OS/x86_64/Packages" \
+                               ["openeuler-22.03-lts"]="mirrors.dotsrc.org/openeuler/openEuler-22.03-LTS/OS/x86_64/Packages" )
+
+          UP_TO_DATE=true
+
+          for dir in "${!kernels[@]}"; do
+            (
+              mkdir -p latest/$dir
+              wget -r --spider -o latest/$dir/packages.txt --no-parent "${kernels[$dir]}" -A 'kernel-devel*'
+
+              PACKAGES=$(grep -o "kernel-devel.*\.rpm$" latest/$dir/packages.txt)
+
+              PRESENT=$(echo "${{ steps.local-kernels.outputs.file-list }}" | grep -o "$dir[^ ]*rpm" || true)
+              for package in $PACKAGES; do
+                if [[ "$PRESENT" != *"$package"* || "$PRESENT" == "" ]]; then
+                  echo "::notice::$package not present locally"
+                  echo "${kernels[$dir]}/$package" | tee -a latest/$dir/downloads.txt
+                fi
+              done
+
+              wget -q -i latest/$dir/downloads.txt -P latest/$dir/
+            ) &
+          done
+          wait
+
+          if [[ $(find latest -type f -name downloads.txt) ]]; then
+            UP_TO_DATE=false
+          fi
+
+          find latest -type f -name "downloads.txt" -delete \
+                              -o -name "packages.txt" -delete
+
+          echo  "UP_TO_DATE=${UP_TO_DATE}" | tee -a $GITHUB_OUTPUT
+
+      - name: Upload new kernel-devel binaries to Azure
+        if: steps.up-to-date.outputs.UP_TO_DATE == 'false'
+        uses: Corigine/ci-libs/github_actions/azure/azcopy_upload@main
+        with:
+          connection-string: ${{ secrets.AZ_SAS_TOK }}
+          src: latest/*
+          dst: ${{ env.LOCAL_KERNELS }}
+
+  build-local:
+    if: always()
+    needs: sync-local
+    uses: ./.github/workflows/build-local.yaml
+    secrets:
+      AZ_SAS_TOK: ${{ secrets.AZ_SAS_TOK }}
+      GHUB_TOKEN: ${{ secrets.GHUB_TOKEN }}
