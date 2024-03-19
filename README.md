@@ -481,6 +481,7 @@ this is only presented here as a reference.
 | nfp_net_vnic_debug    | false   | Enable debug printk messages                                                |
 | nfp_net_vnic_pollinterval | 1   | Polling interval for Rx/Tx queues (in ms)                                   |
 | nfp_pf_netdev         | true    | PF driver in [Netdev mode](#pf-netdev-mode)                                 |
+| nfp_res_reclaim       | false   | Reclaim NFP resources during probe                                          |
 | nfp_roce_enabled      | false   | Enable RoCE interface registration                                          |
 | nfp_roce_ints_num     | 4       | Number of RoCE interrupt vectors                                            |
 

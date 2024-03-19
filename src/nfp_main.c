@@ -76,6 +76,10 @@ bool force_40b_dma;
 module_param(force_40b_dma, bool, 0444);
 MODULE_PARM_DESC(force_40b_dma, "Force using 40b dma mask, which allows new HW to use NFD3 firmware (default = false)");
 
+bool nfp_res_reclaim;
+module_param(nfp_res_reclaim, bool, 0444);
+MODULE_PARM_DESC(nfp_res_reclaim, "Reclaim NFP resources during probe (default = false)");
+
 static const char nfp_driver_name[] = "nfp";
 const char nfp_driver_version[] = NFP_SRC_VERSION;
 
@@ -1247,8 +1251,8 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 		goto err_disable_msix;
 	}
 
-	/* Only PF0 has the right to reclaim locked resources. */
-	if (!pf->multi_pf.id) {
+	/* By default, reclaim locked resources in single-PF setup. */
+	if (!pf->multi_pf.en || nfp_res_reclaim) {
 		err = nfp_resource_table_init(pf->cpp);
 		if (err)
 			goto err_cpp_free;
