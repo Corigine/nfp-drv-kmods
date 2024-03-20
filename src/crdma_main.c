@@ -230,8 +230,18 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 		ret = -EINVAL;
 		goto free_mem;
 	}
-
-	dev->cap.max_uar_pages = 1 << cap->max_uar_pages_log2;
+	/* For single PF card, the roce firmware split
+	 * the doorbell space (64 pages total) equally
+	 * to each vnic(32 pages per vnic) and the doorbell
+	 * page number is used to determine which vnic generated
+	 * doorbell. This wil result the wrong PF no in roce
+	 * firmware for multi PF card, so reduce the uar pages to
+	 * compatibility the single PF for multi PF card.
+	 */
+	if (dev->nfp_info->pdev->multifunction)
+		dev->cap.max_uar_pages = 1 << (cap->max_uar_pages_log2 - 1);
+	else
+		dev->cap.max_uar_pages = 1 << cap->max_uar_pages_log2;
 	dev->cap.min_page_size = 1 << cap->min_page_size_log2;
 	dev->cap.max_swqe_size = 1 << cap->max_swqe_size_log2;
 	dev->cap.max_rwqe_size = 1 << cap->max_rwqe_size_log2;
