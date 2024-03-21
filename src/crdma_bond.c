@@ -473,13 +473,14 @@ int crdma_bond_add_ibdev(struct nfp_roce *roce)
 			crdma_err("Failed to alloc bond dev\n");
 			return 0;
 		}
+		kref_init(&bdev->ref);
+	} else {
+		crdma_bdev_get(bdev);
 	}
 
 	mutex_lock(&bdev->lock);
 	crdma_bdev_add_ibdev(bdev, roce);
 	mutex_unlock(&bdev->lock);
-
-	crdma_bdev_get(bdev);
 
 	return 0;
 }
