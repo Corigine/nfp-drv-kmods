@@ -28,6 +28,7 @@ struct platform_device;
 
 struct nfp_cpp;
 struct nfp_cpp_area;
+struct nfp_cpp_area_cache;
 struct nfp_eth_table;
 struct nfp_hwinfo;
 struct nfp_mip;
@@ -283,4 +284,11 @@ unsigned int nfp_net_lr2speed(unsigned int linkrate);
 unsigned int nfp_net_speed2lr(unsigned int speed);
 
 u8 nfp_get_pf_id(struct nfp_pf *pf);
+struct nfp_cpp_area_cache *
+area_cache_get(struct nfp_cpp *cpp, u32 id,
+	       u64 addr, unsigned long *offset, size_t length);
+void
+area_cache_put(struct nfp_cpp *cpp, struct nfp_cpp_area_cache *cache);
+struct nfp_cpp_area *
+area_get_from_cache(struct nfp_cpp_area_cache *cache);
 #endif /* NFP_MAIN_H */

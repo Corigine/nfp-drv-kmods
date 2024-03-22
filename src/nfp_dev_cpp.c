@@ -394,6 +394,15 @@ static ssize_t nfp_dev_cpp_op(struct file *file,
 	}
 
 	while (count > 0) {
+		unsigned long long address = *offp;
+		struct nfp_cpp_area_cache *cache;
+		unsigned long offset = 0;
+
+		cache = area_cache_get(cpp, cpp_id, address, &offset, curlen);
+		if (cache) {
+			area = area_get_from_cache(cache);
+			goto data_access;
+		}
 		area = nfp_cpp_area_alloc_with_name(
 			cpp, cpp_id, "nfp.cdev", *offp, curlen);
 		if (!area)
@@ -413,6 +422,7 @@ static ssize_t nfp_dev_cpp_op(struct file *file,
 			return err;
 		}
 
+data_access:
 		for (pos = 0; pos < curlen; pos += len) {
 			len = curlen - pos;
 			if (len > sizeof(tmpbuf))
@@ -425,11 +435,11 @@ static ssize_t nfp_dev_cpp_op(struct file *file,
 					break;
 				}
 				err = nfp_cpp_area_write(
-					area, pos, tmpbuf, len);
+					area, pos + offset, tmpbuf, len);
 				if (err < 0)
 					break;
 			} else {
-				err = nfp_cpp_area_read(area, pos, tmpbuf, len);
+				err = nfp_cpp_area_read(area, pos + offset, tmpbuf, len);
 				if (err < 0)
 					break;
 				if (copy_to_user(udata, tmpbuf, len)) {
@@ -442,8 +452,10 @@ static ssize_t nfp_dev_cpp_op(struct file *file,
 		*offp += pos;
 		totlen += pos;
 		buff += pos;
-		nfp_cpp_area_release(area);
-		nfp_cpp_area_free(area);
+		if (cache)
+			area_cache_put(cpp, cache);
+		else
+			nfp_cpp_area_release_free(area);
 
 		if (err < 0)
 			return err;

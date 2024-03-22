@@ -994,7 +994,13 @@ int nfp_cpp_area_cache_add(struct nfp_cpp *cpp, size_t size)
 	return 0;
 }
 
-static struct nfp_cpp_area_cache *
+struct nfp_cpp_area *
+area_get_from_cache(struct nfp_cpp_area_cache *cache)
+{
+	return cache->area;
+}
+
+struct nfp_cpp_area_cache *
 area_cache_get(struct nfp_cpp *cpp, u32 id,
 	       u64 addr, unsigned long *offset, size_t length)
 {
@@ -1076,7 +1082,7 @@ exit:
 	return cache;
 }
 
-static void
+void
 area_cache_put(struct nfp_cpp *cpp, struct nfp_cpp_area_cache *cache)
 {
 	if (!cache)
