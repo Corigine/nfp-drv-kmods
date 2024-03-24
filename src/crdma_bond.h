@@ -62,7 +62,8 @@ struct nfp_roce;
  * @actived: Indicate whether bond is activated
  * @roce: RoCE devices belongs to this crdma_bond
  * @group: Track bond group's slaves state
- * @bond_work: Work queue for do configs to roce bond
+ * @bond_work: Delay Work for do configs to roce bond
+ * @wq: Work queue for do configs to roce bond
  * @ref: Ref cnt of this struct
  * @lock: Lock to protect crdma_bond
  */
@@ -74,6 +75,7 @@ struct crdma_bond {
 	struct bond_group group;
 
 	struct delayed_work bond_work;
+	struct workqueue_struct *wq;
 	struct kref	ref;
 	struct mutex lock;
 };

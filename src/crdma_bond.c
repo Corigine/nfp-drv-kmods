@@ -149,6 +149,8 @@ static void crdma_do_bond(struct crdma_bond *bdev)
 		mutex_lock(&bdev->lock);
 		bdev->actived = 1;
 		mutex_unlock(&bdev->lock);
+
+		msleep(2000);
 		crdma_bond_register_bond_ibdev(roce);
 		crdma_bond_create_bond(roce, &group);
 	} else if (do_bond && actived) {
@@ -160,6 +162,8 @@ static void crdma_do_bond(struct crdma_bond *bdev)
 		mutex_lock(&bdev->lock);
 		bdev->actived = 0;
 		mutex_unlock(&bdev->lock);
+
+		msleep(5000);
 		crdma_bond_register_slave_ibdev(roce);
 	}
 }
@@ -365,7 +369,7 @@ static int crdma_bond_netdev_event(struct notifier_block *nb,
 	mutex_unlock(&bdev->lock);
 
 	if (changed)
-		schedule_delayed_work(&bdev->bond_work, 0);
+		queue_delayed_work(bdev->wq, &bdev->bond_work, 0);
 
 	return NOTIFY_DONE;
 }
@@ -378,6 +382,7 @@ static void crdma_bond_dev_free(struct kref *ref)
 		unregister_netdevice_notifier(&bdev->netdev_nb);
 
 	cancel_delayed_work_sync(&bdev->bond_work);
+	destroy_workqueue(bdev->wq);
 	mutex_destroy(&bdev->lock);
 	kfree(bdev);
 }
@@ -389,6 +394,12 @@ static struct crdma_bond *crdma_bond_dev_alloc(void)
 	bdev = kzalloc(sizeof(*bdev), GFP_KERNEL);
 	if (!bdev)
 		return NULL;
+
+	bdev->wq = create_singlethread_workqueue("crdma_bond");
+	if (!bdev->wq) {
+		kfree(bdev);
+		return NULL;
+	}
 
 	mutex_init(&bdev->lock);
 	INIT_DELAYED_WORK(&bdev->bond_work, crdma_do_bond_work);
