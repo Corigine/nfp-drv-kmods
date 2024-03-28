@@ -581,6 +581,10 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 		SET_NETDEV_DEV(repr, &priv->nn->pdev->dev);
 		nfp_net_get_mac_addr(app->pf, repr, port);
 
+		err = nfp_devlink_port_register(app, port);
+		if (err)
+			goto err_reprs_clean;
+
 		cmsg_port_id = nfp_flower_cmsg_phys_port(phys_port);
 		err = nfp_repr_init(app, repr,
 				    cmsg_port_id, port, priv->nn->dp.netdev);
@@ -590,6 +594,10 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 			nfp_repr_free(repr);
 			goto err_reprs_clean;
 		}
+
+#if (VER_NON_RHEL_LT(6, 2)) || (RHEL_RELEASE_LT(9, 305, 0, 0))
+		nfp_devlink_port_type_eth_set(port);
+#endif
 
 		nfp_flower_cmsg_mac_repr_add(ctrl_skb, app->pf->multi_pf.en ? 0 : idx,
 					     eth_tbl->ports[idx].nbi,

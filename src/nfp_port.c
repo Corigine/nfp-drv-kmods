@@ -42,6 +42,11 @@ int nfp_port_get_port_parent_id(struct net_device *netdev,
 	port = nfp_port_from_netdev(netdev);
 	if (!port)
 		return -EOPNOTSUPP;
+	/* If devlink_port is registered, devlink core
+	 * is taking care of port parent ID.
+	 */
+	if (nfp_devlink_is_port_registered(port))
+		return -EOPNOTSUPP;
 
 	ppid->id_len = nfp_cpp_serial(port->app->cpp, &serial);
 	memcpy(&ppid->id, serial, ppid->id_len);
@@ -145,6 +150,11 @@ nfp_port_get_phys_port_name(struct net_device *netdev, char *name, size_t len)
 
 	port = nfp_port_from_netdev(netdev);
 	if (!port)
+		return -EOPNOTSUPP;
+	/* If devlink_port is registered, devlink core
+	 * is taking care of name formatting.
+	 */
+	if (nfp_devlink_is_port_registered(port))
 		return -EOPNOTSUPP;
 
 	switch (port->type) {

@@ -457,6 +457,18 @@ static const struct devlink_port_ops nfp_devlink_port_ops = {
 };
 #endif
 
+bool nfp_devlink_is_port_registered(struct nfp_port *port)
+{
+	if (!port)
+		return false;
+
+#if VER_NON_RHEL_LT(6, 1) || VER_RHEL_LT(9, 2)
+	return !!port->dl_port.devlink;
+#else
+	return port->dl_port.registered;
+#endif
+}
+
 int nfp_devlink_port_register(struct nfp_app *app, struct nfp_port *port)
 {
 	struct compat__devlink_port_attrs attrs = {};
