@@ -13,6 +13,8 @@
 #include "nfp_main.h"
 #include "nfp_port.h"
 
+#define NFP_DEVLINK_ID_PF_START	NSP_ETH_MAX_COUNT
+
 static int
 nfp_devlink_fill_eth_port(struct nfp_port *port,
 			  struct nfp_eth_table_port *copy)
@@ -475,6 +477,7 @@ int nfp_devlink_port_register(struct nfp_app *app, struct nfp_port *port)
 	struct nfp_eth_table_port eth_port;
 	int __maybe_unused serial_len;
 	struct devlink *devlink;
+	int dl_port_index;
 	const u8 *serial;
 	int ret;
 
@@ -482,20 +485,44 @@ int nfp_devlink_port_register(struct nfp_app *app, struct nfp_port *port)
 	SET_NETDEV_DEVLINK_PORT(port->netdev, &port->dl_port);
 #endif
 
-	rtnl_lock();
-	ret = nfp_devlink_fill_eth_port(port, &eth_port);
-	rtnl_unlock();
-	if (ret)
-		return ret;
-
-	attrs.split = eth_port.is_split;
+	switch (port->type) {
+	case NFP_PORT_PHYS_PORT:
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
+		rtnl_lock();
+		ret = nfp_devlink_fill_eth_port(port, &eth_port);
+		rtnl_unlock();
+		if (ret)
+			return ret;
+		attrs.split = eth_port.is_split;
 #if VER_NON_RHEL_GE(5, 9) || VER_RHEL_GE(8, 4)
-	attrs.splittable = eth_port.port_lanes > 1 && !attrs.split;
-	attrs.lanes = eth_port.port_lanes;
+		attrs.splittable = eth_port.port_lanes > 1 && !attrs.split;
+		attrs.lanes = eth_port.port_lanes;
 #endif
-	attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
-	attrs.phys.port_number = eth_port.label_port;
-	attrs.phys.split_subport_number = eth_port.label_subport;
+		attrs.phys.port_number = eth_port.label_port;
+		attrs.phys.split_subport_number = eth_port.label_subport;
+		dl_port_index = port->eth_id;
+		break;
+#if VER_NON_RHEL_GE(5, 3) || VER_RHEL_GE(8, 2)
+	case NFP_PORT_PF_PORT:
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_PCI_PF;
+		attrs.pci_pf.pf = port->pf_id;
+		dl_port_index = NFP_DEVLINK_ID_PF_START + port->pf_id;
+		break;
+	case NFP_PORT_VF_PORT:
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_PCI_VF;
+		attrs.pci_vf.pf = port->pf_id;
+		attrs.pci_vf.vf = port->vf_id;
+		dl_port_index = NFP_DEVLINK_ID_PF_START + 1 + port->vf_id;
+		break;
+#endif
+	default:
+		/* Unrecognised port types will not be registered with devlink,
+		 * but this is not considered a failure. Subsequent devlink
+		 * port access needs to be protected by
+		 * nfp_devlink_is_port_registered.
+		 */
+		return 0;
+	}
 	serial_len = nfp_cpp_serial(port->app->cpp, &serial);
 	memcpy(attrs.switch_id.id, serial, serial_len);
 	attrs.switch_id.id_len = serial_len;
@@ -505,9 +532,9 @@ int nfp_devlink_port_register(struct nfp_app *app, struct nfp_port *port)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
 	return devl_port_register_with_ops(devlink, &port->dl_port,
-					   port->eth_id, &nfp_devlink_port_ops);
+					   dl_port_index, &nfp_devlink_port_ops);
 #else
-	return devl_port_register(devlink, &port->dl_port, port->eth_id);
+	return devl_port_register(devlink, &port->dl_port, dl_port_index);
 #endif
 }
 

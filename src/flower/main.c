@@ -465,6 +465,10 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 		eth_hw_addr_random(repr);
 		port_id = nfp_flower_cmsg_pcie_port(nfp_pcie, vnic_type, idx, queue);
 
+		err = nfp_devlink_port_register(app, port);
+		if (err)
+			goto err_reprs_clean;
+
 		err = nfp_repr_init(app, repr,
 				    port_id, port, priv->nn->dp.netdev);
 		if (err) {
@@ -473,6 +477,10 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 			nfp_repr_free(repr);
 			goto err_reprs_clean;
 		}
+
+#if (VER_NON_RHEL_LT(6, 2)) || (RHEL_RELEASE_LT(9, 305, 0, 0))
+		nfp_devlink_port_type_eth_set(port);
+#endif
 
 		RCU_INIT_POINTER(reprs->reprs[i], repr);
 		nfp_info(app->cpp, "%s%d Representor(%s) created\n",

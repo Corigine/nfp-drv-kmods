@@ -200,7 +200,7 @@ err_debugfs_vnic_clean:
 	nfp_net_debugfs_dir_clean(&nn->debugfs_dir);
 	nfp_net_clean(nn);
 err_devlink_port_clean:
-	if (nn->port)
+	if (nfp_devlink_is_port_registered(nn->port))
 		nfp_devlink_port_unregister(nn->port);
 	return err;
 }
@@ -251,7 +251,7 @@ static void nfp_net_pf_clean_vnic(struct nfp_pf *pf, struct nfp_net *nn)
 #endif
 	nfp_net_debugfs_dir_clean(&nn->debugfs_dir);
 	nfp_net_clean(nn);
-	if (nn->port)
+	if (nfp_devlink_is_port_registered(nn->port))
 		nfp_devlink_port_unregister(nn->port);
 }
 
