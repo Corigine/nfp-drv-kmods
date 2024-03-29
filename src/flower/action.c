@@ -1480,6 +1480,13 @@ int nfp_flower_compile_action(struct nfp_app *app,
 #endif
 	}
 
+	/* Don't support to offload flow with empty action list */
+	if (!act_cnt) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "unsupported offload: empty action list");
+		return -EOPNOTSUPP;
+	}
+
 	/* We optimise when the action list is small, this can unfortunately
 	 * not happen once we have more than one action in the action list.
 	 */
