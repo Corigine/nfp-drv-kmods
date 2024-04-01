@@ -164,6 +164,10 @@ enum {
 	CRDMA_DB_SQ_MASK                =  0x00FFFFFF,
 	CRDMA_DB_SQ_TAIL_SHIFT          = 11,
 	CRDMA_DB_SWQE_TYPE_SHIFT        = 22,
+	/* RQ Doorbell Register */
+	CRDMA_DB_RQ_ADDR_OFFSET         =  (0x204 * 4),
+	CRDMA_DB_RQ_MASK                =  0x000007FF,
+	CRDMA_DB_RQ_TAIL_SHIFT          =  11,
 
 	/* CQ Doorbell Register */
 	CRDMA_DB_CQ_ADDR_OFFSET         =  (0x210 * 4),

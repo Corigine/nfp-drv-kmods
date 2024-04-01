@@ -2693,9 +2693,11 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 			   const struct ib_recv_wr **bad_wr)
 #endif
 {
+	struct crdma_ibdev *dev = to_crdma_ibdev(qp->device);
 	struct crdma_qp *cqp = to_crdma_qp(qp);
 	struct crdma_rwqe *rwqe;
 	int ret = 0;
+	int db_value = 0;
 	unsigned long irq_flags;
 
 	spin_lock_irqsave(&cqp->rq.lock, irq_flags);
@@ -2738,6 +2740,10 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 		set_wqe_sw_ownership(&cqp->rq, cqp->rq.tail +
 				     CRDMA_WQ_WQE_SPARES);
 		cqp->rq.tail = (cqp->rq.tail + 1) & cqp->rq.mask;
+		mb();
+		db_value = (cqp->qp_index & CRDMA_DB_RQ_MASK) | cqp->rq.tail << CRDMA_DB_RQ_TAIL_SHIFT;
+		crdma_rq_ring_db32(dev, db_value);
+
 		wr = wr->next;
 	}
 	spin_unlock_irqrestore(&cqp->rq.lock, irq_flags);

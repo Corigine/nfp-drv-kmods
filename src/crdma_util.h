@@ -264,6 +264,8 @@ void crdma_cleanup_net_notifiers(struct crdma_ibdev *dev);
 
 void crdma_ring_db32(struct crdma_ibdev *dev, uint32_t value, int offset);
 
+void crdma_rq_ring_db32(struct crdma_ibdev *dev, uint32_t value);
+
 void crdma_sq_ring_db32(struct crdma_ibdev *dev, uint32_t value);
 
 void crdma_cq_ring_db32(struct crdma_ibdev *dev, uint32_t value);
