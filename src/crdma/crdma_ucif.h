@@ -1,35 +1,5 @@
-/*
- * Copyright (c) 2015, Netronome, Inc.  All rights reserved.
- * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
+/* Copyright (C) 2023 Corigine, Inc. */
 
 #ifndef CRDMA_UCIF_H
 #define CRDMA_UCIF_H
@@ -173,50 +143,50 @@ struct crdma_event_cmd {
 	u8		status;
 };
 
- enum {
-	CRDMA_WQ_WQE_SPARES             = 8
- };
+enum {
+	CRDMA_WQ_WQE_SPARES	= 8
+};
 
 struct crdma_av {
-       /*
-        * Destination MAC is stored in 32-bit word byte swapped
-        * form so that this transformation is not done on each
-        * SWQE post.  MAC offsets are stored in the following
-        * order: 3, 2, 1, 0, 5, 4. The DMA of the SWQE will undo
-        * this swap.
-        */
-       __u8    d_mac[6];
-       __le16  vlan;
-       __u8    port;                   /* Physical port, 0 based */
+	/*
+	 * Destination MAC is stored in 32-bit word byte swapped
+	 * form so that this transformation is not done on each
+	 * SWQE post.  MAC offsets are stored in the following
+	 * order: 3, 2, 1, 0, 5, 4. The DMA of the SWQE will undo
+	 * this swap.
+	 */
+	__u8	d_mac[6];
+	__le16	vlan;
+	__u8	port;			/* Physical port, 0 based */
 
-       /* We classify GID type as RoCEv2 and indicate IPv4 or IPv6 */
-       __u8    gid_type;
-       __u8    s_mac_ndx;              /* Deprecated, set to zero */
-       __u8    v_id;                   /* If vlan is valid, set to 1 */
-       __u8    traffic_class;          /* Used for Traffic class */
-       __u8    hop_limit;
-       __u8    s_gid_ndx;              /* Source GID table entry to use */
-       __u8    service_level;          /* Used for PCP if vlan tag exist */
-       __le32  flow_label;             /* Always byte swapped */
-       /*
-        * Destination GID is stored in 32-bit byte swapped form so that
-        * this transformation is not done on each SWQE post.  GID byte
-        * offsets are stored in the following order: 3, 2, 1 0, 7, 6, 5, 4,
-        * 11, 10, 9, 8, 15, 14, 13, 12. The DMA of the SWQE will undo this
-        * swap.
-        */
-       union {
-               __u32   d_gid_word[4];
-               __u8    d_gid[16];
-       };
-       __le32  ib_sr_ipd;
+	/* We classify GID type as RoCEv2 and indicate IPv4 or IPv6 */
+	__u8	gid_type;
+	__u8	s_mac_ndx;		/* Deprecated, set to zero */
+	__u8	v_id;			/* If vlan is valid, set to 1 */
+	__u8	traffic_class;		/* Used for Traffic class */
+	__u8	hop_limit;
+	__u8	s_gid_ndx;		/* Source GID table entry to use */
+	__u8	service_level;		/* Used for PCP if vlan tag exist */
+	__le32	flow_label;		/* Always byte swapped */
+	/*
+	 * Destination GID is stored in 32-bit byte swapped form so that
+	 * this transformation is not done on each SWQE post.  GID byte
+	 * offsets are stored in the following order: 3, 2, 1 0, 7, 6, 5, 4,
+	 * 11, 10, 9, 8, 15, 14, 13, 12. The DMA of the SWQE will undo this
+	 * swap.
+	 */
+	union {
+		__u32	d_gid_word[4];
+		__u8	d_gid[16];
+	};
+	__le32	ib_sr_ipd;
 };
 
 enum {
-	CRDMA_AV_IBSR_IPD_SHIFT         = 24,
-	CRDMA_AV_PD_MASK                = 0x00FFFFFF,
-	CRDMA_AV_ROCE_V2_IPV4_GID_TYPE  = 1,
-	CRDMA_AV_ROCE_V2_IPV6_GID_TYPE  = 2
+	CRDMA_AV_IBSR_IPD_SHIFT		= 24,
+	CRDMA_AV_PD_MASK		= 0x00FFFFFF,
+	CRDMA_AV_ROCE_V2_IPV4_GID_TYPE	= 1,
+	CRDMA_AV_ROCE_V2_IPV6_GID_TYPE	= 2
 };
 
 /* Microcode hardware specific work request for Send Queue WQE */
@@ -294,7 +264,7 @@ struct crdma_wqe_sge {
 struct crdma_swqe_inline {
 	__le16		byte_count;
 	__le16		rsvd;
-	u8          	data[0];
+	u8		data[0];
 };
 
 /* Send WQE Fast Register Memory Region */
@@ -308,13 +278,13 @@ enum {
 };
 
 enum{
-	CRDMA_MR_TYPE_DEFAULT 	= 0,
-	CRDMA_MR_TYPE_FRMR 	= 1,
-	CRDMA_MR_TYPE_DMA 	= 2
+	CRDMA_MR_TYPE_DEFAULT	= 0,
+	CRDMA_MR_TYPE_FRMR	= 1,
+	CRDMA_MR_TYPE_DMA	= 2
 };
 
 struct crdma_swqe_frmr {
-	__le32          flags;
+	__le32		flags;
 	__le32		key;
 	__le32		page_list_paddr_h;
 	__le32		page_list_paddr_l;
@@ -373,8 +343,8 @@ struct crdma_rwqe {
 enum {
 	CRDMA_EQ_COMPLETION_EVENTS	= 1 << 0,
 	CRDMA_EQ_ASYNC_EVENTS		= 1 << 1,
-	CRDMA_EQ_EVENT_MASK             = CRDMA_EQ_COMPLETION_EVENTS |
-	                                  CRDMA_EQ_ASYNC_EVENTS,
+	CRDMA_EQ_EVENT_MASK		= CRDMA_EQ_COMPLETION_EVENTS |
+					  CRDMA_EQ_ASYNC_EVENTS,
 	CRDMA_EQ_OWNER_BIT		= 1 << 0
 };
 
@@ -417,22 +387,22 @@ struct crdma_eq_table {
  * and port change events.
  */
 enum {
-	CRDMA_EQ_CQ_COMPLETION_NOTIFY	  = 1,
-	CRDMA_EQ_CQ_ERROR		  = 2,
-	CRDMA_EQ_QP_COMM_ESTABLISHED	  = 5,
-	CRDMA_EQ_QP_SQ_DRAINED		  = 6,
-	CRDMA_EQ_QP_SQ_LAST_WQE		  = 7,
-	CRDMA_EQ_QP_CATASTROPHIC_ERROR	  = 8,
-	CRDMA_EQ_QP_INVALID_REQUEST	  = 9,
-	CRDMA_EQ_QP_ACCESS_ERROR	  = 10,
-	CRDMA_EQ_SRQ_LIMIT_REACHED	  = 11,
-	CRDMA_EQ_SRQ_CATASTROPHIC_ERROR	  = 12,
-	CRDMA_EQ_EQ_OVERRUN_ERROR 	  = 13,
-	CRDMA_EQ_CMDIF_COMPLETE		  = 14,
-	CRDMA_EQ_LOCAL_CATASTROPHIC_ERROR = 15,
-	CRDMA_EQ_PORT_CHANGE		  = 16,
-	CRDMA_EQ_MGMT_PORT_CHANGE	  = 17,
-	CRDMA_EQ_MICROCODE_WARNING	  = 18
+	CRDMA_EQ_CQ_COMPLETION_NOTIFY		= 1,
+	CRDMA_EQ_CQ_ERROR			= 2,
+	CRDMA_EQ_QP_COMM_ESTABLISHED		= 5,
+	CRDMA_EQ_QP_SQ_DRAINED			= 6,
+	CRDMA_EQ_QP_SQ_LAST_WQE			= 7,
+	CRDMA_EQ_QP_CATASTROPHIC_ERROR		= 8,
+	CRDMA_EQ_QP_INVALID_REQUEST		= 9,
+	CRDMA_EQ_QP_ACCESS_ERROR		= 10,
+	CRDMA_EQ_SRQ_LIMIT_REACHED		= 11,
+	CRDMA_EQ_SRQ_CATASTROPHIC_ERROR		= 12,
+	CRDMA_EQ_EQ_OVERRUN_ERROR		= 13,
+	CRDMA_EQ_CMDIF_COMPLETE			= 14,
+	CRDMA_EQ_LOCAL_CATASTROPHIC_ERROR	= 15,
+	CRDMA_EQ_PORT_CHANGE			= 16,
+	CRDMA_EQ_MGMT_PORT_CHANGE		= 17,
+	CRDMA_EQ_MICROCODE_WARNING		= 18
 };
 
 /* Format of EQE written by microcode */
@@ -878,7 +848,7 @@ int crdma_cq_create_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq,
  * @cq: The driver CQ object.
  *
  * Returns 0 on success, otherwise an error.
-*/
+ */
 int crdma_cq_resize_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq);
 
 /**
@@ -909,7 +879,8 @@ int crdma_srq_create_cmd(struct crdma_ibdev *dev, struct crdma_srq *csrq);
  *
  * Returns 0 on success, otherwise an error.
  */
-int crdma_srq_set_arm_limit_cmd(struct crdma_ibdev *dev, struct crdma_srq *csrq);
+int crdma_srq_set_arm_limit_cmd(struct crdma_ibdev *dev,
+				struct crdma_srq *csrq);
 
 /**
  * Destroy a share receive queue control object.
@@ -1086,7 +1057,8 @@ int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
  * Enable or Disable ooo/timeout retransmit to microcode.
  *
  * @dev: RoCE IB device.
- * @enbaled: high 4bits: ooo, low 4bits: timeout; 0x1: to enable, 0x0: to disable
+ * @enbaled: high 4bits: ooo, low 4bits:
+ *           timeout; 0x1: to enable, 0x0: to disable
  * Returns 0 on success, otherwise an error.
  */
 int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
@@ -1332,7 +1304,7 @@ void crdma_cleanup_cmdif(struct crdma_ibdev *dev);
  *
  * Returns the associated string, or the undefined string.
  */
-const char *crdma_opcode_to_str(u8 opcode);
+const char * const crdma_opcode_to_str(u8 opcode);
 
 /**
  * Return the string representation of a command status.
@@ -1341,7 +1313,7 @@ const char *crdma_opcode_to_str(u8 opcode);
  *
  * Returns the associated string, or the undefined string.
  */
-const char *crdma_status_to_str(u8 status);
+const char * const crdma_status_to_str(u8 status);
 
 /**
  * Return the string representation of an interrupt event
@@ -1350,6 +1322,6 @@ const char *crdma_status_to_str(u8 status);
  *
  * Returns the associated string, or the undefined string.
  */
-const char *crdma_event_to_str(u8 event_type);
+const char * const crdma_event_to_str(u8 event_type);
 
 #endif /* CRDMA_UCIF_H */

@@ -1,34 +1,6 @@
-/*
- * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Copyright (C) 2023 Corigine, Inc. */
+
 #include <net/bonding.h>
 
 #include "nfpcore/nfp_roce.h"
@@ -84,7 +56,8 @@ static void crdma_bond_tx_mapping(struct bond_group *group,
 		*tx_bm |= 1<<1;
 }
 
-static void crdma_bond_create_bond(struct nfp_roce **roce, struct bond_group *group)
+static void crdma_bond_create_bond(struct nfp_roce **roce,
+				   struct bond_group *group)
 {
 	int err;
 	u64 tx_bm = 0;
@@ -100,7 +73,8 @@ static void crdma_bond_create_bond(struct nfp_roce **roce, struct bond_group *gr
 		crdma_err("Failed to create LAG (%d)\n", err);
 }
 
-static void crdma_bond_mod_bond(struct nfp_roce **roce, struct bond_group *group)
+static void crdma_bond_mod_bond(struct nfp_roce **roce,
+				struct bond_group *group)
 {
 	int err;
 	u64 tx_bm = 0;
@@ -132,35 +106,36 @@ static void crdma_bond_destroy_bond(struct nfp_roce **roce)
 static void crdma_do_bond(struct crdma_bond *bdev)
 {
 	bool do_bond;
-	int actived;
+	int active;
 	struct bond_group group = {0};
 	struct nfp_roce *roce[CRDMA_BOND_MAX_PORT] = {0};
 
 	mutex_lock(&bdev->lock);
-	memcpy(roce, bdev->roce, sizeof(struct nfp_roce *) * CRDMA_BOND_MAX_PORT);
-	actived = bdev->actived;
+	memcpy(roce, bdev->roce,
+	       sizeof(struct nfp_roce *) * CRDMA_BOND_MAX_PORT);
+	active = bdev->active;
 	group = bdev->group;
 	mutex_unlock(&bdev->lock);
 
 	do_bond = group.is_bonded;
-	if (do_bond && !actived) {
+	if (do_bond && !active) {
 		crdma_bond_unregister_slave_ibdev(roce);
 
 		mutex_lock(&bdev->lock);
-		bdev->actived = 1;
+		bdev->active = 1;
 		mutex_unlock(&bdev->lock);
 
 		msleep(2000);
 		crdma_bond_register_bond_ibdev(roce);
 		crdma_bond_create_bond(roce, &group);
-	} else if (do_bond && actived) {
+	} else if (do_bond && active) {
 		crdma_bond_mod_bond(roce, &group);
-	} else if (!do_bond && actived) {
+	} else if (!do_bond && active) {
 		crdma_bond_destroy_bond(roce);
 		crdma_bond_unregister_bond_ibdev(roce);
 
 		mutex_lock(&bdev->lock);
-		bdev->actived = 0;
+		bdev->active = 0;
 		mutex_unlock(&bdev->lock);
 
 		msleep(5000);
@@ -189,9 +164,10 @@ static int crdma_bond_dev_get_netdev_idx(struct crdma_bond *bdev,
 	return -ENOENT;
 }
 
-static int crdma_bond_changeupper_event(struct crdma_bond *bdev,
-					 struct bond_group *group,
-					 struct netdev_notifier_changeupper_info *info)
+static int
+crdma_bond_changeupper_event(struct crdma_bond *bdev,
+			     struct bond_group *group,
+			     struct netdev_notifier_changeupper_info *info)
 {
 	struct net_device *upper = info->upper_dev, *ndev_tmp;
 	struct netdev_lag_upper_info *lag_upper_info = NULL;
@@ -232,9 +208,8 @@ static int crdma_bond_changeupper_event(struct crdma_bond *bdev,
 	if (!(bond_status & GENMASK(CRDMA_BOND_MAX_PORT - 1, 0)))
 		return 0;
 
-	if (lag_upper_info) {
+	if (lag_upper_info)
 		group->tx_type = lag_upper_info->tx_type;
-	}
 
 	group->has_inactive = has_inactive;
 	/* Determine bonding status:
@@ -263,10 +238,11 @@ static int crdma_bond_changeupper_event(struct crdma_bond *bdev,
 	return changed;
 }
 
-static int crdma_bond_changelowerstate_event(struct crdma_bond *bdev,
-					      struct bond_group *group,
-					      struct net_device *ndev,
-					      struct netdev_notifier_changelowerstate_info *info)
+static int
+crdma_bond_changelowerstate_event(struct crdma_bond *bdev,
+				  struct bond_group *group,
+				  struct net_device *ndev,
+				  struct netdev_notifier_changelowerstate_info *info)
 {
 	struct netdev_lag_lower_state_info *lag_lower_info;
 	int idx;
@@ -288,8 +264,8 @@ static int crdma_bond_changelowerstate_event(struct crdma_bond *bdev,
 }
 
 static int crdma_bond_changeinfodata_event(struct crdma_bond *bdev,
-					    struct bond_group *group,
-					    struct net_device *ndev)
+					   struct bond_group *group,
+					   struct net_device *ndev)
 {
 	struct net_device *ndev_tmp;
 	struct slave *slave;
@@ -328,16 +304,16 @@ static int crdma_bond_changeinfodata_event(struct crdma_bond *bdev,
  * @ptr: The pointer to private data (net_device).
  *
  * Returns NOTIFY_DONE.
-*/
+ */
 static int crdma_bond_netdev_event(struct notifier_block *nb,
-			unsigned long event, void *ptr)
+				   unsigned long event, void *ptr)
 {
 	struct net_device *netdev = netdev_notifier_info_to_dev(ptr);
 	struct crdma_bond *bdev;
 	struct bond_group group = {0};
 	int changed = 0;
 
-    if (event != NETDEV_CHANGEUPPER &&
+	if (event != NETDEV_CHANGEUPPER &&
 	    event != NETDEV_CHANGELOWERSTATE &&
 	    event != NETDEV_CHANGEINFODATA)
 		return NOTIFY_DONE;
@@ -348,20 +324,19 @@ static int crdma_bond_netdev_event(struct notifier_block *nb,
 	group = bdev->group;
 	mutex_unlock(&bdev->lock);
 
-	switch(event)
-	{
-		case NETDEV_CHANGEUPPER:
-			changed = crdma_bond_changeupper_event(bdev, &group, ptr);
-			break;
-		case NETDEV_CHANGELOWERSTATE:
-			changed = crdma_bond_changelowerstate_event(bdev, &group,
-							     netdev, ptr);
-			break;
-		case NETDEV_CHANGEINFODATA:
-			changed = crdma_bond_changeinfodata_event(bdev, &group, netdev);
-			break;
-		default:
-			break;
+	switch (event) {
+	case NETDEV_CHANGEUPPER:
+		changed = crdma_bond_changeupper_event(bdev, &group, ptr);
+		break;
+	case NETDEV_CHANGELOWERSTATE:
+		changed = crdma_bond_changelowerstate_event(bdev, &group,
+							netdev, ptr);
+		break;
+	case NETDEV_CHANGEINFODATA:
+		changed = crdma_bond_changeinfodata_event(bdev, &group, netdev);
+		break;
+	default:
+		break;
 	}
 
 	mutex_lock(&bdev->lock);
@@ -439,8 +414,8 @@ static struct crdma_bond *crdma_bond_fetch_bdev(struct nfp_roce *roce)
 
 	list_for_each_entry(tmp_roce, &nfp_roce_list, list) {
 		if ((tmp_roce == roce) ||
-			(crdma_gen_dev_pci(tmp_roce) != crdma_gen_dev_pci(roce)) ||
-			!tmp_roce->bdev)
+		    (crdma_gen_dev_pci(tmp_roce) != crdma_gen_dev_pci(roce)) ||
+		    !tmp_roce->bdev)
 			continue;
 
 		return tmp_roce->bdev;
@@ -450,7 +425,7 @@ static struct crdma_bond *crdma_bond_fetch_bdev(struct nfp_roce *roce)
 }
 
 static void crdma_bdev_add_ibdev(struct crdma_bond *bdev,
-			       struct nfp_roce *roce)
+				 struct nfp_roce *roce)
 {
 	unsigned int fn = PCI_FUNC(roce->info->pdev->devfn);
 
@@ -459,7 +434,7 @@ static void crdma_bdev_add_ibdev(struct crdma_bond *bdev,
 }
 
 static void crdma_bdev_del_ibdev(struct crdma_bond *bdev,
-			       struct nfp_roce *roce)
+				 struct nfp_roce *roce)
 {
 	unsigned int fn = PCI_FUNC(roce->info->pdev->devfn);
 
@@ -511,21 +486,20 @@ void crdma_bond_del_ibdev(struct nfp_roce *roce)
 	crdma_bdev_put(bdev);
 }
 
-int crdma_bond_is_actived(struct crdma_ibdev *crdma_dev)
+int crdma_bond_is_active(struct crdma_ibdev *crdma_dev)
 {
-	int actived = 0;
+	int active = 0;
 	struct crdma_bond *bdev = NULL;
 
 	bdev = crdma_dev->nfp_info->bdev;
-
 	if (!bdev)
-		return actived;
+		return active;
 
 	mutex_lock(&bdev->lock);
-	actived = bdev->actived;
+	active = bdev->active;
 	mutex_unlock(&bdev->lock);
 
-	return actived;
+	return active;
 }
 
 struct net_device *crdma_bond_get_netdev(struct crdma_ibdev *crdma_dev)
@@ -540,7 +514,7 @@ struct net_device *crdma_bond_get_netdev(struct crdma_ibdev *crdma_dev)
 		goto out;
 
 	mutex_lock(&bdev->lock);
-	if (!bdev->actived)
+	if (!bdev->active)
 		goto unlock;
 
 	if (bdev->group.tx_type == NETDEV_LAG_TX_TYPE_ACTIVEBACKUP) {

@@ -29,7 +29,7 @@ Conflicts: agilio-nfp-driver-dkms
 Requires: kernel, findutils, bash
 %global debug_package %{nil}
 %description
-This package contains the Corigine Flow Processor (NFP) Kernel Drivers.
+This package contains the Corigine Flow Processor (NFP) Kernel Drivers and Corigine RDMA Kernel Drivers.
 
 %prep
 %setup
@@ -60,6 +60,8 @@ install -m 755 ./tools/profile.sh %{buildroot}/etc/profile.d/nfp_drv_kmods_dkms_
 find %{buildroot}/lib/modules/ -name 'modules.*' -exec rm -f {} \;
 cd %{buildroot}
 find lib -name "nfp.ko" -printf "/%p\n" \
+	>%{_builddir}/%{name}-%{version}/file.list
+find lib -name "crdma.ko" -printf "/%p\n" \
 	>%{_builddir}/%{name}-%{version}/file.list
 find lib -name "nfp_driver.symvers" -printf "/%p\n" \
 	>>%{_builddir}/%{name}-%{version}/file.list

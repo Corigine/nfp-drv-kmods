@@ -1,35 +1,5 @@
-/*
- * Copyright (c) 2015, Netronome, Inc.  All rights reserved.
- * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
+/* Copyright (C) 2023 Corigine, Inc. */
 
 /*
  * crdma_ib.h - Provides Corigine RoCEv2 InfiniBand specific details.
@@ -217,13 +187,13 @@ struct crdma_qp {
 	u32			qp_index;	/* Microcode control object */
 
 	/*
-	* If this QP is a GSI QP (i.e. QP1), then qp1_port indicates
-	* the physical port the QP is associated with. Microcode reserves QP
-	* control objects starting at 0 to be used to maintain QP1 object
-	* state. The QP1 port number determines the control object
-	* index used to manage that QP1. NOTE: for special QP the
-	* above "qp_index" is not used.
-	*/
+	 * If this QP is a GSI QP (i.e. QP1), then qp1_port indicates
+	 * the physical port the QP is associated with. Microcode reserves QP
+	 * control objects starting at 0 to be used to maintain QP1 object
+	 * state. The QP1 port number determines the control object
+	 * index used to manage that QP1. NOTE: for special QP the
+	 * above "qp_index" is not used.
+	 */
 	int			qp1_port;
 
 	enum ib_qp_state	qp_state;
@@ -312,13 +282,13 @@ struct crdma_port {
 	u8			mac[ETH_ALEN];
 
 	/*
-		* Ports in host memory Ethernet source addressing information.
-		* Much of this function is common across RoCE providers with
-		* respect to the management of the GIDs and MAC addresses.
-		* It is expected that the API to these interfaces will change,
-		* but ultimately the provider will need the ability to push
-		* SGID and SMAC tables to microcode.
-		*/
+	 * Ports in host memory Ethernet source addressing information.
+	 * Much of this function is common across RoCE providers with
+	 * respect to the management of the GIDs and MAC addresses.
+	 * It is expected that the API to these interfaces will change,
+	 * but ultimately the provider will need the ability to push
+	 * SGID and SMAC tables to microcode.
+	 */
 	spinlock_t		table_lock;
 	int			gid_table_size;
 	struct crdma_gid_entry	gid_table_entry[CRDMA_IB_MAX_GID_TABLE_SIZE];
@@ -506,12 +476,12 @@ static inline struct crdma_mr *to_crdma_mr(struct ib_mr *ib_mr)
 }
 
  /**
- * Return CRDMA RoCE address handle from IB address handle.
- *
- * @ib_ah: The IB address handle.
- *
- * Returns the address of the CRDMA private address handle structure.
- */
+  * Return CRDMA RoCE address handle from IB address handle.
+  *
+  * @ib_ah: The IB address handle.
+  *
+  * Returns the address of the CRDMA private address handle structure.
+  */
 static inline struct crdma_ah *to_crdma_ah(struct ib_ah *ib_ah)
 {
 	return container_of(ib_ah, struct crdma_ah, ib_ah);

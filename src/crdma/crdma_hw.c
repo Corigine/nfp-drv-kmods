@@ -1,35 +1,5 @@
-/*
- * Copyright (c) 2015, Netronome, Inc. All rights reserved.
- * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *	copyright notice, this list of conditions and the following
- *	disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *	copyright notice, this list of conditions and the following
- *	disclaimer in the documentation and/or other materials
- *	provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Copyright (C) 2023 Corigine, Inc. */
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -95,12 +65,13 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 			(opcode_mod << CRDMA_CMDIF_OPCODE_MOD_SHIFT) |
 			opcode;
 
+	/* Memory barrier */
 	mb();
 	__raw_writel((__force u32) cpu_to_le32(cmd_word),
 			&reg->cmd_status);
 
 	dev->toggle = dev->toggle ^ 1;
-#if (!(VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0)))
+#if (!(VER_NON_RHEL_GE(5, 2) || VER_RHEL_GE(8, 0)))
 	mmiowb();
 #endif
 	return 0;
@@ -167,13 +138,11 @@ int crdma_acquire_pci_resources(struct crdma_ibdev *dev)
 
 void crdma_free_pci_resources(struct crdma_ibdev *dev)
 {
-	return;
 }
 
 void crdma_cleanup_hw(struct crdma_ibdev *dev)
 {
 	pr_info("CRDMA HW specific cleanup\n");
-	return;
 }
 
 void crdma_set_sq_db(struct crdma_ibdev *dev, u32 qpn)
@@ -184,9 +153,8 @@ void crdma_set_sq_db(struct crdma_ibdev *dev, u32 qpn)
 	db = qpn & CRDMA_DB_SQ_MASK;
 	addr = dev->priv_uar.map + CRDMA_DB_SQ_ADDR_OFFSET;
 	__raw_writel((__force u32) cpu_to_le32(db), addr);
+	/* Memory barrier */
 	mb();
-
-	return;
 }
 
 void crdma_set_cq_db(struct crdma_ibdev *dev, u32 cqn, bool solicited)
@@ -207,9 +175,8 @@ void crdma_set_cq_db(struct crdma_ibdev *dev, u32 cqn, bool solicited)
 		(ccq->cqn & CRDMA_DB_CQN_MASK);
 	addr = dev->priv_eq_uar.map + CRDMA_DB_CQ_ADDR_OFFSET;
 	__raw_writel((__force u32) cpu_to_le32(db), addr);
+	/* Memory barrier */
 	mb();
-
-	return;
 }
 
 inline void crdma_set_eq_ci(struct crdma_ibdev *dev,  u32 eqn,
@@ -223,8 +190,7 @@ inline void crdma_set_eq_ci(struct crdma_ibdev *dev,  u32 eqn,
 	addr = dev->priv_eq_uar.map +
 		(eqn * CRDMA_UAR_EQ_ADDR_INTERVAL_IN_PAGE);
 	__raw_writel((__force u32) cpu_to_le32(ci), addr);
+	/* Memory barrier */
 	mb();
-
-	return;
 }
 

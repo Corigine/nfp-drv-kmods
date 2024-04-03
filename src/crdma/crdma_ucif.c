@@ -1,35 +1,5 @@
-/*
- * Copyright (c) 2015, Netronome, Inc. All rights reserved.
- * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *	copyright notice, this list of conditions and the following
- *	disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *	copyright notice, this list of conditions and the following
- *	disclaimer in the documentation and/or other materials
- *	provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Copyright (C) 2023 Corigine, Inc. */
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -113,9 +83,9 @@ static int crdma_qp_modify_opcode_mod(enum ib_qp_state cur_state,
  *
  * Returns the associated string.
  */
-const char *crdma_opcode_to_str(u8 opcode)
+const char * const crdma_opcode_to_str(u8 opcode)
 {
-	static const char *cmd_to_str[] = {
+	static const char * const cmd_to_str[] = {
 		[0]				= CRDMA_UNDEFINED,
 		[CRDMA_CMD_NO_OP]		= "NO-OP",
 		[CRDMA_CMD_QUERY_DEV_CAP]	= "QUERY_DEV_CAP",
@@ -180,9 +150,9 @@ const char *crdma_opcode_to_str(u8 opcode)
  *
  * Returns the associated string.
  */
-const char *crdma_status_to_str(u8 status)
+const char * const crdma_status_to_str(u8 status)
 {
-	static const char *status_to_str[] = {
+	static const char * const status_to_str[] = {
 		[CRDMA_STS_OK]			= "success",
 		[CRDMA_STS_UCODE_CORRUPTED]	= "microcode corrupted",
 		[CRDMA_STS_UCODE_INTERNAL_ERR]	= "microcode internal error",
@@ -213,9 +183,9 @@ const char *crdma_status_to_str(u8 status)
  *
  * Returns the associated string.
  */
-const char *crdma_event_to_str(u8 event_type)
+const char * const crdma_event_to_str(u8 event_type)
 {
-	static const char *event_to_str[] = {
+	static const char * const event_to_str[] = {
 		[0]				= CRDMA_UNDEFINED,
 		[CRDMA_EQ_CQ_COMPLETION_NOTIFY]	= "CQ completion",
 		[CRDMA_EQ_CQ_ERROR]		= "CQ error",
@@ -326,7 +296,7 @@ static int crdma_waited_cmd(struct crdma_ibdev *dev, struct crdma_cmd *cmd)
 	/* Wait for command state availability */
 	down(&dev->event_sem);
 	spin_lock(&dev->cmd_q_lock);
-	cmd_state = & dev->cmd_q[dev->cmd_q_free];
+	cmd_state = &dev->cmd_q[dev->cmd_q_free];
 	cmd_state->token += dev->max_cmds_out;
 	dev->cmd_q_free = cmd_state->next;
 	init_completion(&cmd_state->comp);
@@ -398,7 +368,6 @@ static void crdma_cmd_complete(struct crdma_ibdev *dev, u16 token,
 
 	/* Wake up command initiator */
 	complete(&cmd_state->comp);
-	return;
 }
 
 /**
@@ -529,7 +498,7 @@ static void crdma_qp_async_event(struct crdma_ibdev *dev,
 		event.device	 = cqp->ib_qp.device;
 		event.element.qp = &cqp->ib_qp;
 
-		switch(eqe->type) {
+		switch (eqe->type) {
 		case CRDMA_EQ_QP_COMM_ESTABLISHED:
 			event.event = IB_EVENT_COMM_EST;
 			break;
@@ -555,8 +524,8 @@ static void crdma_qp_async_event(struct crdma_ibdev *dev,
 			break;
 
 		default:
-			crdma_warn("Async QP event not handled, QPN "
-					"%d, event %d\n", qpn, eqe->type);
+			crdma_warn("Async QP %d event %d not handled\n",
+				qpn, eqe->type);
 			return;
 		}
 
@@ -565,8 +534,6 @@ static void crdma_qp_async_event(struct crdma_ibdev *dev,
 	}
 	if (atomic_dec_and_test(&cqp->ref_cnt))
 		complete(&cqp->free);
-
-	return;
 }
 
 /**
@@ -681,16 +648,14 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 			break;
 
 		case CRDMA_EQ_PORT_CHANGE:
-			crdma_dev_info(dev, "unaffiliated event %s "
-				       "not implemented\n",
-					crdma_event_to_str(eqe->type));
+			crdma_dev_info(dev, "event %s not implemented\n",
+				       crdma_event_to_str(eqe->type));
 			break;
 
 		case CRDMA_EQ_MGMT_PORT_CHANGE:
 		default:
-			crdma_dev_info(dev, "unaffiliated event %s "
-				       "not implemented\n",
-					crdma_event_to_str(eqe->type));
+			crdma_dev_info(dev, "event %s not implemented\n",
+				       crdma_event_to_str(eqe->type));
 			break;
 		}
 		eq->consumer_cnt++;
@@ -740,9 +705,8 @@ int crdma_init_eq(struct crdma_ibdev *dev, int index, int entries_log2,
 			eq->mem->base_mtt_ndx, eq->mem->num_mtt,
 			eq->mem->min_order + PAGE_SHIFT,
 			eq->mem->num_sg, 0);
-	if (ret) {
+	if (ret)
 		goto free_mem;
-	}
 
 	/*
 	 * Get virtual address of memory for EQ consumer processing and
@@ -772,7 +736,7 @@ int crdma_init_eq(struct crdma_ibdev *dev, int index, int entries_log2,
 
 	ret = crdma_eq_map_cmd(dev, eq->eq_num, eq->event_map);
 	if (ret) {
-		crdma_warn("crdma_eq_map_cmd faild, returned %d\n", ret);
+		crdma_warn("crdma_eq_map_cmd failed, returned %d\n", ret);
 		goto destroy_eq;
 	}
 
@@ -807,16 +771,14 @@ void crdma_cleanup_eq(struct crdma_ibdev *dev, int eqn)
 	crdma_set_eq_ci(dev, eq->eq_num,
 			eq->consumer_cnt & eq->consumer_mask, false);
 
-	if (dev->have_interrupts) {
+	if (dev->have_interrupts)
 		free_irq(eq->vector, eq);
-	}
 
 	if (crdma_eq_destroy_cmd(dev, eq))
 		crdma_warn("Destroy of ucode EQ %d failed\n", eq->eq_num);
 
 	crdma_free_dma_mem(dev, eq->mem);
 	eq->mem = NULL;
-	return;
 }
 
 /**
@@ -934,14 +896,13 @@ int crdma_hca_enable(struct crdma_ibdev *dev)
 	int status;
 
 	status = __crdma_no_param_cmd(dev, CRDMA_CMD_HCA_ENABLE, 0, 0,
-							CRDMA_CMDIF_GEN_TIMEOUT_MS);
+				      CRDMA_CMDIF_GEN_TIMEOUT_MS);
 	/*
-	* Microcode currently does not support HCA Enable command, so
-	* we over-ride the status if error is unsupported.
-	*/
+	 * Microcode currently does not support HCA Enable command, so
+	 * we over-ride the status if error is unsupported.
+	 */
 	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
-		crdma_warn("Microcode returned unsupported opcode, "
-						"ignoring\n");
+		crdma_warn("Microcode unsupported opcode, ignoring\n");
 		status = CRDMA_STS_OK;
 	}
 	return status;
@@ -952,16 +913,14 @@ int crdma_hca_disable(struct crdma_ibdev *dev)
 	int status;
 
 	status = __crdma_no_param_cmd(dev, CRDMA_CMD_HCA_DISABLE, 0, 0,
-							CRDMA_CMDIF_GEN_TIMEOUT_MS);
+				      CRDMA_CMDIF_GEN_TIMEOUT_MS);
 	/*
-	* Microcode currently does not support HCA Disable command, so
-	* we over-ride the status if error is unsupported.
-	*/
-	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
-		crdma_warn("Microcode returned unsupported opcode, "
-						"ignoring\n");
+	 * Microcode currently does not support HCA Disable command, so
+	 * we over-ride the status if error is unsupported.
+	 */
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE)
 		status = CRDMA_STS_OK;
-	}
+
 	return status;
 }
 
@@ -995,9 +954,8 @@ int __crdma_mtt_write(struct crdma_ibdev *dev, u32 base_mtt,
 	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-code response */
-	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE)
 		status = CRDMA_STS_OK;
-	}
 
 	return status;
 }
@@ -1056,11 +1014,9 @@ int crdma_mtt_write_sg(struct crdma_ibdev *dev,
 					status = __crdma_mtt_write(dev,
 							base_mtt, mtt_cnt,
 							&in_mbox);
-					if (status) {
-						crdma_warn("MTT_WRITE failed "
-								"%d\n", status);
+					if (status)
 						return status;
-					}
+
 					base_mtt += mtt_cnt;
 					num_mtt -= mtt_cnt;
 					mtt_cnt = 0;
@@ -1120,9 +1076,8 @@ int crdma_eq_create_cmd(struct crdma_ibdev *dev, struct crdma_eq *eq)
 	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-code response */
-	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE)
 		status = CRDMA_STS_OK;
-	}
 
 	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
@@ -1155,9 +1110,9 @@ int crdma_eq_map_cmd(struct crdma_ibdev *dev, u32 eqn, u32 events)
 	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-code response */
-	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE)
 		status = CRDMA_STS_OK;
-	}
+
 	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
@@ -1167,9 +1122,8 @@ int crdma_init_event_cmdif(struct crdma_ibdev *dev)
 	int i;
 
 
-	if (!dev->have_interrupts) {
+	if (!dev->have_interrupts)
 		return 0;
-	}
 
 	/*
 	 * Use the largest power of 2 <= the microcode supported
@@ -1187,9 +1141,9 @@ int crdma_init_event_cmdif(struct crdma_ibdev *dev)
 	 */
 	dev->cmd_q = kcalloc(dev->max_cmds_out,
 				sizeof(struct crdma_event_cmd), GFP_KERNEL);
-	if (!dev->cmd_q) {
+	if (!dev->cmd_q)
 		return -ENOMEM;
-	}
+
 	spin_lock_init(&dev->cmd_q_lock);
 	for (i = 0; i < dev->max_cmds_out; i++) {
 		dev->cmd_q[i].token = i;
@@ -1223,7 +1177,6 @@ void crdma_cleanup_event_cmdif(struct crdma_ibdev *dev)
 
 	dev->cmd_q_free = -1;
 	kfree(dev->cmd_q);
-	return;
 }
 
 int crdma_cq_create_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq,
@@ -1274,9 +1227,8 @@ int crdma_cq_create_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq,
 	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-coded response */
-	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE)
 		status = CRDMA_STS_OK;
-	}
 
 	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
@@ -1308,9 +1260,9 @@ int crdma_cq_resize_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq)
 	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-coded response */
-	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE)
 		status = CRDMA_STS_OK;
-	}
+
 	crdma_cleanup_mailbox(dev, &in_mbox);
 	return status;
 }
@@ -1339,8 +1291,9 @@ int crdma_srq_create_cmd(struct crdma_ibdev *dev, struct crdma_srq *csrq)
 
 	page_info = (csrq->mem->min_order + PAGE_SHIFT) <<
 		CRDMA_SRQ_CREATE_LOG2_PAGE_SZ_SHIFT;
-	page_info = (ilog2(csrq->wq.wqe_size) & CRDMA_SRQ_CREATE_LOG2_SWQE_MASK) <<
-		CRDMA_SRQ_CREATE_LOG2_SWQE_SHIFT;
+	page_info = (ilog2(csrq->wq.wqe_size) &
+		     CRDMA_SRQ_CREATE_LOG2_SWQE_MASK) <<
+		     CRDMA_SRQ_CREATE_LOG2_SWQE_SHIFT;
 
 	/* Set PHYS flag if single block and device supports it */
 	if (csrq->mem->num_mtt == 1 &&
@@ -1471,8 +1424,6 @@ static void crdma_set_qp_ctrl(struct crdma_ibdev *dev,
 	ctrl->uar_pfn_high = cpu_to_le32(pfn >> 32);
 	ctrl->uar_pfn_low = cpu_to_le32((pfn & 0x0FFFFFFFFull) <<
 					PAGE_SHIFT);
-
-	return;
 }
 
 /**
@@ -1508,9 +1459,8 @@ static int crdma_set_qp_attr(struct crdma_ibdev *dev,
 	if (ib_attr_mask & IB_QP_QKEY)
 		attr->qkey = cpu_to_le32(ib_attr->qkey);
 
-	if (ib_attr_mask & IB_QP_AV) {
+	if (ib_attr_mask & IB_QP_AV)
 		crdma_set_av(qp->ib_qp.pd, &attr->av, &ib_attr->ah_attr);
-	}
 
 	if (ib_attr_mask & IB_QP_PATH_MTU)
 		attr->mtu_access |= (ib_attr->path_mtu + 7) <<
@@ -1529,10 +1479,10 @@ static int crdma_set_qp_attr(struct crdma_ibdev *dev,
 		attr->rq_psn = cpu_to_le32(ib_attr->rq_psn);
 
 	if (ib_attr_mask & IB_QP_MAX_QP_RD_ATOMIC)
-		attr->rdma_init_depth = ib_attr->max_rd_atomic;;
+		attr->rdma_init_depth = ib_attr->max_rd_atomic;
 
 	if (ib_attr_mask & IB_QP_ALT_PATH)
-		/* Not supported */;
+		;
 
 	if (ib_attr_mask & IB_QP_MIN_RNR_TIMER)
 		attr->min_rnr_timer = ib_attr->min_rnr_timer;
@@ -1544,7 +1494,7 @@ static int crdma_set_qp_attr(struct crdma_ibdev *dev,
 		attr->rdma_rsp_res = ib_attr->max_dest_rd_atomic;
 
 	if (ib_attr_mask & IB_QP_PATH_MIG_STATE)
-		/* Not supported */;
+		;
 
 	if (ib_attr_mask & IB_QP_CAP)
 		;
@@ -1607,9 +1557,8 @@ int crdma_qp_modify_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 	status = crdma_cmd(dev, &cmd);
 
 	/* While command not supported provide hard-coded response */
-	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE)
 		status = CRDMA_STS_OK;
-	}
 
 	/* Save new state in QP */
 	if (status == CRDMA_STS_OK)
@@ -1657,7 +1606,8 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 							CRDMA_QP_ATTR_QPN_MASK;
 	qp_attr->max_rd_atomic = param->rdma_init_depth;
 	qp_attr->max_dest_rd_atomic = param->rdma_rsp_res;
-	qp_attr->qp_access_flags = param->mtu_access & CRDMA_QP_ATTR_ACCESS_MASK;
+	qp_attr->qp_access_flags =
+		param->mtu_access & CRDMA_QP_ATTR_ACCESS_MASK;
 	qp_attr->path_mtu = (param->mtu_access >> CRDMA_QP_ATTR_MTU_SHIFT) - 7;
 
 	if (qp_attr_mask & IB_QP_AV) {
@@ -1690,8 +1640,8 @@ int crdma_qp_query_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 	}
 
 free_mbox:
-        crdma_cleanup_mailbox(dev, &out_mbox);
-        return status;
+	crdma_cleanup_mailbox(dev, &out_mbox);
+	return status;
 }
 
 int crdma_qp_destroy_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp)
@@ -1817,7 +1767,7 @@ int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 			((cmr->access & IB_ACCESS_REMOTE_READ) ?
 				CRDMA_MPT_REMOTE_READ_ENABLE : 0) |
 			(cmr->umem ? 0 : ((cmr->type == CRDMA_MR_TYPE_FRMR) ?
-				0 :CRDMA_MPT_DMA));
+				0 : CRDMA_MPT_DMA));
 
 	/* Set PHYS flag if only a single MTT entry and it is supported */
 	if (cmr->num_mtt == 1 && (dev->cap.opt_flags &
@@ -1828,22 +1778,21 @@ int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 		flags_pdn |= CRDMA_MPT_FRMR_ENABLE;
 		flags_pdn |= CRDMA_MPT_INVALIDATE_ENABLE;
 		param->frmr_entries = cpu_to_le32(cmr->num_mtt);
-	}
-	else {
+	} else {
 		param->frmr_entries = 0;
 	}
 	param->flags_pd	= cpu_to_le32(flags_pdn);
 
 	param->io_addr_h = cpu_to_le32(cmr->io_vaddr >> 32);
 	param->io_addr_l = cpu_to_le32(cmr->io_vaddr & 0x0FFFFFFFF);
-	param->length	= cpu_to_le32(cmr->len);
-	param->mtt_index= cpu_to_le32(cmr->base_mtt);
+	param->length	 = cpu_to_le32(cmr->len);
+	param->mtt_index = cpu_to_le32(cmr->base_mtt);
 
 	page_info = (cmr->mpt_order + cmr->page_shift) <<
 				CRDMA_MPT_LOG2_PAGE_SZ_SHIFT;
 	param->page_info = cpu_to_le32(page_info);
 	param->mtt_index = cpu_to_le32(cmr->base_mtt);
-	param->reserved = 0;
+	param->reserved  = 0;
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = CRDMA_CMD_MPT_CREATE;
@@ -1869,12 +1818,12 @@ int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr,
 		if (cmr->base_mtt < 0)
 			return -ENOMEM;
 
-#if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,365,0,0))
+#if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 365, 0, 0))
 		ret = crdma_mtt_write_sg(dev, umem->sgt_append.sgt.sgl,
 					 umem->sgt_append.sgt.nents,
 					 cmr->base_mtt, cmr->num_mtt,
 					 PAGE_SHIFT, comp_pages, comp_order);
-#elif (VER_NON_RHEL_OR_KYL_GE(5,3) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#elif (VER_NON_RHEL_OR_KYL_GE(5, 3) || VER_RHEL_GE(8, 0) || VER_KYL_GE(10, 3))
 		ret = crdma_mtt_write_sg(dev, umem->sg_head.sgl, umem->nmap,
 					 cmr->base_mtt, cmr->num_mtt,
 					 PAGE_SHIFT, comp_pages, comp_order);
@@ -1896,9 +1845,9 @@ int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr,
 
 	/* Issue MPT Create Command */
 	ret = crdma_mpt_create_cmd(dev, cmr);
-	if (ret) {
+	if (ret)
 		goto free_mtt;
-	}
+
 	return 0;
 
 free_mtt:
@@ -1913,7 +1862,6 @@ void crdma_cleanup_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 	__crdma_no_param_cmd(dev, CRDMA_CMD_MPT_DESTROY, 0,
 			cmr->key, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 	crdma_free_bitmap_area(&dev->mtt_map, cmr->base_mtt, cmr->num_mtt);
-	return;
 }
 
 int crdma_mpt_query_cmd(struct crdma_ibdev *dev, u32 mpt_index,
@@ -1933,9 +1881,9 @@ int crdma_mpt_query_cmd(struct crdma_ibdev *dev, u32 mpt_index,
 	cmd.input_mod = mpt_index;
 
 	status = crdma_cmd(dev, &cmd);
-	if (status == CRDMA_STS_OK) {
+	if (status == CRDMA_STS_OK)
 		memcpy(param, out_mbox.buf, sizeof(*param));
-	}
+
 	crdma_cleanup_mailbox(dev, &out_mbox);
 	return status;
 }
@@ -2158,16 +2106,13 @@ int crdma_init_cmdif(struct crdma_ibdev *dev)
 
 	dev->mbox_pool = dma_pool_create("crdma_cmd", &dev->nfp_info->pdev->dev,
 			CRDMA_CMDIF_MBOX_SIZE, CRDMA_CMDIF_MBOX_SIZE, 0);
-	if (!dev->mbox_pool) {
-		crdma_dev_warn(dev, "RoCEv2 command mailbox pool create"
-			       " failure\n");
+	if (!dev->mbox_pool)
 		return -ENOMEM;
-	}
+
 	return 0;
 }
 
 void crdma_cleanup_cmdif(struct crdma_ibdev *dev)
 {
 	dma_pool_destroy(dev->mbox_pool);
-	return;
 }

@@ -1,34 +1,5 @@
-/*
- * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
+/* Copyright (C) 2023 Corigine, Inc. */
 
 #ifndef CRDMA_BOND_H
 #define CRDMA_BOND_H
@@ -59,7 +30,7 @@ struct nfp_roce;
  * struct crdma_bond - crdma data for link aggregation
  * Each NIC maintains one of this data.
  * @netdev_nb: Work queue for do configs to roce bond
- * @actived: Indicate whether bond is activated
+ * @active: Indicate whether bond is activated
  * @roce: RoCE devices belongs to this crdma_bond
  * @group: Track bond group's slaves state
  * @bond_work: Delay Work for do configs to roce bond
@@ -70,7 +41,7 @@ struct nfp_roce;
 struct crdma_bond {
 	struct notifier_block netdev_nb;
 
-	int actived;
+	int active;
 	struct nfp_roce *roce[CRDMA_BOND_MAX_PORT];
 	struct bond_group group;
 
@@ -82,7 +53,7 @@ struct crdma_bond {
 
 int crdma_bond_add_ibdev(struct nfp_roce *roce);
 void crdma_bond_del_ibdev(struct nfp_roce *roce);
-int crdma_bond_is_actived(struct crdma_ibdev *crdma_dev);
+int crdma_bond_is_active(struct crdma_ibdev *crdma_dev);
 struct net_device *crdma_bond_get_netdev(struct crdma_ibdev *crdma_dev);
 
 #endif /* CRDMA_BOND_H */

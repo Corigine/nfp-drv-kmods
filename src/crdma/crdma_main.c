@@ -1,35 +1,5 @@
-/*
- * Copyright (c) 2015, Netronome, Inc. All rights reserved.
- * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Copyright (C) 2023 Corigine, Inc. */
 
 #include <linux/module.h>
 #include <linux/idr.h>
@@ -73,33 +43,29 @@ static const char crdma_version[] =
  */
 static bool have_interrupts = true;
 module_param(have_interrupts, bool, 0444);
-MODULE_PARM_DESC(have_interrupts, "During bring-up, allows selective use of "
-		"event driven command mode (default: false)");
+MODULE_PARM_DESC(have_interrupts, "During bring-up, allows selective use of event driven command mode (default: false)");
 
 /*
  * DCQCN is a typical congestion control protocol used for RoCEv2,
  * which can promote RoCEv2's performance when traffic crowds.
  */
-bool dcqcn_enable = false;
+bool dcqcn_enable;
 module_param(dcqcn_enable, bool, 0444);
-MODULE_PARM_DESC(dcqcn_enable, "During bring-up, allows selective use of "
-		"setting dcqcn enable (default: false)");
+MODULE_PARM_DESC(dcqcn_enable, "During bring-up, allows selective use of setting dcqcn enable (default: false)");
 
 /*
  * OOO retransmit for RoCEv2.
  */
 bool retrans_ooo_enable = true;
 module_param(retrans_ooo_enable, bool, 0444);
-MODULE_PARM_DESC(retrans_ooo_enable, "During bring-up, allows selective use of "
-		"setting ooo retransmit enable (default: true)");
+MODULE_PARM_DESC(retrans_ooo_enable, "During bring-up, allows selective use of setting ooo retransmit enable (default: true)");
 
 /*
  * Timeout retransmit for RoCEv2.
  */
 bool retrans_timeout_enable = true;
 module_param(retrans_timeout_enable, bool, 0444);
-MODULE_PARM_DESC(retrans_timeout_enable, "During bring-up, allows selective use of "
-		"setting timeout retransmit enable (default: true)");
+MODULE_PARM_DESC(retrans_timeout_enable, "During bring-up, allows selective use of setting timeout retransmit enable (default: true)");
 
 /**
  * Load device capabilities/attributes.
@@ -132,10 +98,10 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	}
 
 	/*
-	* Initialize microcode supported capabilities for the device,
-	* noting and setting reasonable limit over-rides during
-	* the development process.
-	*/
+	 * Initialize microcode supported capabilities for the device,
+	 * noting and setting reasonable limit over-rides during
+	 * the development process.
+	 */
 	dev->cap.cmdif_abi_rev = le16_to_cpu(attr.cmd_abi_rev);
 	dev->cap.build_id = ((u64) le32_to_cpu(attr.build_id_high)) << 32 |
 			le32_to_cpu(attr.build_id_low);
@@ -149,16 +115,14 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.uc_mhz_clock = le32_to_cpu(attr.mhz_clock);
 
 	cap = kzalloc(sizeof(*cap), GFP_KERNEL);
-	if (!cap) {
-		crdma_dev_warn(dev, "kzalloc failure\n");
+	if (!cap)
 		return -ENOMEM;
-	}
 
 	/* Get dev capacity from firmware */
 	ret = crdma_query_dev_cap(dev, cap);
 	if (ret) {
-		crdma_dev_warn(dev, "Query device capabilities"
-			       " cmd failed %d\n", ret);
+		crdma_dev_warn(dev, "Query device capabilities failed %d\n",
+			ret);
 		goto free_mem;
 	}
 
@@ -166,9 +130,9 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.n_ports = (cap->ports_rsvd >> CRDMA_DEV_CAP_PORT_SHIFT) &
 				CRDMA_DEV_CAP_PORT_MASK;
 	/*
-	* NFP Ethernet only supports 1 port right now so we restrict
-	* microcode to a single port.
-	*/
+	 * NFP Ethernet only supports 1 port right now so we restrict
+	 * microcode to a single port.
+	 */
 	if (dev->cap.n_ports > 1) {
 		crdma_dev_warn(dev, "Limiting port count from %d to %d\n",
 						dev->cap.n_ports, 1);
@@ -193,7 +157,8 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.max_mpt = cap->max_mpt;
 
 	if (cap->max_mtt <= 0) {
-		crdma_dev_warn(dev, "Specified Max MTT %d < 1\n", cap->max_mtt);
+		crdma_dev_warn(dev, "Specified Max MTT %d < 1\n",
+			cap->max_mtt);
 		ret = -EINVAL;
 		goto free_mem;
 	}
@@ -211,15 +176,15 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.smac_table_size = cap->smac_table_size;
 
 	if (cap->sgid_table_size < 2) {
-		crdma_dev_err(dev, "Specified source GID table size "
-			       "%d < 2\n", cap->sgid_table_size);
+		crdma_dev_err(dev, "Specified source GID table size %d < 2\n",
+			cap->sgid_table_size);
 		ret = -EINVAL;
 		goto free_mem;
 	}
 	dev->cap.sgid_table_size = cap->sgid_table_size;
 
 	if (dev->cap.sgid_table_size > CRDMA_IB_MAX_GID_TABLE_SIZE) {
-		crdma_dev_warn(dev, "Specified SGID table size capped to %d entries\n",
+		crdma_dev_warn(dev, "Specified SGID table size capped to %d\n",
 				CRDMA_IB_MAX_GID_TABLE_SIZE);
 		dev->cap.sgid_table_size = CRDMA_IB_MAX_GID_TABLE_SIZE;
 	}
@@ -256,16 +221,18 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.rsvd_qp = cap->rsvd_qp;
 
 	if (cap->max_eq_log2 > 3) {
-		crdma_dev_warn(dev, "Specified max EQ log2 numer %d capped to %d\n",
-				cap->max_eq_log2, 3);
+		crdma_dev_warn(dev,
+			"Specified max EQ log2 numer %d capped to %d\n",
+			cap->max_eq_log2, 3);
 		cap->max_eq_log2 = 3;
 	}
 
 	dev->cap.max_eq = 1 << cap->max_eq_log2;
 
 	if (cap->cqe_size_log2 != 5) {
-		crdma_dev_err(dev, "Specified CQE size log2 incorrect: %d\n",
-				cap->cqe_size_log2);
+		crdma_dev_err(dev,
+			"Specified CQE size log2 incorrect: %d\n",
+			cap->cqe_size_log2);
 		ret = -EINVAL;
 		goto free_mem;
 	}
@@ -302,7 +269,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 
 	dev->cap.ib.max_qp = 1 << cap->max_qp_log2;
 	dev->cap.ib.max_qp_wr = 1 << cap->max_qp_wr_log2;
-#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_EQ(7,6))
+#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_EQ(7, 6))
 	dev->cap.ib.max_sge = cap->max_sq_sge;
 #else
 	dev->cap.ib.max_send_sge = cap->max_sq_sge;
@@ -345,14 +312,14 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.ib.max_pd = CRDMA_IB_MAX_PD;
 	dev->cap.ib.max_ah = CRDMA_IB_MAX_AH;
 
-#if (!(VER_NON_RHEL_GE(5,8) || VER_RHEL_GE(8,0)))
+#if (!(VER_NON_RHEL_GE(5, 8) || VER_RHEL_GE(8, 0)))
 	/* Don't support old style fast memory registration */
 	dev->cap.ib.max_fmr = 0;
 	dev->cap.ib.max_map_per_fmr = 0;
 #endif
 	/* SRQ is supported */
-	dev->cap.ib.max_srq = 1 << cap->max_srq_log2;;
-	dev->cap.ib.max_srq_wr = 1 << cap->max_srq_wr_log2;;
+	dev->cap.ib.max_srq = 1 << cap->max_srq_log2;
+	dev->cap.ib.max_srq_wr = 1 << cap->max_srq_wr_log2;
 	dev->cap.ib.max_srq_sge = 1 << cap->max_srq_rwqe_size_log2;
 
 	/*
@@ -397,7 +364,6 @@ static void crdma_free_eqs(struct crdma_ibdev *dev)
 
 	dev->eq_table.num_eq = 0;
 	kfree(dev->eq_table.eq);
-	return;
 }
 
 /**
@@ -425,10 +391,8 @@ static int crdma_create_eqs(struct crdma_ibdev *dev)
 
 	dev->eq_table.eq = kcalloc(num_eq, sizeof(struct crdma_eq),
 				GFP_KERNEL);
-	if (!dev->eq_table.eq) {
-		crdma_warn("Unable to allocate EQ table memory\n");
+	if (!dev->eq_table.eq)
 		return -ENOMEM;
-	}
 
 	for (i = 0; i < num_eq; i++) {
 		events = (i == 0) ? CRDMA_EQ_ASYNC_EVENTS : 0;
@@ -452,34 +416,38 @@ free_eq:
 	return err;
 }
 
-static ssize_t show_hca_type(struct device *device,
-		struct device_attribute *attr, char *buf)
+static ssize_t hca_type_show(struct device *device,
+			     struct device_attribute *attr, char *buf)
 {
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5, 2) || VER_RHEL_GE(8, 0) || VER_KYL_GE(10, 3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
 	struct crdma_ibdev *dev = dev_get_drvdata(device);
 #endif
-	return scnprintf(buf, PAGE_SIZE, "0x%08X\n", dev->nfp_info->pdev->device);
+	return scnprintf(buf, PAGE_SIZE, "0x%08X\n",
+		dev->nfp_info->pdev->device);
 }
 
-static ssize_t show_hw_rev(struct device *device,
-		struct device_attribute *attr, char *buf)
+static ssize_t hw_rev_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf)
 {
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5, 2) || VER_RHEL_GE(8, 0) || VER_KYL_GE(10, 3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
 	struct crdma_ibdev *dev = dev_get_drvdata(device);
 #endif
-	return scnprintf(buf, PAGE_SIZE, "0x%x\n", dev->nfp_info->pdev->vendor);
+	return scnprintf(buf, PAGE_SIZE, "0x%x\n",
+		dev->nfp_info->pdev->vendor);
 }
 
-static ssize_t show_board(struct device *device, struct device_attribute *attr,
-			  char *buf)
+static ssize_t board_id_show(struct device *device,
+			     struct device_attribute *attr,
+			     char *buf)
 {
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5, 2) || VER_RHEL_GE(8, 0) || VER_KYL_GE(10, 3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
@@ -491,32 +459,35 @@ static ssize_t show_board(struct device *device, struct device_attribute *attr,
 static unsigned int db_offset;
 static unsigned int db_value;
 
-static ssize_t show_doorbell(struct device *device, struct device_attribute *attr, char *buf)
+static ssize_t doorbell_show(struct device *device,
+			     struct device_attribute *attr,
+			     char *buf)
 {
-       ssize_t off = 0;
+	ssize_t off = 0;
 
-       off += scnprintf(buf, PAGE_SIZE, "doorbell offset: 0x%x, doorbell value: 0x%x.\n",
-                       db_offset, db_value);
-       return off;
+	off += scnprintf(buf, PAGE_SIZE,
+			"doorbell offset: 0x%x, doorbell value: 0x%x.\n",
+			 db_offset, db_value);
+	return off;
 }
 
-static ssize_t store_doorbell(struct device *device, struct device_attribute *attr,
-                              const char *buf, size_t size)
+static ssize_t doorbell_store(struct device *device,
+			      struct device_attribute *attr,
+			      const char *buf, size_t size)
 {
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
-       struct ib_device *ibdev = container_of(device, struct ib_device, dev);
-       struct crdma_ibdev *cdev = to_crdma_ibdev(ibdev);
+#if (VER_NON_RHEL_OR_KYL_GE(5, 2) || VER_RHEL_GE(8, 0) || VER_KYL_GE(10, 3))
+	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
+	struct crdma_ibdev *cdev = to_crdma_ibdev(ibdev);
 #else
-       struct crdma_ibdev *cdev = dev_get_drvdata(device);
+	struct crdma_ibdev *cdev = dev_get_drvdata(device);
 #endif
-       sscanf(buf, "%x %x", &db_offset, &db_value);
-       crdma_ring_db32(cdev, db_value, db_offset);
-       return size;
+	sscanf(buf, "%x %x", &db_offset, &db_value);
+	crdma_ring_db32(cdev, db_value, db_offset);
+	return size;
 }
 
-
-static ssize_t dump_uc_gid(struct device *device,
-                struct device_attribute *attr, char *buf)
+static ssize_t uc_gid_show(struct device *device,
+			   struct device_attribute *attr, char *buf)
 {
 	struct crdma_gid_entry *entries;
 	struct crdma_gid_entry *entry;
@@ -524,7 +495,7 @@ static ssize_t dump_uc_gid(struct device *device,
 	int i, j;
 	int err;
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5, 2) || VER_RHEL_GE(8, 0) || VER_KYL_GE(10, 3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
@@ -547,8 +518,8 @@ static ssize_t dump_uc_gid(struct device *device,
 	for (i = 0, entry = entries; i < dev->port.gid_table_size;
 					i++, entry++) {
 		cnt += scnprintf(buf + cnt, PAGE_SIZE - cnt,
-						"%d: Valid (%d), Type: (%d) GID: (", i,
-						entry->valid, entry->type);
+			"%d: Valid (%d), Type: (%d) GID: (", i,
+			entry->valid, entry->type);
 
 		for (j = 0; j < 16; j++)
 			cnt += scnprintf(buf + cnt, PAGE_SIZE - cnt, "%02X",
@@ -561,7 +532,7 @@ out:
 	return cnt;
 }
 
-static ssize_t show_dcqcn_enable(struct device *device,
+static ssize_t dcqcn_enable_show(struct device *device,
 		struct device_attribute *attr, char *buf)
 {
 	return scnprintf(buf, PAGE_SIZE, "0x%x\n", dcqcn_enable);
@@ -572,13 +543,13 @@ static int crdma_init_dcqcn(struct crdma_ibdev *dev)
 	return crdma_dcqcn_enable_cmd(dev, dcqcn_enable);
 }
 
-static ssize_t show_retrans_ooo_enable(struct device *device,
+static ssize_t retrans_ooo_enable_show(struct device *device,
 		struct device_attribute *attr, char *buf)
 {
 	return scnprintf(buf, PAGE_SIZE, "0x%x\n", retrans_ooo_enable);
 }
 
-static ssize_t show_retrans_timeout_enable(struct device *device,
+static ssize_t retrans_timeout_enable_show(struct device *device,
 		struct device_attribute *attr, char *buf)
 {
 	return scnprintf(buf, PAGE_SIZE, "0x%x\n", retrans_timeout_enable);
@@ -595,17 +566,18 @@ static int crdma_init_retrans(struct crdma_ibdev *dev)
  *
  * Echo "opcode" to file /sys/class/infiniband/crdma_#/command
  */
-static ssize_t exec_command(struct device *device,
-		struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t command_store(struct device *device,
+			     struct device_attribute *attr,
+			     const char *buf, size_t count)
 {
 	struct crdma_query_ucode_attr ucode_attr;
 	struct crdma_dev_cap_param *cap;
+	uint32_t outparm;
 	int opcode;
 	int err;
 	int i;
-	uint32_t outparm;
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,2) || VER_RHEL_GE(8,0) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5, 2) || VER_RHEL_GE(8, 0) || VER_KYL_GE(10, 3))
 	struct ib_device *ibdev = container_of(device, struct ib_device, dev);
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 #else
@@ -625,10 +597,8 @@ static ssize_t exec_command(struct device *device,
 		break;
 	case CRDMA_CMD_QUERY_DEV_CAP:
 		cap = kzalloc(sizeof(*cap), GFP_KERNEL);
-		if (!cap) {
-			crdma_info("kzalloc failure\n");
+		if (!cap)
 			return -ENOMEM;
-		}
 		err = crdma_query_dev_cap(dev, cap);
 		kfree(cap);
 		break;
@@ -636,9 +606,8 @@ static ssize_t exec_command(struct device *device,
 		err = crdma_query_nic(dev, &outparm);
 		break;
 	case CRDMA_CMD_MTT_WRITE:
-		crdma_info("%s not directly supported, use "
-				"CRDMA_CMD_SET_BS_HOST_MEM_SIZE\n",
-				crdma_opcode_to_str(opcode));
+		crdma_info("%s not directly supported\n",
+			   crdma_opcode_to_str(opcode));
 		break;
 	case CRDMA_CMD_HCA_ENABLE:
 		err = crdma_hca_enable(dev);
@@ -671,15 +640,15 @@ static ssize_t exec_command(struct device *device,
 	return count;
 }
 
-static DEVICE_ATTR(hw_rev,   S_IRUGO, show_hw_rev,    NULL);
-static DEVICE_ATTR(hca_type, S_IRUGO, show_hca_type,    NULL);
-static DEVICE_ATTR(board_id, S_IRUGO, show_board,  NULL);
-static DEVICE_ATTR(command,  S_IWUSR|S_IWGRP, NULL, exec_command);
-static DEVICE_ATTR(doorbell, S_IRUGO|S_IWUSR|S_IWGRP, show_doorbell, store_doorbell);
-static DEVICE_ATTR(uc_gid, S_IRUGO, dump_uc_gid, NULL);
-static DEVICE_ATTR(dcqcn_enable, S_IRUGO, show_dcqcn_enable, NULL);
-static DEVICE_ATTR(retrans_ooo_enable, S_IRUGO, show_retrans_ooo_enable, NULL);
-static DEVICE_ATTR(retrans_timeout_enable, S_IRUGO, show_retrans_timeout_enable, NULL);
+static DEVICE_ATTR_RO(hw_rev);
+static DEVICE_ATTR_RO(hca_type);
+static DEVICE_ATTR_RO(board_id);
+static DEVICE_ATTR(command,  0444, NULL, command_store);
+static DEVICE_ATTR(doorbell, 0444, doorbell_show, doorbell_store);
+static DEVICE_ATTR_RO(uc_gid);
+static DEVICE_ATTR_RO(dcqcn_enable);
+static DEVICE_ATTR_RO(retrans_ooo_enable);
+static DEVICE_ATTR_RO(retrans_timeout_enable);
 
 static struct device_attribute *crdma_class_attrs[] = {
 	&dev_attr_hw_rev,
@@ -724,15 +693,13 @@ static int crdma_init_maps(struct crdma_ibdev *dev)
 	}
 	dev->cq_table = kcalloc(dev->cap.ib.max_cq,
 				sizeof(struct crdma_cq *), GFP_KERNEL);
-	if (!dev->cq_table) {
-		crdma_dev_warn(dev, "Unable to allocate CQ ID to CQ map\n");
+	if (!dev->cq_table)
 		goto cleanup_cq;
-	}
 
 	/*
-	* Skip over QP numbers reserved for special QP use and/or special
-	* QP numbers reserved for SMI/GSI.
-	*/
+	 * Skip over QP numbers reserved for special QP use and/or special
+	 * QP numbers reserved for SMI/GSI.
+	 */
 	if (crdma_init_bitmap(&dev->qp_map,
 				max(2, dev->cap.rsvd_qp),
 				dev->cap.ib.max_qp - 1)) {
@@ -776,7 +743,6 @@ static void crdma_cleanup_maps(struct crdma_ibdev *dev)
 	crdma_cleanup_bitmap(&dev->mpt_map);
 	crdma_cleanup_bitmap(&dev->uar_map);
 	crdma_cleanup_bitmap(&dev->srq_map);
-	return;
 }
 
 /**
@@ -818,7 +784,6 @@ static int crdma_init_port(struct crdma_ibdev *dev)
  */
 static void crdma_cleanup_port(struct crdma_ibdev *dev)
 {
-	return;
 }
 
 /**
@@ -952,7 +917,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		return NULL;
 	}
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,1) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5, 1) || VER_RHEL_GE(8, 1) || VER_KYL_GE(10, 3))
 	dev = ib_alloc_device(crdma_ibdev, ibdev);
 #else
 	dev = (struct crdma_ibdev *) ib_alloc_device(
@@ -963,10 +928,9 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		return NULL;
 	}
 	dev->nfp_info = kzalloc(size, GFP_KERNEL);
-	if (!dev->nfp_info) {
-		crdma_err("NFP Information memory allocation failed\n");
+	if (!dev->nfp_info)
 		goto err_free_dev;
-	}
+
 	memcpy(dev->nfp_info, info, size);
 
 	crdma_dev_info(dev, "Number of Vectors       %d\n",
@@ -993,7 +957,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		goto err_unregister_verbs;
 	dev->ibdev.phys_port_cnt = dev->cap.n_ports;
 
-#if (VER_NON_RHEL_OR_KYL_GE(5,1) || VER_RHEL_GE(8,2) || VER_KYL_GE(10,3))
+#if (VER_NON_RHEL_OR_KYL_GE(5, 1) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
 	if (ib_device_set_netdev(&dev->ibdev, dev->nfp_info->netdev, 1))
 		goto err_free_idr;
 #endif
@@ -1044,8 +1008,6 @@ static void crdma_remove_dev(struct crdma_ibdev *dev)
 	idr_remove(&crdma_dev_id, dev->id);
 	kfree(dev->nfp_info);
 	ib_dealloc_device(&dev->ibdev);
-
-	return;
 }
 
 /**
@@ -1073,15 +1035,14 @@ static struct nfp_roce_drv crdma_drv = {
 
 static int __init crdma_init(void)
 {
-	crdma_info("crdma_init: calling nfp_register_roce_driver\n");
+	crdma_info("calling nfp_register_roce_driver\n");
 	return nfp_register_roce_driver(&crdma_drv);
 }
 
 static void __exit crdma_cleanup(void)
 {
-	crdma_info("crdma_cleanup: calling nfp_unregister_roce_driver\n");
+	crdma_info("calling nfp_unregister_roce_driver\n");
 	nfp_unregister_roce_driver(&crdma_drv);
-	return;
 }
 
 module_init(crdma_init);

@@ -1,35 +1,5 @@
-/*
- * Copyright (c) 2015, Netronome, Inc.  All rights reserved.
- * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
+/* Copyright (C) 2023 Corigine, Inc. */
 
 #ifndef CRDMA_HW_H
 #define CRDMA_HW_H
@@ -168,7 +138,6 @@ enum {
 	CRDMA_DB_RQ_ADDR_OFFSET         =  (0x204 * 4),
 	CRDMA_DB_RQ_MASK                =  0x000007FF,
 	CRDMA_DB_RQ_TAIL_SHIFT          =  11,
-
 	/* CQ Doorbell Register */
 	CRDMA_DB_CQ_ADDR_OFFSET         =  (0x210 * 4),
 	CRDMA_DB_CQ_SEQ_SHIFT           =  30,
@@ -193,8 +162,9 @@ void crdma_set_sq_db(struct crdma_ibdev *dev, u32 qpn);
  *
  * @dev: RoCE IB device.
  * @cqn: The number of the CP.
- * @solicited: If true, an event will be generated only for the next solicited CQ entry.
- *             If false, any CQ entry, solicited or not, will generate an event.
+ * @solicited: If true, an event will be generated only for the
+ * next solicited CQ entry. If false, any CQ entry, solicited
+ * or not, will generate an event.
  */
 void crdma_set_cq_db(struct crdma_ibdev *dev, u32 cqn, bool solicited);
 

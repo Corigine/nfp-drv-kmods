@@ -1,35 +1,5 @@
-/*
- * Copyright (c) 2015, Netronome, Inc. All rights reserved.
- * Copyright (C) 2022-2025 Corigine, Inc. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *	copyright notice, this list of conditions and the following
- *	disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *	copyright notice, this list of conditions and the following
- *	disclaimer in the documentation and/or other materials
- *	provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Copyright (C) 2023 Corigine, Inc. */
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -79,7 +49,6 @@ void crdma_cleanup_bitmap(struct crdma_bitmap *bitmap)
 {
 	bitmap->num_bits = 0;
 	kfree(bitmap->map);
-	return;
 }
 
 int crdma_alloc_bitmap_index(struct crdma_bitmap *bitmap, u32 *allocated_index)
@@ -88,7 +57,8 @@ int crdma_alloc_bitmap_index(struct crdma_bitmap *bitmap, u32 *allocated_index)
 
 	spin_lock(&bitmap->lock);
 
-	index = find_next_zero_bit(bitmap->map, bitmap->num_bits, bitmap->last_index);
+	index = find_next_zero_bit(bitmap->map,
+		bitmap->num_bits, bitmap->last_index);
 	if (index >= bitmap->num_bits)
 		index = find_first_zero_bit(bitmap->map, bitmap->num_bits);
 	if (index >= bitmap->num_bits)
@@ -112,7 +82,6 @@ void crdma_free_bitmap_index(struct crdma_bitmap *bitmap, u32 index)
 	spin_lock(&bitmap->lock);
 	clear_bit(index - bitmap->min_index, bitmap->map);
 	spin_unlock(&bitmap->lock);
-	return;
 }
 
 u32 crdma_alloc_bitmap_area(struct crdma_bitmap *bitmap, u32 count)
@@ -148,7 +117,6 @@ void crdma_free_bitmap_area(struct crdma_bitmap *bitmap, u32 index, u32 count)
 	spin_lock(&bitmap->lock);
 	bitmap_clear(bitmap->map, index - bitmap->min_index, count);
 	spin_unlock(&bitmap->lock);
-	return;
 }
 
 static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
@@ -164,12 +132,14 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	while ((1 << mem->min_order) < num_pages)
 		mem->min_order++;
 
-	buf = alloc_pages_exact(PAGE_SIZE << mem->min_order, GFP_KERNEL | __GFP_ZERO);
+	buf = alloc_pages_exact(PAGE_SIZE << mem->min_order,
+		GFP_KERNEL | __GFP_ZERO);
 	if (!buf)
 		return -ENOMEM;
 	sg_dma_address(mem->alloc) = dma_map_single(&dev->nfp_info->pdev->dev,
 			buf, PAGE_SIZE << mem->min_order, DMA_BIDIRECTIONAL);
-	if (dma_mapping_error(&dev->nfp_info->pdev->dev, sg_dma_address(mem->alloc))) {
+	if (dma_mapping_error(&dev->nfp_info->pdev->dev,
+		sg_dma_address(mem->alloc))) {
 		crdma_warn("Failed to map DMA address\n");
 		free_pages_exact(buf, PAGE_SIZE << mem->min_order);
 		return -ENOMEM;
@@ -182,15 +152,14 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	sg_dma_len(mem->alloc) = mem->tot_len;
 	mem->num_sg = 1;
 	mem->num_mtt = 1;
-	if (crdma_alloc_bitmap_index(&dev->mtt_map, &mem->base_mtt_ndx)) {
+	if (crdma_alloc_bitmap_index(&dev->mtt_map, &mem->base_mtt_ndx))
 		goto alloc_err;
-	}
 
 	return 0;
 
 alloc_err:
-	dma_unmap_single(&dev->nfp_info->pdev->dev, sg_dma_address(mem->alloc),
-			mem->tot_len, DMA_BIDIRECTIONAL);
+	dma_unmap_single(&dev->nfp_info->pdev->dev,
+		sg_dma_address(mem->alloc), mem->tot_len, DMA_BIDIRECTIONAL);
 	free_pages_exact(sg_virt(mem->alloc), mem->tot_len);
 	return -ENOMEM;
 }
@@ -237,12 +206,12 @@ static int __crdma_alloc_mem_pages(struct crdma_ibdev *dev,
 	 * number of 512 entry scatter lists together.
 	 */
 	if (num_pages > 0) {
-		crdma_warn("crdma_mem only %d blocks supported at this"
-				" point\n", CRDMA_MEM_MAX_ALLOCS);
+		crdma_warn("crdma_mem only %d blocks supported at this point\n",
+			CRDMA_MEM_MAX_ALLOCS);
 		goto alloc_err;
 	}
 
-#if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,394,0,0))
+#if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 394, 0, 0))
 	mem->num_sg = dma_map_sg(&dev->nfp_info->pdev->dev, mem->alloc,
 				 mem->num_allocs, DMA_BIDIRECTIONAL);
 #else
@@ -308,12 +277,13 @@ void crdma_free_dma_mem(struct crdma_ibdev *dev, struct crdma_mem *mem)
 				mem->base_mtt_ndx, mem->num_mtt);
 
 	if (mem->coherent) {
-		dma_unmap_single(&dev->nfp_info->pdev->dev, sg_dma_address(mem->alloc),
-				mem->tot_len, DMA_BIDIRECTIONAL);
+		dma_unmap_single(&dev->nfp_info->pdev->dev,
+			sg_dma_address(mem->alloc),
+			mem->tot_len, DMA_BIDIRECTIONAL);
 		free_pages_exact(sg_virt(mem->alloc), mem->tot_len);
 	} else {
 		if (mem->num_sg)
-#if (VER_NON_RHEL_GE(5,15) || RHEL_RELEASE_GE(8,394,0,0))
+#if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 394, 0, 0))
 			dma_unmap_sg(&dev->nfp_info->pdev->dev, mem->alloc,
 				     mem->num_allocs, DMA_BIDIRECTIONAL);
 #else
@@ -326,7 +296,6 @@ void crdma_free_dma_mem(struct crdma_ibdev *dev, struct crdma_mem *mem)
 					get_order(mem->alloc[i].length));
 	}
 	kfree(mem);
-	return;
 }
 
 int crdma_alloc_uar(struct crdma_ibdev *dev, struct crdma_uar *uar)
@@ -344,7 +313,6 @@ void crdma_free_uar(struct crdma_ibdev *dev, struct crdma_uar *uar)
 		uar->map = NULL;
 	}
 	crdma_free_bitmap_index(&dev->uar_map, uar->index);
-	return;
 }
 
 u64 crdma_uar_pfn(struct crdma_ibdev *dev,
@@ -362,7 +330,6 @@ void crdma_mac_swap(u8 *out_mac, u8 *in_mac)
 	out_mac[3] = in_mac[0];
 	out_mac[4] = in_mac[5];
 	out_mac[5] = in_mac[4];
-	return;
 }
 
 /**
@@ -373,35 +340,34 @@ void crdma_mac_swap(u8 *out_mac, u8 *in_mac)
  * @ptr: The pointer to private data (net_device).
  *
  * Returns NOTIFY_DONE.
-*/
+ */
 static int crdma_netdev_event(struct notifier_block *nb,
 			unsigned long event, void *ptr)
 {
-	struct net_device *real_netdev, *netdev = netdev_notifier_info_to_dev(ptr);
+	struct net_device *real_netdev, *netdev =
+		netdev_notifier_info_to_dev(ptr);
 	struct crdma_ibdev *dev;
 
 	dev = container_of(nb, struct crdma_ibdev, nb_netdev);
 	real_netdev = rdma_vlan_dev_real_dev(netdev);
-	if(!real_netdev)
+	if (!real_netdev)
 		real_netdev = netdev;
 
-	if (real_netdev != dev->port.netdev) {
+	if (real_netdev != dev->port.netdev)
 		return NOTIFY_DONE;
-	}
 
-	switch(event)
-	{
-		case NETDEV_UP:
-			crdma_port_enable_cmd(dev, 0);
-			break;
-		case NETDEV_DOWN:
-			crdma_port_disable_cmd(dev, 0);
-			break;
-		case NETDEV_CHANGEMTU:
-			crdma_set_port_mtu_cmd(dev, 0, netdev->mtu);
-			break;
-		default:
-			break;
+	switch (event) {
+	case NETDEV_UP:
+		crdma_port_enable_cmd(dev, 0);
+		break;
+	case NETDEV_DOWN:
+		crdma_port_disable_cmd(dev, 0);
+		break;
+	case NETDEV_CHANGEMTU:
+		crdma_set_port_mtu_cmd(dev, 0, netdev->mtu);
+		break;
+	default:
+		break;
 	}
 
 	return NOTIFY_DONE;
@@ -425,12 +391,10 @@ int crdma_init_net_notifiers(struct crdma_ibdev *dev)
 
 void crdma_cleanup_net_notifiers(struct crdma_ibdev *dev)
 {
-
 	if (dev->nb_netdev.notifier_call) {
 		compat_unregister_netdevice_notifier(&dev->nb_netdev);
 		dev->nb_netdev.notifier_call = NULL;
 	}
-	return;
 }
 
 bool crdma_add_smac(struct crdma_port *port, u8 *mac)
@@ -488,8 +452,7 @@ bool crdma_remove_smac(struct crdma_port *port, u8 *mac)
 int crdma_init_smac_table(struct crdma_ibdev *dev, int port_num)
 {
 	/* Set the ports default MAC address */
-	if (crdma_add_smac(&dev->port,
-				dev->port.mac)) {
+	if (crdma_add_smac(&dev->port, dev->port.mac)) {
 		crdma_write_smac_table(dev, port_num,
 				dev->port.mac_table_size);
 	}
@@ -503,25 +466,21 @@ void crdma_ring_db32(struct crdma_ibdev *dev, uint32_t value, int offset)
 	__raw_writel((__force u32) cpu_to_le32(value),
 		     dev->priv_uar.map + offset);
 	spin_unlock_irqrestore(&dev->priv_uar_lock, flags);
-	return;
 }
 
 void crdma_rq_ring_db32(struct crdma_ibdev *dev, uint32_t value)
 {
 	crdma_ring_db32(dev, value, CRDMA_DB_RQ_ADDR_OFFSET);
-	return;
 }
 
 void crdma_sq_ring_db32(struct crdma_ibdev *dev, uint32_t value)
 {
 	crdma_ring_db32(dev, value, CRDMA_DB_SQ_ADDR_OFFSET);
-	return;
 }
 
 void crdma_cq_ring_db32(struct crdma_ibdev *dev, uint32_t value)
 {
 	crdma_ring_db32(dev, value, CRDMA_DB_CQ_ADDR_OFFSET);
-	return;
 }
 
 int crdma_check_ah_attr(struct crdma_ibdev *dev, struct rdma_ah_attr *attr)
@@ -530,7 +489,7 @@ int crdma_check_ah_attr(struct crdma_ibdev *dev, struct rdma_ah_attr *attr)
 	struct crdma_port *port = &dev->port;
 
 	if (attr->type != RDMA_AH_ATTR_TYPE_ROCE) {
-		crdma_warn("CRDMA HCA only support RoCE \n");
+		crdma_warn("CRDMA HCA only support RoCE\n");
 		return -EINVAL;
 	}
 
@@ -558,7 +517,7 @@ int crdma_set_av(struct ib_pd *pd,
 {
 	const struct ib_global_route *grh = rdma_ah_read_grh(ah_attr);
 	u8 nw_type;
-#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_LT(8,1))
+#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(8, 1))
 	union ib_gid sgid;
 	struct ib_gid_attr sgid_attr;
 	int ret;
@@ -588,9 +547,10 @@ int crdma_set_av(struct ib_pd *pd,
 				(to_crdma_pd(pd)->pd_index & CRDMA_AV_PD_MASK));
 
 	/* Get gid type */
-#if (VER_NON_RHEL_LT(4,19) || VER_RHEL_LT(8,1))
+#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(8, 1))
 	ret = ib_get_cached_gid(pd->device,
-		rdma_ah_get_port_num(ah_attr), grh->sgid_index, &sgid, &sgid_attr);
+		rdma_ah_get_port_num(ah_attr),
+		grh->sgid_index, &sgid, &sgid_attr);
 	if (ret)
 		return ret;
 
@@ -600,7 +560,7 @@ int crdma_set_av(struct ib_pd *pd,
 #endif
 	if (nw_type == RDMA_NETWORK_IPV4)
 		av->gid_type = CRDMA_AV_ROCE_V2_IPV4_GID_TYPE;
-	else if(nw_type == RDMA_NETWORK_IPV6)
+	else if (nw_type == RDMA_NETWORK_IPV6)
 		av->gid_type = CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
 	else {
 		crdma_warn("No supported network type %d\n", nw_type);
@@ -608,12 +568,12 @@ int crdma_set_av(struct ib_pd *pd,
 	}
 
 	/* Get vlan id*/
-#if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,2))
+#if (VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 2))
 	if (rdma_read_gid_l2_fields(grh->sgid_attr, &vlan, NULL)) {
 		crdma_warn("Get vlan failed from gid_attr\n");
 		return -EINVAL;
 	}
-#elif (VER_NON_RHEL_LT(4,19) || VER_RHEL_LT(8,1))
+#elif (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(8, 1))
 	if (is_vlan_dev(sgid_attr.ndev))
 		vlan = vlan_dev_vlan_id(sgid_attr.ndev);
 #else
@@ -623,13 +583,10 @@ int crdma_set_av(struct ib_pd *pd,
 	if (vlan < VLAN_CFI_MASK) { /* VLAN ID is valid*/
 		av->vlan = cpu_to_le32(vlan);
 		av->v_id = 1;
-	}
-	else
+	} else
 		av->v_id = 0;
 
-	/*
-		To DO: check it need swap or not wiht firmare debug
-	*/
+	/* To DO: check it need swap or not with firmware debug */
 	memcpy(av->d_gid, grh->dgid.raw, 16);
 	av->d_gid_word[0] = __swab32(av->d_gid_word[0]);
 	av->d_gid_word[1] = __swab32(av->d_gid_word[1]);
