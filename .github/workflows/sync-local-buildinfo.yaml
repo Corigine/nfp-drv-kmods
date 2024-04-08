@@ -1,0 +1,53 @@
+name: Sync buildinfo.json
+
+# ========== TRIGGER ==========
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/data/kernel-devel-c4c/**'
+      - '.github/workflows/sync-local-buildinfo.yaml'
+
+jobs:
+  sync-master:
+    name: Sync buildinfo.json files
+    runs-on:
+      - self-hosted
+      - ci-linter-vm
+    env:
+      LOCAL_KERNELS: tmp/misc
+    steps:
+      # --- PREPARE ENVIRONMENT ---
+      - name: Clean up the working directory
+        run: sudo find -delete
+
+      # --- CLONE REPOSITORIES ---
+      - name: Checkout repo
+        uses: Corigine/ci-libs/github_actions/utilities/checkout_corigine@main
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GHUB_TOKEN }}
+
+      - name: Clone ci-libs (for other GH actions)
+        uses: Corigine/ci-libs/github_actions/utilities/checkout_corigine@main
+        with:
+          repository: Corigine/ci-libs
+          token: ${{ secrets.GHUB_TOKEN }}
+          path: ci-libs
+
+      - name: Upload buildinfo.json files to Azure
+        uses: Corigine/ci-libs/github_actions/azure/azcopy_upload@main
+        with:
+          connection-string: ${{ secrets.AZ_SAS_TOK }}
+          src: .github/data/kernel-devel-c4c
+          dst: ${{ env.LOCAL_KERNELS }}
+
+  sync-local:
+    if: always()
+    needs: sync-master
+    uses: ./.github/workflows/sync-local-kernels.yaml
+    secrets:
+      AZ_SAS_TOK: ${{ secrets.AZ_SAS_TOK }}
+      GHUB_TOKEN: ${{ secrets.GHUB_TOKEN }}

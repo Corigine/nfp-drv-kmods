@@ -5,6 +5,12 @@ name: Sync local kernels
 on:
   schedule:
     - cron: '0 0 * * *'
+  workflow_call:
+    secrets:
+      GHUB_TOKEN:
+        required: true
+      AZ_SAS_TOK:
+        required: true
   workflow_dispatch:
     secrets:
       GHUB_TOKEN:
