@@ -431,7 +431,8 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 		case CRDMA_WQE_RDMA_WRITE_WITH_IMM_OP:
 			wc->opcode = IB_WC_RECV_RDMA_WITH_IMM;
 			wc->wc_flags |= IB_WC_WITH_IMM;
-			wc->ex.imm_data = le32_to_cpu(cqe->imm_inval);
+			/* Swap immediate data to undo hardware swap */
+			wc->ex.imm_data = __swab32(cqe->imm_inval);
 			break;
 		case CRDMA_WQE_SEND_WITH_INVAL_OP:
 			wc->opcode = IB_WC_RECV;
@@ -440,7 +441,8 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 			break;
 		case CRDMA_WQE_SEND_WITH_IMM_OP:
 			wc->wc_flags |= IB_WC_WITH_IMM;
-			wc->ex.imm_data = le32_to_cpu(cqe->imm_inval);
+			/* Swap immediate data to undo hardware swap */
+			wc->ex.imm_data = __swab32(cqe->imm_inval);
 			/* Fall through */
 		case CRDMA_WQE_SEND_OP:
 		default:
@@ -2504,7 +2506,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 
 		if (wr->opcode == IB_WR_SEND_WITH_IMM ||
 		    wr->opcode == IB_WR_RDMA_WRITE_WITH_IMM)
-			swqe->ctrl.imm_inval = cpu_to_le32(wr->ex.imm_data);
+			swqe->ctrl.imm_inval = __swab32(wr->ex.imm_data);
 		else
 			swqe->ctrl.imm_inval = 0;
 
