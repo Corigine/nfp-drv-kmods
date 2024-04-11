@@ -37,7 +37,7 @@
 #include <linux/pci.h>
 #include <linux/interrupt.h>
 
-#include "nfp_roce.h"
+#include "nfpcore/nfp_roce.h"
 #include "crdma_ib.h"
 #include "crdma_hw.h"
 #include "crdma_util.h"

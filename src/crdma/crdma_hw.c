@@ -35,8 +35,8 @@
 #include <linux/init.h>
 #include <linux/errno.h>
 
-#include "nfp.h"
-#include "nfp_roce.h"
+#include "nfpcore/nfp.h"
+#include "nfpcore/nfp_roce.h"
 #include "crdma_ib.h"
 #include "crdma_hw.h"
 

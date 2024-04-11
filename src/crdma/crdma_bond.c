@@ -31,7 +31,7 @@
  */
 #include <net/bonding.h>
 
-#include "nfp_roce.h"
+#include "nfpcore/nfp_roce.h"
 #include "crdma_ib.h"
 #include "crdma_ucif.h"
 #include "crdma_bond.h"

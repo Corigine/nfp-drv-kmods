@@ -46,7 +46,7 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_umem.h>
 
-#include "nfp_roce.h"
+#include "nfpcore/nfp_roce.h"
 #include "crdma_abi.h"
 #include "crdma_ucif.h"
 #include "crdma_util.h"

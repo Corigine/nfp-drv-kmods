@@ -41,7 +41,7 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_user_verbs.h>
 
-#include "nfp_roce.h"
+#include "nfpcore/nfp_roce.h"
 #include "crdma_ib.h"
 #include "crdma_hw.h"
 #include "crdma_verbs.h"
