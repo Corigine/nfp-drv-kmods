@@ -413,6 +413,13 @@ nfp_cpp_from_operations(const struct nfp_cpp_operations *ops,
 void *nfp_cpp_priv(struct nfp_cpp *priv);
 
 int nfp_cpp_area_cache_add(struct nfp_cpp *cpp, size_t size);
+struct nfp_cpp_area_cache *
+area_cache_get(struct nfp_cpp *cpp, u32 id,
+	       u64 addr, unsigned long *offset, size_t length);
+void
+area_cache_put(struct nfp_cpp *cpp, struct nfp_cpp_area_cache *cache);
+struct nfp_cpp_area *
+area_get_from_cache(struct nfp_cpp_area_cache *cache);
 
 /* The following section contains extensions to the
  * NFP CPP API, to be used in a Linux kernel-space context.
