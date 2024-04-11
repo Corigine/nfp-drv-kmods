@@ -100,6 +100,7 @@ uninstall:
 	rm -f $(INSTALL_MOD_PATH)/lib/modules/$(KVER)/$(MOD_DIR)/nfp.ko
 	rm -f $(INSTALL_MOD_PATH)/lib/modules/$(KVER)/$(MOD_DIR)/nfp_net.ko
 	rm -f $(INSTALL_MOD_PATH)/lib/modules/$(KVER)/$(MOD_DIR)/nfp_netvf.ko
+	rm -f $(INSTALL_MOD_PATH)/lib/modules/$(KVER)/$(MOD_DIR)/crdma.ko
 	rm -f $(INSTALL_MOD_PATH)/lib/modules/$(KVER)/$(MOD_DIR)-symvers/nfp_driver.symvers
 	rm -rf /opt/netronome/drv
 	rm -f /etc/profile.d/nfp_drv_kmods_dkms_profile.sh

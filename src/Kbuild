@@ -18,10 +18,18 @@ CONFIG_NFP_HARD_DB ?= y
 # Include code for the RoCE
 CONFIG_NFP_ROCE ?= y
 
+CONFIG_INFINIBAND_CRDMA ?= m
+
 # RoCE dependes on Hardware Doorbell
 ifeq ($(CONFIG_NFP_ROCE),y)
   CONFIG_NFP_HARD_DB := y
 endif
+
+ifeq ($(CONFIG_INFINIBAND_CRDMA),m)
+  CONFIG_NFP_HARD_DB := y
+  CONFIG_NFP_ROCE ?= y
+endif
+
 
 ccflags-y := $(CFLAGS_EXTRA)
 
@@ -108,6 +116,16 @@ endif
 ifeq ($(CONFIG_NFP_HARD_DB),y)
 ccflags-y += -DCONFIG_NFP_HARD_DB
 endif
+
+obj-$(CONFIG_INFINIBAND_CRDMA)  += crdma.o
+
+crdma-y := \
+          crdma/crdma_hw.o \
+          crdma/crdma_main.o \
+          crdma/crdma_ucif.o \
+          crdma/crdma_util.o \
+          crdma/crdma_verbs.o \
+          crdma/crdma_bond.o
 
 # Ubuntu version may contain non-digit characters, like rc, in such case
 # tell the compat code not to trust it.  This should only happen on unofficial,
