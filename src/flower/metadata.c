@@ -446,7 +446,7 @@ int nfp_compile_flow_metadata(struct nfp_app *app, u32 cookie,
 	}
 
 	nfp_flow->meta.flow_version = cpu_to_be64(priv->flower_version);
-	priv->flower_version++;
+	priv->flower_version += priv->flower_version_inc;
 
 	/* Update flow payload with mask ids. */
 	nfp_flow->unmasked_data[NFP_FL_MASK_ID_LOCATION] = new_mask_id;
@@ -485,7 +485,7 @@ void __nfp_modify_flow_metadata(struct nfp_flower_priv *priv,
 {
 	nfp_flow->meta.flags &= ~NFP_FL_META_FLAG_MANAGE_MASK;
 	nfp_flow->meta.flow_version = cpu_to_be64(priv->flower_version);
-	priv->flower_version++;
+	priv->flower_version += priv->flower_version_inc;
 }
 
 int nfp_modify_flow_metadata(struct nfp_app *app,
@@ -674,6 +674,20 @@ int nfp_flower_metadata_init(struct nfp_app *app, u64 host_ctx_count,
 			goto err_free_last_used;
 
 		priv->stats_ids.init_unalloc = div_u64(host_ctx_count, host_num_mems);
+		priv->flower_version_inc = 1;
+	} else {
+		priv->flower_version = app->pf->multi_pf.id;
+
+		/* "_nfd_cfg_multi_pf_state" contains the total number of PFs */
+		priv->flower_version_inc = nfp_rtsym_read_le(app->pf->rtbl,
+							   "_nfd_cfg_multi_pf_state",
+							   &err);
+		if (err) {
+			nfp_warn(app->cpp,
+				 "FlowerNIC: fail to get _nfd_cfg_multi_pf_state: %d\n",
+				 err);
+			goto err_free_neigh_table;
+		}
 	}
 
 	stats_size = FIELD_PREP(NFP_FL_STAT_ID_STAT, host_ctx_count) |

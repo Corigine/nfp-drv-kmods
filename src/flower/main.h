@@ -310,6 +310,7 @@ struct nfp_fl_internal_ports {
  * @neigh_table:	Table to keep track of neighbor entries
  * @predt_lock:		Lock to serialise predt/neigh table updates
  * @nfp_fl_lock:	Lock to protect the flow offload operation
+ * @flower_version_inc:	Flower version increase step
  */
 struct nfp_flower_priv {
 	struct nfp_app *app;
@@ -356,6 +357,7 @@ struct nfp_flower_priv {
 	struct rhashtable neigh_table;
 	spinlock_t predt_lock; /* Lock to serialise predt/neigh table updates */
 	struct mutex nfp_fl_lock; /* Protect the flow operation */
+	u8 flower_version_inc;
 };
 
 /**
