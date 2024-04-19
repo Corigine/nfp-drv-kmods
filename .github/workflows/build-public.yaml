@@ -1,0 +1,153 @@
+name: Build public
+
+# ========== TRIGGER ==========
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths:
+      - 'Makefile'
+      - 'src/**'
+      - '.github/workflows/build-public.yaml'
+    secrets:
+      GHUB_TOKEN:
+        required: true
+      AZ_SAS_TOK:
+        required: true
+
+# Cancel outdated workflows.
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+
+jobs:
+  build-public:
+    name: Trigger build workflow in public repo
+    runs-on:
+      - self-hosted
+      - ci-linter-vm
+    env:
+      BRANCH_PRIV: ${{ github.head_ref || github.ref_name }}
+      BRANCH_PUB: >-
+        ${{ github.head_ref || github.ref_name }}-PR${{ github.event.number }}-${{ github.run_id }}.check
+      SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Clean old artifacts
+        run: |
+          sudo find -delete
+
+      - name: Checkout public repo
+        uses: Corigine/ci-libs/github_actions/utilities/checkout_corigine@main
+        with:
+          repository: Corigine/nfp-drv-kmods
+          path: ./nfp-drv-kmods
+          ref: main
+          token: ${{ secrets.GHUB_TOKEN }}
+
+      - name: Trigger new build run | nfp-drv-kmods
+        id: git_push
+        shell: bash
+        working-directory: nfp-drv-kmods
+        run: |
+          git remote add private \
+            https://${{ secrets.GHUB_TOKEN }}@github.com/Corigine/nfp-drv-kmods-private.git
+          git fetch private ${{ env.BRANCH_PRIV }}
+          git checkout -b ${{ env.BRANCH_PUB }} private/${{ env.BRANCH_PRIV }}
+          git push --set-upstream origin ${{ env.BRANCH_PUB }}
+          # Wait to allow build to be triggered
+          sleep 60
+
+      - name: Get new build run for this PR | nfp-drv-kmods
+        id: list_new
+        uses: Corigine/ci-libs/github_actions/REST-API/workflow-list@main
+        with:
+          ghub_token: ${{ secrets.GHUB_TOKEN }}
+          repo: nfp-drv-kmods
+          ref: ${{ env.BRANCH_PUB }}
+          workflow: build.yaml
+          num_results: 1
+
+      - name: POST public build job to PR
+        uses: Corigine/ci-libs/github_actions/REST-API/post_status@main
+        with:
+          ghub_token: ${{ secrets.GHUB_TOKEN }}
+          repo: nfp-drv-kmods-private
+          sha: ${{ env.SHA }}
+          context: Public build
+          status: pending
+          description: NFP kernel driver build in nfp-drv-kmods
+          url: >-
+            https://github.com/Corigine/nfp-drv-kmods/actions/runs/${{ steps.list_new.outputs.top_result_run_id }}
+
+      - name: Wait for public build to complete | nfp-drv-kmods
+        id: workflow_wait
+        uses: Corigine/ci-libs/github_actions/REST-API/workflow-wait@main
+        with:
+          ghub_token: ${{ secrets.GHUB_TOKEN }}
+          repo: nfp-drv-kmods
+          run_id: ${{ steps.list_new.outputs.top_result_run_id }}
+
+      - name: Parse results of build | nfp-drv-kmods
+        if: always() && steps.workflow_wait.conclusion == 'success'
+        shell: python3 {0}
+        run: |
+          print("::notice::Public build finished: "
+                "${{ steps.workflow_wait.outputs.conclusion }}")
+          print("::notice::Inspect workflow run here: "
+                "${{ steps.workflow_wait.outputs.workflow_link }}")
+          if "${{ steps.workflow_wait.outputs.conclusion }}" != "success":
+            exit(1)
+
+      - name: POST public build job results to PR
+        if: always() && steps.workflow_wait.conclusion == 'success'
+        uses: Corigine/ci-libs/github_actions/REST-API/post_status@main
+        with:
+          ghub_token: ${{ secrets.GHUB_TOKEN }}
+          repo: nfp-drv-kmods-private
+          sha: ${{ env.SHA }}
+          context: Public build
+          status: >-
+            ${{ steps.workflow_wait.outputs.conclusion == 'success' && 'success'
+                || 'failure' }}
+          description: NFP kernel driver build in nfp-drv-kmods
+          url: ${{ steps.workflow_wait.outputs.workflow_link }}
+
+      # In case this job is cancelled
+      - name: Get public build if still running | Cleanup
+        if: always() && steps.git_push.conclusion == 'success'
+        id: list_duplicates2
+        uses: Corigine/ci-libs/github_actions/REST-API/workflow-list@main
+        with:
+          ghub_token: ${{ secrets.GHUB_TOKEN }}
+          repo: nfp-drv-kmods
+          ref: ${{ env.BRANCH_PUB }}
+          workflow: build.yaml
+          num_results: 1
+
+      - name: Cancel public build | Cleanup
+        if: >-
+          always() &&
+          (steps.git_push.conclusion == 'success' &&
+           steps.list_duplicates2.outputs.top_result_status != 'completed')
+        uses: Corigine/ci-libs/github_actions/REST-API/workflow-cancel@main
+        with:
+          ghub_token: ${{ secrets.GHUB_TOKEN }}
+          repo: nfp-drv-kmods
+          run_id: ${{ steps.list_duplicates2.outputs.top_result_run_id }}
+
+      - name: Delete .check branch on nfp-drv-kmods | Cleanup
+        if: always() && steps.git_push.conclusion == 'success'
+        shell: bash
+        working-directory: nfp-drv-kmods
+        run: |
+          if git ls-remote origin ${{ env.BRANCH_PUB }} | grep -q "${{ env.BRANCH_PUB }}"; then
+            git push -d origin ${{ env.BRANCH_PUB }}
+          fi
+
+      - name: Clean artifacts | Cleanup
+        if: always()
+        run: |
+          sudo find -delete
