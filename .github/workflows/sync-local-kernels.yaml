@@ -53,6 +53,7 @@ jobs:
           src: ${{ env.LOCAL_KERNELS }}
           dst: latest/
           pattern: '*buildinfo.json'
+          force_download: true
 
       - name: Get local kernel-devel packages
         id: local-kernels
