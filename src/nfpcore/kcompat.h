@@ -43,6 +43,9 @@
 #ifndef COMPAT_KYLINUX
 #define COMPAT_KYLINUX 0
 #endif
+#ifndef COMPAT_KYLINUX_V10SP2
+#define COMPAT_KYLINUX_V10SP2 0
+#endif
 #ifndef COMPAT_ANOLISLINUX
 #define COMPAT_ANOLISLINUX 0
 #endif

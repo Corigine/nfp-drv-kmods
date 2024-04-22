@@ -3953,7 +3953,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 		&dev->nfp_info->pdev->dev);
 #elif (VER_NON_RHEL_OR_KYL_GE(5, 1) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
 	ret = ib_register_device(&dev->ibdev, name);
-#elif (VER_NON_KYL_GE(4, 20) || VER_RHEL_GE(8, 1) || VER_KYL_GE(10, 2))
+#elif (VER_NON_KYL_GE(4, 20) || VER_RHEL_GE(8, 1) || COMPAT_KYLINUX_V10SP2)
 	ret = ib_register_device(&dev->ibdev, name, NULL);
 #else
 	ret = ib_register_device(&dev->ibdev, NULL);
