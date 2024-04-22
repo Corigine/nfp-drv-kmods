@@ -357,7 +357,7 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 
 		case CRDMA_WQE_RDMA_WRITE_WITH_IMM_OP:
 			wc->wc_flags |= IB_WC_WITH_IMM;
-			/* Fall through */
+			fallthrough;
 		case CRDMA_WQE_RDMA_WRITE_OP:
 			wc->opcode = IB_WC_RDMA_WRITE;
 			break;
@@ -379,9 +379,9 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 			break;
 		case CRDMA_WQE_SEND_WITH_IMM_OP:
 			wc->wc_flags |= IB_WC_WITH_IMM;
-			/* Fall through */
+			fallthrough;
 		case CRDMA_WQE_SEND_OP:
-			/* Fall through */
+			fallthrough;
 		default:
 			wc->opcode = IB_WC_SEND;
 			break;
@@ -405,8 +405,9 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 			wc->wc_flags |= IB_WC_WITH_IMM;
 			/* Swap immediate data to undo hardware swap */
 			wc->ex.imm_data = __swab32(cqe->imm_inval);
-			/* Fall through */
+			fallthrough;
 		case CRDMA_WQE_SEND_OP:
+			fallthrough;
 		default:
 			wc->opcode = IB_WC_RECV;
 			break;
