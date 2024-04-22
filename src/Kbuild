@@ -117,16 +117,6 @@ ifeq ($(CONFIG_NFP_HARD_DB),y)
 ccflags-y += -DCONFIG_NFP_HARD_DB
 endif
 
-obj-$(CONFIG_INFINIBAND_CRDMA)  += crdma.o
-
-crdma-y := \
-	   crdma/crdma_hw.o \
-	   crdma/crdma_main.o \
-	   crdma/crdma_ucif.o \
-	   crdma/crdma_util.o \
-	   crdma/crdma_verbs.o \
-	   crdma/crdma_bond.o
-
 # Ubuntu version may contain non-digit characters, like rc, in such case
 # tell the compat code not to trust it.  This should only happen on unofficial,
 # non-LTS kernels.
@@ -159,6 +149,16 @@ RHEL_RELEASE := \
 		     END {if (found != 1) print 0}' \
 		$(srctree)/include/generated/uapi/linux/version.h 2>/dev/null || echo 0)
 
+KYLIN_MAJOR := \
+	$(shell awk '/KYLIN_MAJOR/ {print $$3; found=1} \
+		     END {if (found != 1) print 0}' \
+		$(srctree)/include/generated/uapi/linux/version.h 2>/dev/null || echo 0)
+
+KYLIN_MINOR := \
+	$(shell awk '/KYLIN_MINOR/ {print $$3; found=1} \
+		     END {if (found != 1) print 0}' \
+		$(srctree)/include/generated/uapi/linux/version.h 2>/dev/null || echo 0)
+
 format_point_count=$(shell echo $(RHEL_RELEASE) | grep -o '\.' | wc -l)
 ifeq ($(format_point_count),0)
 	RHEL_REL_STANDARDIZE=$(shell echo $(RHEL_RELEASE).0.0)
@@ -180,6 +180,15 @@ VER_IS_NON_RHEL := $(shell [ $(RHEL_MAJOR) -eq 0 ] && echo y)
 define rhel_ge
 $(shell [ $(RHEL_MAJOR) -gt $1 -o \
 \( $(RHEL_MAJOR) -eq $1 -a $(RHEL_MINOR) -ge $2 \) ] && echo y)
+endef
+
+# Check if it's KYLIN kernel and not earlier than given version
+#
+# @param $1: major version
+# @param $2: minor version
+define kylin_ge
+$(shell [ $(KYLIN_MAJOR) -gt $1 -o \
+\( $(KYLIN_MAJOR) -eq $1 -a $(KYLIN_MINOR) -ge $2 \) ] && echo y)
 endef
 
 # Check if the kernel version is not earlier than given version
@@ -274,12 +283,14 @@ $(eval $(call add_compat_flag,$(utsrelease_h_path),oe,COMPAT_OELINUX=1))
 $(eval $(call add_compat_var_flag,$(utsrelease_h_path),ky,COMPAT_KYLINUX,COMPAT_KYLINUX=1))
 # Check for Anolis Linux
 $(eval $(call add_compat_var_flag,$(utsrelease_h_path),an8,COMPAT_ANOLISLINUX,COMPAT_ANOLISLINUX=1))
+$(eval $(call add_compat_var,$(utsrelease_h_path),an7,COMPAT_ANOLISLINUX_MAJOR_7))
 # Check for SUSE linux
 ifneq (, $(wildcard $(srctree)/include/generated/uapi/linux/suse_version.h))
   ccflags-y += -DCOMPAT_SLELINUX=1
   local_version="$(shell echo $(CONFIG_LOCALVERSION) | cut -f 2 -d "-").0"
   ccflags-y += -DSLEL_LOCALVER_X=$(shell echo $(local_version) | cut -d '.' -f 1)
   ccflags-y += -DSLEL_LOCALVER_Y=$(shell echo $(local_version) | cut -d '.' -f 2)
+  COMPAT_SUSE := y
 endif
 
 VER_IS_NON_RHEL_OR_KYL := \
@@ -423,6 +434,70 @@ ifneq (,$(filter y,$(CONFIG_NFP_NET_PF) $(CONFIG_NFP_NET_VF)))
     ccflags-y += -DCONFIG_NFP_NET_IPSEC
   endif
 endif # CONFIG_NFP_NET_*
+
+# Use white list and only Operation Systems listed need build crdma
+BUILD_CRDMA := 0
+
+# Linux kernel > = 4.19
+ifeq ($(call kern_ge,4,19),y)
+	BUILD_CRDMA := y
+endif
+
+# Linux kernel  <= 5.16
+ifeq ($(call kern_ge,5,16),y)
+	BUILD_CRDMA := 0
+endif
+
+# Support Anolis Linux 8.*
+ifeq ($(COMPAT_ANOLISLINUX), y)
+	BUILD_CRDMA := y
+endif
+
+# CentOS >= 7.6
+ifeq ($(call rhel_ge,7,6), y)
+	BUILD_CRDMA := y
+endif
+
+# CentOS < 9.0
+ifeq ($(call rhel_ge,9,0), y)
+	BUILD_CRDMA := 0
+endif
+
+# Do not support Anolis Linux 7.*
+# Must be put after  rhel_ge judement, Anolis use RHEL_MAJOR and RHEL_MINOR too.
+# So we need to set 0 here.
+ifeq ($(COMPAT_ANOLISLINUX_MAJOR_7), y)
+	BUILD_CRDMA := 0
+endif
+
+# Open Clouds >= 8.*
+
+# Kylin os >= V10SP3
+ifeq ($(call kylin_ge,10,3), y)
+	BUILD_CRDMA := y
+endif
+
+# Do not support SUSE
+ifeq ($(COMPAT_SUSE), y)
+	BUILD_CRDMA := 0
+endif
+
+# Do not support UBUNTU
+ifneq ($(UTS_UBUNTU_RELEASE_ABI), 0)
+	BUILD_CRDMA := 0
+endif
+
+ifeq ($(BUILD_CRDMA),y)
+	obj-$(CONFIG_INFINIBAND_CRDMA)  += crdma.o
+
+	crdma-y := \
+		   crdma/crdma_hw.o \
+		   crdma/crdma_main.o \
+		   crdma/crdma_ucif.o \
+		   crdma/crdma_util.o \
+		   crdma/crdma_verbs.o \
+		   crdma/crdma_bond.o
+endif
 
 ####################
 # Build information
