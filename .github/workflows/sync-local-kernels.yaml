@@ -96,7 +96,7 @@ jobs:
             UP_TO_DATE=false
           fi
 
-          find latest -type f -name "downloads.txt" -delete \
+          sudo find latest -type f -name "downloads.txt" -delete \
                               -o -name "packages.txt" -delete
 
           echo  "UP_TO_DATE=${UP_TO_DATE}" | tee -a $GITHUB_OUTPUT
