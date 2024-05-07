@@ -54,10 +54,6 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 	if (pci_channel_offline(dev->nfp_info->pdev))
 		return -EIO;
 
-#if 0 /* XXX: Test only */
-	__crdma_dump_cmdif(dev);
-#endif
-
 	/*
 	 * Make sure if the previous command was non-polled that the
 	 * command interface is ready to accept another command.
@@ -76,7 +72,7 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 		}
 	}
 
-#if CRDMA_DETAIL_INFO_DEBUG_FLAG
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	pr_info("input_param: 0x%016llx\n", input_param);
 	pr_info("output_param: 0x%016llx\n", output_param);
 	pr_info("input_mod: 0x%08x\n", input_mod);
@@ -107,13 +103,9 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 			(opcode_mod << CRDMA_CMDIF_OPCODE_MOD_SHIFT) |
 			opcode;
 
-#if 0
-	pr_info("Current command word:0x%08x\n",
-			le32_to_cpu(__raw_readl(&reg->cmd_status)));
-#endif
 	rmb();
 
-#if CRDMA_DETAIL_INFO_DEBUG_FLAG
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	pr_info("Command word to post:0x%08X\n", cmd_word);
 #endif
 
@@ -194,13 +186,14 @@ int crdma_acquire_pci_resources(struct crdma_ibdev *dev)
 {
 	dev->cmdif = dev->nfp_info->cmdif;
 	if (!dev->cmdif) {
-		crdma_info("Command interface iomem passed as NULL\n");
+		crdma_warn("Command interface iomem passed as NULL\n");
 		return -EINVAL;
 	}
-	pr_info("cmdif_reg IOMEM address:%p\n", dev->cmdif);
-
 	dev->db_paddr = dev->nfp_info->db_base;
+#ifdef CRDMA_DEBUG_FLAG
+	pr_info("cmdif_reg IOMEM address:%p\n", dev->cmdif);
 	pr_info("DB pages bus/DMA address:0x%016llX\n", dev->db_paddr);
+#endif
 	return 0;
 }
 
@@ -251,8 +244,10 @@ void crdma_set_cq_db(struct crdma_ibdev *dev, u32 cqn, bool solicited)
 	__raw_writel((__force u32) cpu_to_le32(db), addr);
 	mb();
 
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_dev_info(dev, "Write CQ_Doorbell %p with 0x%08X\n",
 		addr, cpu_to_le32(db));
+#endif
 	return;
 }
 
@@ -269,9 +264,10 @@ inline void crdma_set_eq_ci(struct crdma_ibdev *dev,  u32 eqn,
 	__raw_writel((__force u32) cpu_to_le32(ci), addr);
 	mb();
 
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_dev_info(dev, "Write EQ_Doorbell %p with 0x%08X\n",
 		addr, cpu_to_le32(ci));
-
+#endif
 	return;
 }
 

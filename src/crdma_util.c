@@ -101,8 +101,6 @@ full:
 
 void crdma_free_bitmap_index(struct crdma_bitmap *bitmap, u32 index)
 {
-	crdma_info("free_bitmap_index %d\n", index);
-
 	spin_lock(&bitmap->lock);
 	clear_bit(index - bitmap->min_index, bitmap->map);
 	spin_unlock(&bitmap->lock);
@@ -113,8 +111,6 @@ u32 crdma_alloc_bitmap_area(struct crdma_bitmap *bitmap, u32 count)
 {
 	u32 index;
 	u32 range;
-
-	crdma_info("alloc_bitmap_area count %d\n", count);
 
 	range = bitmap->max_index - bitmap->min_index + 1;
 	spin_lock(&bitmap->lock);
@@ -140,7 +136,6 @@ full:
 
 void crdma_free_bitmap_area(struct crdma_bitmap *bitmap, u32 index, u32 count)
 {
-	crdma_info("free_bitmap_area index %d count %d\n", index, count);
 
 	spin_lock(&bitmap->lock);
 	bitmap_clear(bitmap->map, index - bitmap->min_index, count);
@@ -153,7 +148,6 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 {
 	void *buf;
 
-	pr_info("=== __crdma_alloc_mem_coherent === \n");
 	/*
 	 * Reduce translation page size to be the minimum size (order) that
 	 * covers the requested number of PAGE_SIZE pages.
@@ -174,12 +168,13 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	if (!buf)
 		return -ENOMEM;
 
+#ifdef CRDMA_DEBUG_FLAG
 	pr_info("dma_alloc_coherent information:\n");
 	pr_info("Order:         %d\n", mem->min_order);
 	pr_info("Size:          %ld\n",PAGE_SIZE << mem->min_order);
 	pr_info("Virtual Addr:  0x%p\n", buf);
 	pr_info("DMA Addr:      0x%016llx\n", sg_dma_address(mem->alloc));
-
+#endif
 	mem->tot_len = PAGE_SIZE << mem->min_order;
 	mem->num_allocs++;
 
@@ -190,8 +185,6 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	mem->base_mtt_ndx = crdma_alloc_bitmap_index(&dev->mtt_map);
 	if (mem->base_mtt_ndx < 0)
 		goto alloc_err;
-
-	pr_info("=== __crdma_alloc_mem_coherent done === \n");
 
 	return 0;
 
@@ -208,8 +201,6 @@ static int __crdma_alloc_mem_pages(struct crdma_ibdev *dev,
 	int order = mem->min_order;
 	int i;
 
-	crdma_warn("__crdma_alloc_mem_pages page number: %d, order: %d\n",
-		num_pages, order);
 
 	/*
 	 * Try to reduce number of HCA MTT entries by creating
@@ -309,19 +300,15 @@ void crdma_free_dma_mem(struct crdma_ibdev *dev, struct crdma_mem *mem)
 				mem->base_mtt_ndx, mem->num_mtt);
 
 	if (mem->coherent) {
-		crdma_info("free coherent memory\n");
 		dma_free_coherent(&dev->nfp_info->pdev->dev,
 				sg_dma_len(mem->alloc),
 				sg_virt(mem->alloc),
 				sg_dma_address(mem->alloc));
 	} else {
-		crdma_info("unmap DMA memory\n");
 		if (mem->num_sg)
 			pci_unmap_sg(dev->nfp_info->pdev, mem->alloc,
 					mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
 
-		crdma_info("free DMA memory (num allocs = %d)\n",
-				mem->num_allocs);
 		for (i = 0; i < mem->num_allocs; i++)
 			__free_pages(sg_page(&mem->alloc[i]),
 					get_order(mem->alloc[i].length));
@@ -397,20 +384,17 @@ static int crdma_netdev_event(struct notifier_block *nb,
 	{
 		case NETDEV_UP:
 			if (netdev && netdev->name) {
-				crdma_info("dev[%s] is up\n", netdev->name);
 				crdma_port_enable_cmd(dev, 0);
 			}
 			break;
 		case NETDEV_DOWN:
 			if (netdev && netdev->name) {
-				crdma_info("dev[%s] is down\n", netdev->name);
 				crdma_port_disable_cmd(dev, 0);
 			}
 			break;
 		case NETDEV_CHANGEMTU:
 			mtu = netdev->mtu;
 			if (netdev && netdev->name) {
-				crdma_info("dev[%s] mtu is changed to %d\n", netdev->name, mtu);
 				crdma_set_port_mtu_cmd(dev, 0, mtu);
 			}
 			break;
@@ -423,8 +407,6 @@ static int crdma_netdev_event(struct notifier_block *nb,
 int crdma_init_net_notifiers(struct crdma_ibdev *dev)
 {
 	int err;
-	crdma_debug("crdma_init_net_notifier()\n");
-
 	if (dev->nb_netdev.notifier_call) {
 		crdma_warn("netdevice notifier registered twice!\n");
 		return 0;
@@ -440,7 +422,6 @@ int crdma_init_net_notifiers(struct crdma_ibdev *dev)
 
 void crdma_cleanup_net_notifiers(struct crdma_ibdev *dev)
 {
-	crdma_debug("crdma_cleanup_net_notifier()\n");
 
 	if (dev->nb_netdev.notifier_call) {
 		unregister_netdevice_notifier(&dev->nb_netdev);
@@ -474,7 +455,9 @@ bool crdma_add_smac(struct crdma_port *port, u8 *mac)
 			goto done;
 		}
 	}
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("S_MAC table full\n");
+#endif
 done:
 	spin_unlock_irqrestore(&port->table_lock, flags);
 
@@ -523,12 +506,13 @@ void crdma_ring_db32(struct crdma_ibdev *dev, uint32_t value, int offset)
 
 void crdma_sq_ring_db32(struct crdma_ibdev *dev, uint32_t value)
 {
-	crdma_debug("Write priv UAR SQ DB\n");
 	value  = value & CRDMA_DB_SQ_MASK;
 	crdma_ring_db32(dev, value, CRDMA_DB_SQ_ADDR_OFFSET);
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_debug("SQ doorbell address %p\n",
 		    dev->priv_uar.map + CRDMA_DB_SQ_ADDR_OFFSET);
 	crdma_debug("SQ doorbell written 0x%08X\n", cpu_to_le32(value));
+#endif
 	return;
 }
 

@@ -152,7 +152,7 @@ static struct crdma_mem *crdma_alloc_hw_queue(struct crdma_ibdev *dev,
 		crdma_dev_err(dev, "Unable to allocate queue memory\n");
 		return mem;
 	}
-
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("crdma_alloc_hw_queue dump: \n");
 	pr_info("HWQ memory size        %d\n", mem->tot_len);
 	pr_info("HWQ num allocs         %d\n", mem->num_allocs);
@@ -160,13 +160,13 @@ static struct crdma_mem *crdma_alloc_hw_queue(struct crdma_ibdev *dev,
 	pr_info("HWQ num SG             %d\n", mem->num_sg);
 	pr_info("HWQ needs              %d MTT entries\n", mem->num_mtt);
 	pr_info("HWQ base_mtt_ndx       %d\n", mem->base_mtt_ndx);
-
+#endif
 	err = crdma_mtt_write_sg(dev, mem->alloc, mem->num_sg,
 			mem->base_mtt_ndx, mem->num_mtt,
 			mem->min_order + PAGE_SHIFT,
 			mem->num_sg, 0);
 	if (err) {
-		crdma_info("crdma_mmt_write_sg failed for HWQ, %d\n", err);
+		crdma_err("crdma_mmt_write_sg failed for HWQ, %d\n", err);
 		crdma_free_dma_mem(dev, mem);
 		return ERR_PTR(-ENOMEM); 
 	}
@@ -220,15 +220,16 @@ static void crdma_compound_order(struct ib_umem *umem, u64 start,
 	 * Start with a compound page size based on the alignment of
 	 * the user memory address and reduce order as needed.
 	 */
+	pfn_bits = (unsigned long)(start >> page_shift);
+	order = __ffs(pfn_bits);
+	comp_mask = (1 << order) - 1;
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_debug("start 0x%016llx, page_shift: %ld\n",
 			start, page_shift);
-	pfn_bits = (unsigned long)(start >> page_shift);
 	crdma_debug("pfn_bits: 0%lx\n", pfn_bits);
-	order = __ffs(pfn_bits);
 	crdma_debug("find_first_bit returned: %ld\n", order);
-	comp_mask = (1 << order) - 1;
 	crdma_debug("Alignment comp_mask: 0x%08X\n", comp_mask);
-
+#endif
 	/*
 	 * Go through the memory reducing the alignment to the smallest
 	 * order found in the region.
@@ -248,15 +249,16 @@ static void crdma_compound_order(struct ib_umem *umem, u64 start,
 				comp_mask = (1 << order) - 1;
 				base = pfn;
 				comp_pages = 0;
+#ifdef CRDMA_DEBUG_FLAG
 				crdma_debug("new page: pfn_bits: 0x%lx, "
 					"order: %ld, comp_mask: 0x%08X\n",
 					pfn_bits, order, comp_mask);
+#endif
 			} else if (base + comp_pages != pfn) {
 				/*
 				 * Non compound pages, reset the new
 				 * compound mask based on the alignment.
 				 */
-				crdma_debug("PFN mismatch\n");
 				pfn_bits = (unsigned long)comp_pages;
 				order =  min(order, __ffs(pfn_bits));
 				comp_mask = (1 << order) - 1;
@@ -269,18 +271,22 @@ static void crdma_compound_order(struct ib_umem *umem, u64 start,
 	}
 
 	if (tot_pages) {
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_debug("Determine order, tot_pages: %d, order: %ld\n",
 				tot_pages, order);
-
+#endif
 		order = min_t(unsigned long,
 				ilog2(roundup_pow_of_two(tot_pages)),
 				order);
 		if (comp_order)
 			*comp_order = order;
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_debug("order: %d\n", *comp_order);
-
+#endif
 		*num_comp = DIV_ROUND_UP(tot_pages, (1 << order));
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_debug("num_comp: %d\n", *num_comp);
+#endif
 	} else {
 		order = 0;
 		if (comp_order)
@@ -377,13 +383,11 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 	if (cqe->flags & CRDMA_CQE_SENDQ_FLAG_BIT) {
 		wq = &(*last_qp)->sq;
 		wqe_index = le16_to_cpu(cqe->wqe_index);
-		crdma_debug("CQE Send WQE index %d WQ head %d\n",
-				wqe_index, wq->head);
+
 		/* Advance the SQ head to this work request */
 		wq->head = wqe_index;
 		wc->wr_id = wq->wrid_map[wq->head & wq->mask];
 		wq->head = (wq->head + 1) & wq->mask;
-		crdma_debug("New Send WQ head %d\n", wq->head);
 	} else {
 		/*
 		 * TODO: We will need to handle the case where
@@ -393,7 +397,6 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 		wq = &(*last_qp)->rq;
 		wc->wr_id = wq->wrid_map[wq->head & wq->mask];
 		wq->head = (wq->head + 1) & wq->mask;
-		crdma_debug("New Recv WQ head %d\n", wq->head);
 	}
 
 	/*
@@ -401,7 +404,6 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 	 * error WC entry.
 	 */
 	if (cqe->status) {
-		crdma_debug("Error CQE %d\n", cqe->status);
 		crdma_process_err_cqe(cqe, wc);
 		return 0;
 	}
@@ -485,6 +487,7 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 		 */
 		wc->sl  = le16_to_cpu(cqe->sl_vid) >> 13;
 	}
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_debug("IB WC:\n");
 	crdma_debug("      WRID: 0x%016llX\n", wc->wr_id);
 	crdma_debug("    status: %d\n", wc->status);
@@ -498,6 +501,7 @@ static int crdma_process_cqe(struct crdma_cq *ccq, struct crdma_cqe *cqe,
 				wc->smac[0], wc->smac[1], wc->smac[2],
 				wc->smac[3], wc->smac[4], wc->smac[5]);
 	}
+#endif
 	return 0;
 }
 
@@ -512,7 +516,6 @@ static int crdma_query_device(struct ib_device *ibdev,
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 
-	crdma_info("crdma_query_device\n");
 	memcpy(dev_attr, &dev->cap.ib, sizeof(*dev_attr));
 
 	if (uhw->inlen || uhw->outlen)
@@ -535,8 +538,6 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 	struct net_device *netdev;
-
-	crdma_info("crdma_query_port: %d\n", port_num);
 
 	if (port_num != 1) {
 		crdma_dev_warn(dev, "invalid port=%d\n", port_num);
@@ -634,7 +635,6 @@ void crdma_get_dev_fw_str(struct ib_device *ibdev, char *str)
 
 	snprintf(str, IB_FW_VERSION_NAME_MAX, "%d.%d",
 		 dev->cap.uc_maj_rev, dev->cap.uc_min_rev);
-	crdma_info("crdma_get_dev_fw_str: %s\n", str);
 
 	return;
 }
@@ -656,7 +656,6 @@ static int crdma_add_gid(const struct ib_gid_attr *attr, void **context)
 
 	/* CRDMA HCA only support RoCEv2*/
 	if (!rdma_protocol_roce_udp_encap(attr->device, attr->port_num)) {
-		crdma_info("CRDMA HCA only support RoCEv2, it is no-op here.\n");
 		return -EINVAL;
 	}
 
@@ -693,7 +692,6 @@ static int crdma_del_gid(const struct ib_gid_attr *attr, void **context)
 
 	/* CRDMA HCA only support RoCEv2*/
 	if (!rdma_protocol_roce_udp_encap(attr->device, attr->port_num)) {
-		crdma_info("CRDMA HCA only support RoCEv2, it is no-op here.\n");
 		return -EINVAL;
 	}
 
@@ -729,7 +727,6 @@ static int crdma_query_gid(struct ib_device *ibdev, u8 port_num,
 static int crdma_query_pkey(struct ib_device *ibdev, u8 port_num,
 			u16 index, u16 *pkey)
 {
-	crdma_info("crdma_query_pkey\n");
 
 	if (index >= CRDMA_IB_MAX_PKEY_TABLE_SIZE)
 		return -EINVAL;
@@ -741,14 +738,12 @@ static int crdma_query_pkey(struct ib_device *ibdev, u8 port_num,
 static int crdma_modify_device(struct ib_device *ibdev, int dev_mod_mask,
 			struct ib_device_modify *dev_modify)
 {
-	crdma_info("crdma_modify_device not implemented\n");
 	return 0;
 }
 
 static int crdma_modify_port(struct ib_device *ibdev, u8 port_num,
 			int port_mod_mask, struct ib_port_modify *port_modify)
 {
-	crdma_info("crdma_modify_port not implemented\n");
 	return 0;
 }
 
@@ -761,8 +756,6 @@ static int crdma_alloc_ucontext(struct ib_ucontext *ib_uctxt,
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 	struct crdma_ib_alloc_ucontext_resp resp;
 	int err;
-
-	crdma_info("crdma_alloc_ucontext\n");
 
 	/*
 	 * Inform the library provider of the chip-set family we
@@ -804,8 +797,6 @@ static struct ib_ucontext * crdma_alloc_ucontext(struct ib_device *ibdev,
 	struct crdma_ucontext *crdma_uctxt;
 	struct crdma_ib_alloc_ucontext_resp resp;
 	int err;
-
-	crdma_info("crdma_alloc_ucontext\n");
 
 	/*
 	 * Inform the library provider of the chip-set family we
@@ -852,8 +843,6 @@ static int crdma_dealloc_ucontext(struct ib_ucontext *ib_uctxt)
 	struct crdma_ucontext *crdma_uctxt = to_crdma_uctxt(ib_uctxt);
 	struct crdma_mmap_req *req, *tmp;
 
-	crdma_info("crdma_dealloc_ucontext\n");
-
 	crdma_free_uar(dev, &crdma_uctxt->uar);
 
 	/* Release any pending mmap definitions */
@@ -887,17 +876,21 @@ static int crdma_mmap(struct ib_ucontext *ib_uctxt,
 	u64 offset = vma->vm_pgoff << PAGE_SHIFT;
 	u64 length = vma->vm_end - vma->vm_start;
 
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("mmap uctxt: 0x%p\n", crdma_uctxt);
 	pr_info("  vma->vm_pgoff = %ld\n", vma->vm_pgoff);
 	pr_info("  offset = 0x%016llX\n", offset);
 	pr_info("  length = 0x%lld\n", length);
+#endif
 
 	if (vma->vm_start & (PAGE_SIZE -1))
 		return -EINVAL;
 
 	/* First page offset is for user context UAR used for doorbells */
 	if (vma->vm_pgoff == 0) {
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_info("Map user context UAR, index: %d\n", crdma_uctxt->uar.index);
+#endif
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
 		return io_remap_pfn_range(vma, vma->vm_start,
@@ -908,17 +901,8 @@ static int crdma_mmap(struct ib_ucontext *ib_uctxt,
 	/* A request to mmap a kernel allocated QP, SRQ, or CQ queue */
 	mutex_lock(&crdma_uctxt->mmap_pending_lock);
 	list_for_each_entry_safe(req, tmp, &crdma_uctxt->mmap_pending, entry) {
-#if 0
-		crdma_info("Pending paddr:0x%016llX, len:%lld\n",
-				req->paddr, req->length);
-		crdma_info("Test paddr:0x%016llX, len:%lld\n",
-				offset, length);
-#endif
 		if ((req->paddr != offset) || (req->length < length))
 			continue;
-#if 0
-		crdma_info("mmap found, mapping\n");
-#endif
 		list_del(&req->entry);
 		kfree(req);
 		mutex_unlock(&crdma_uctxt->mmap_pending_lock);
@@ -938,13 +922,11 @@ static int crdma_alloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
 	int err;
 
-	crdma_info("crdma_alloc_pd\n");
 	pd->pd_index = crdma_alloc_bitmap_index(&dev->pd_map);
 	if (pd->pd_index < 0) {
 		return -ENOMEM;
 	}
 
-	crdma_info("PD Index %d\n", pd->pd_index);
 	if(udata) {
 		err = ib_copy_to_udata(udata, &pd->pd_index, sizeof(u32));
 		if (err)
@@ -965,7 +947,6 @@ static struct ib_pd *crdma_alloc_pd(struct ib_device *ibdev,
 	struct crdma_pd *pd;
 	int err;
 
-	crdma_info("crdma_alloc_pd\n");
 	pd = kmalloc(sizeof(*pd), GFP_KERNEL);
 	if (!pd)
 		return ERR_PTR(-ENOMEM);
@@ -976,7 +957,6 @@ static struct ib_pd *crdma_alloc_pd(struct ib_device *ibdev,
 		goto free_mem;
 	}
 
-	crdma_info("PD Index %d\n", pd->pd_index);
 	if (ib_uctxt) {
 		err = ib_copy_to_udata(udata, &pd->pd_index, sizeof(u32));
 		if (err)
@@ -1001,7 +981,6 @@ static int crdma_dealloc_pd(struct ib_pd *pd)
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
 	struct crdma_pd *npd = to_crdma_pd(pd);
 
-	crdma_info("crdma_dealloc_pd, PD Index %d\n", npd->pd_index);
 	crdma_free_bitmap_index(&dev->pd_map, npd->pd_index);
 
 #if (!(VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0)))
@@ -1021,7 +1000,6 @@ static int crdma_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr
 	struct ib_pd *pd = ah->pd;
 	int err;
 
-	crdma_info("crdma_create_ah\n");
 
 	if (crdma_check_ah_attr(dev, ah_attr)) {
 		crdma_warn("CRDMA ah attr check failed\n");
@@ -1055,7 +1033,6 @@ static struct ib_ah *crdma_create_ah(struct ib_pd *pd,
 	struct crdma_ah *cah;
 	int err;
 
-	crdma_info("crdma_create_ah\n");
 
 	if (crdma_check_ah_attr(dev, ah_attr)) {
 		crdma_warn("CRDMA ah attr check failed\n");
@@ -1088,7 +1065,6 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 {
 	struct crdma_ah *cah = to_crdma_ah(ah);
 
-	crdma_info("crdma_query_ah\n");
 
 	memset(ah_attr, 0, sizeof(*ah_attr));
 	ah_attr->type              = ah->type;
@@ -1116,13 +1092,11 @@ static int crdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 #if (VER_NON_RHEL_GE(5,0) || VER_RHEL_GE(8,0))
 static int crdma_destroy_ah(struct ib_ah *ah, u32 flags)
 {
-	crdma_info("crdma_destroy_ah\n");
 	return 0;
 }
 #else
 static int crdma_destroy_ah(struct ib_ah *ah)
 {
-	crdma_info("crdma_destroy_ah\n");
 	kfree(to_crdma_ah(ah));
 	return 0;
 }
@@ -1184,14 +1158,14 @@ static int crdma_qp_val_check(struct crdma_ibdev *dev,
 {
 	/* Note we advertise 1 less than actual hardware maximum */
 	if (cap->max_send_wr >= dev->cap.ib.max_qp_wr) {
-		crdma_info("Send WR entries requested > max %d\n",
+		crdma_warn("Send WR entries requested > max %d\n",
 				dev->cap.ib.max_qp_wr);
 		return -EINVAL;
 	}
 
 	if (cap->max_send_sge < 1 ||
 			cap->max_send_sge > dev->cap.ib.max_send_sge) {
-		crdma_info("Send SG entries requested invalid %d\n",
+		crdma_warn("Send SG entries requested invalid %d\n",
 				cap->max_send_sge);
 		return -EINVAL;
 	}
@@ -1199,19 +1173,19 @@ static int crdma_qp_val_check(struct crdma_ibdev *dev,
 	if (!use_srq) {
 		/* Note we advertise 1 less than actual hardware maximum */
 		if (cap->max_recv_wr >= dev->cap.ib.max_qp_wr) {
-			crdma_info("Recv WR entries requested > max %d\n",
+			crdma_warn("Recv WR entries requested > max %d\n",
 					dev->cap.ib.max_qp_wr);
 			return -EINVAL;
 		}
 		if (cap->max_recv_sge < 1 ||
 				cap->max_recv_sge > dev->cap.ib.max_sge_rd) {
-			crdma_info("Receive SG entries requested > max %d\n",
+			crdma_warn("Receive SG entries requested > max %d\n",
 					dev->cap.ib.max_sge_rd);
 			return -EINVAL;
 		}
 	} else {
 		if (cap->max_recv_wr) {
-			crdma_info("Recv WR must be 0 when using SRQ\n");
+			crdma_warn("Recv WR must be 0 when using SRQ\n");
 			return -EINVAL;
 		}
 		crdma_warn("SRQ not yet supported\n");
@@ -1219,7 +1193,7 @@ static int crdma_qp_val_check(struct crdma_ibdev *dev,
 	}
 
 	if (cap->max_inline_data > dev->cap.max_inline_data) {
-		crdma_info("Max inline data requested > max %d\n",
+		crdma_warn("Max inline data requested > max %d\n",
 				dev->cap.max_inline_data);
 		return -EINVAL;
 	}
@@ -1243,7 +1217,7 @@ static int crdma_qp_set_wq_sizes(struct crdma_ibdev *dev,
 	qp->sq.wqe_size = roundup_pow_of_two(qp->sq.wqe_size);
 
 	if (qp->sq.wqe_size > dev->cap.max_swqe_size) {
-		crdma_info("Required SWQE size %d exceeds max %d\n",
+		crdma_warn("Required SWQE size %d exceeds max %d\n",
 				qp->sq.wqe_size, dev->cap.max_swqe_size);
 		return -EINVAL;
 	}
@@ -1267,7 +1241,7 @@ static int crdma_qp_set_wq_sizes(struct crdma_ibdev *dev,
 						CRDMA_WQ_WQE_SPARES);
 		qp->rq.max_sg = attr->cap.max_recv_sge;
 		if (qp->rq.wqe_size > dev->cap.max_rwqe_size) {
-			crdma_info("Required RWQE size %d exceeds max %d\n",
+			crdma_warn("Required RWQE size %d exceeds max %d\n",
 				qp->rq.wqe_size, dev->cap.max_rwqe_size);
 			return -EINVAL;
 		}
@@ -1283,6 +1257,7 @@ static int crdma_qp_set_wq_sizes(struct crdma_ibdev *dev,
 		qp->sq_offset = qp->rq.length;
 	}
 
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("Set WQ sizes\n");
 	pr_info("SQ WQE size %d\n", qp->sq.wqe_size);
 	pr_info("SQ WQE count %d\n", qp->sq.wqe_cnt);
@@ -1292,7 +1267,7 @@ static int crdma_qp_set_wq_sizes(struct crdma_ibdev *dev,
 	pr_info("RQ WQE count %d\n", qp->rq.wqe_cnt);
 	pr_info("RQ WQE num SG %d\n", qp->rq.max_sg);
 	pr_info("RQ byte length %d\n", qp->rq.length);
-
+#endif
 	return 0;
 }
 
@@ -1332,18 +1307,18 @@ static void crdma_qp1_work(struct work_struct *work)
 	unsigned long flags;
 
 	if (!mad_cq_event_wa) {
-		pr_warn("QP1 work around, should not be called\n");
+		crdma_warn("QP1 work around, should not be called\n");
 		return;
 	}
 
 	port = container_of(delay, typeof(*port), qp1_cq_dwork);
 	if (!port) {
-		pr_warn("QP1 work around, invalid port\n");
+		crdma_warn("QP1 work around, invalid port\n");
 		return;
 	}
 
 	if (!port->qp1_send_ccq || !port->qp1_recv_ccq) {
-		pr_warn("QP1 work around, CQ not defined\n");
+		crdma_warn("QP1 work around, CQ not defined\n");
 		return;
 	}
 
@@ -1396,8 +1371,6 @@ static int crdma_set_qp1_port(struct crdma_ibdev *dev, struct crdma_qp *cqp,
 	struct crdma_port *port = &dev->port;
 	unsigned long flags;
 
-	crdma_debug("Setting QP1 physical port number %d, %p\n",
-			port_num, port);
 
 	spin_lock_irqsave(&port->qp1_lock, flags);
 	if (port->qp1_created) {
@@ -1412,8 +1385,6 @@ static int crdma_set_qp1_port(struct crdma_ibdev *dev, struct crdma_qp *cqp,
 	if (mad_cq_event_wa) {
 		port->qp1_send_ccq = dev->cq_table[cqp->send_cqn];
 		port->qp1_recv_ccq = dev->cq_table[cqp->recv_cqn];
-		crdma_info("QP1 WA send_ccq %p, recv_ccq %p",
-				port->qp1_send_ccq, port->qp1_recv_ccq);
 		INIT_DELAYED_WORK(&port->qp1_cq_dwork, crdma_qp1_work);
 		schedule_delayed_work(&port->qp1_cq_dwork,
 					msecs_to_jiffies(100));
@@ -1433,8 +1404,6 @@ static void crdma_clear_qp1_port(struct crdma_ibdev *dev, int port_num)
 {
 	struct crdma_port *port = &dev->port;
 	unsigned long flags;
-
-	crdma_debug("Clearing QP1 physical port number %d\n", port_num);
 
 	spin_lock_irqsave(&port->qp1_lock, flags);
 	if (port->qp1_created) {
@@ -1461,23 +1430,21 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 	struct crdma_qp *cqp;
 	int err;
 
-	crdma_info("crdma_create_qp\n");
-
 	if (qp_init_attr->qp_type != IB_QPT_UD &&
 			qp_init_attr->qp_type != IB_QPT_RC &&
 			qp_init_attr->qp_type != IB_QPT_GSI) {
-		crdma_info("Unsupported QP type %d\n", qp_init_attr->qp_type);
+		crdma_warn("Unsupported QP type %d\n", qp_init_attr->qp_type);
 		return ERR_PTR(-EINVAL);
 	}
 
 	if (udata && qp_init_attr->qp_type == IB_QPT_GSI) {
-		crdma_info("QP1 create restricted to kernel\n");
+		crdma_warn("QP1 create restricted to kernel\n");
 		return ERR_PTR(-EINVAL);
 	}
 
 	if (crdma_qp_val_check(dev, &qp_init_attr->cap,
 				qp_init_attr->srq != NULL)) {
-		crdma_info("QP init attribute validation failed\n");
+		crdma_warn("QP init attribute validation failed\n");
 		return ERR_PTR(-EINVAL);
 	}
 
@@ -1501,11 +1468,10 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 
 	/* Handle speical QP1 requirements */
 	if (qp_init_attr->qp_type == IB_QPT_GSI) {
-		crdma_debug("Creating Special QP1\n");
 		err = crdma_set_qp1_port(dev, cqp,
 				qp_init_attr->port_num - 1);
 		if (err) {
-			crdma_info("Error %d setting QP1 port number\n", err);
+			crdma_err("Error %d setting QP1 port number\n", err);
 			err = -EINVAL;
 			goto free_mem;
 		}
@@ -1522,7 +1488,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 	cqp->qp_index = qp_init_attr->qp_type == IB_QPT_GSI ?
 		CRDMA_QP1_INDEX : crdma_alloc_bitmap_index(&dev->qp_map);
 	if (cqp->qp_index < 0) {
-		crdma_info("No QP index available\n");
+		crdma_warn("No QP index available\n");
 		err = -ENOMEM;
 		goto clear_port;
 	}
@@ -1575,19 +1541,19 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 
 		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
 		if (err) {
-			crdma_info("Copy of UDATA failed, %d\n", err);
+			crdma_warn("Copy of UDATA failed, %d\n", err);
 			goto delete_qp;
 		}
 
 		err = crdma_add_mmap_req(crdma_uctxt, resp.wq_base_addr,
 				cqp->mem->tot_len);
 		if (err) {
-			crdma_info("Failed to add pending mmap, %d\n", err);
+			crdma_warn("Failed to add pending mmap, %d\n", err);
 			goto delete_qp;
 		}
 	} else {
 		if (qp_init_attr->qp_type != IB_QPT_GSI) {
-			crdma_info("Only Kernel QP1 supported now\n");
+			crdma_warn("Only Kernel QP1 supported now\n");
 			err = -ENOMEM;
 			goto delete_qp;
 		}
@@ -1598,7 +1564,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 		cqp->sq.wrid_map = kcalloc(cqp->sq.wqe_cnt, sizeof(u64),
 						GFP_KERNEL);
 		if (!cqp->sq.wrid_map) {
-			crdma_info("Could not allocate SQ WRID map\n");
+			crdma_warn("Could not allocate SQ WRID map\n");
 			err = -ENOMEM;
 			goto delete_qp;
 		}
@@ -1610,7 +1576,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 		cqp->rq.wrid_map = kcalloc(cqp->rq.wqe_cnt, sizeof(u64),
 						GFP_KERNEL);
 		if (!cqp->rq.wrid_map) {
-			crdma_info("Could not allocate RQ WRID map\n");
+			crdma_warn("Could not allocate RQ WRID map\n");
 			err = -ENOMEM;
 			kfree(cqp->sq.wrid_map);
 			goto delete_qp;
@@ -1656,8 +1622,6 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	enum ib_qp_state new_state;
 	int ret;
 
-	crdma_info("crdma_modify_qp: attr_mask 0x%08X\n", qp_attr_mask);
-	crdma_info("qp_type %d\n", qp->qp_type);
 
 	mutex_lock(&cqp->mutex);
 	/*
@@ -1666,17 +1630,17 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	 */
 	if (qp_attr_mask & IB_QP_CUR_STATE &&
 	    qp_attr->cur_qp_state != cqp->qp_state) {
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_info("IB_QP_CUR_STATE is set, but qp_attr->cur_qp_state "
 			   "%d, cqp->qp_state %d\n",
 			   qp_attr->cur_qp_state, cqp->qp_state);
+#endif
 		ret = -EINVAL;
 		goto out;
 	}
 
 	cur_state = cqp->qp_state;
 	new_state = qp_attr_mask & IB_QP_STATE ? qp_attr->qp_state : cur_state;
-
-	crdma_info("curr_state %d, new_state %d\n", cur_state, new_state);
 
 	/* State transition attribute/transport type validation */
 	ret = -EINVAL;
@@ -1687,18 +1651,20 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	if (!ib_modify_qp_is_ok(cur_state, new_state,
 			qp->qp_type, qp_attr_mask, IB_LINK_LAYER_ETHERNET)) {
 #endif
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_info("QPN %d, invalid attribute mask specified "
 				"for transition %d to %d. qp_type %d, "
 				"attr_mask 0x%08X\n",
 				qp->qp_num, cur_state, new_state,
 				qp->qp_type, qp_attr_mask);
+#endif
 		goto out;
 	}
 
 	/* Requester resources can't be larger than device allows for QP */
 	if (qp_attr_mask & IB_QP_MAX_QP_RD_ATOMIC && (qp_attr->max_rd_atomic >
 							dev->cap.ib.max_qp_init_rd_atom)) {
-		crdma_info("QPN %d, max_rd_atomic %d too large\n",
+		crdma_warn("QPN %d, max_rd_atomic %d too large\n",
 						qp->qp_num, qp_attr->max_rd_atomic);
 		goto out;
 	}
@@ -1706,19 +1672,19 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	/* Perform validation of the requested attributes */
 	if ((qp_attr_mask & IB_QP_PORT) && (qp_attr->port_num == 0 ||
 							qp_attr->port_num > dev->cap.n_ports)) {
-		crdma_info("Invalid port number %d\n", qp_attr->port_num);
+		crdma_warn("Invalid port number %d\n", qp_attr->port_num);
 		goto out;
 	}
 
 	if ((qp_attr_mask & IB_QP_PKEY_INDEX) && (qp_attr->pkey_index > 0)) {
-		crdma_info("Invalid PKEY index %d\n", qp_attr->pkey_index);
+		crdma_warn("Invalid PKEY index %d\n", qp_attr->pkey_index);
 		goto out;
 	}
 
 	/* Requester resources can't be larger than device allows for QP */
 	if (qp_attr_mask & IB_QP_MAX_QP_RD_ATOMIC && (qp_attr->max_rd_atomic >
 							dev->cap.ib.max_qp_init_rd_atom)) {
-		crdma_info("QPN %d, max_rd_atomic %d too large\n",
+		crdma_warn("QPN %d, max_rd_atomic %d too large\n",
 						qp->qp_num, qp_attr->max_rd_atomic);
 		goto out;
 	}
@@ -1727,7 +1693,7 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	if (qp_attr_mask & IB_QP_MAX_DEST_RD_ATOMIC &&
 					(qp_attr->max_dest_rd_atomic >
 					dev->cap.ib.max_qp_rd_atom)) {
-		crdma_info("QPN %d, max_dest_rd_atomic %d too large\n",
+		crdma_warn("QPN %d, max_dest_rd_atomic %d too large\n",
 						qp->qp_num, qp_attr->max_rd_atomic);
 		goto out;
 	}
@@ -1754,7 +1720,7 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 			qp_attr, qp_attr_mask, cur_state, new_state);
 
 	if (ret) {
-		crdma_info("Microcode QP_MODIFY error, %d\n", ret);
+		crdma_err("Microcode QP_MODIFY error, %d\n", ret);
 		ret = -EINVAL;
 	}
 
@@ -1770,7 +1736,6 @@ static int crdma_query_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	struct crdma_qp *cqp = to_crdma_qp(qp);
 	int ret = 0;
 
-	crdma_info("crdma_query_qp\n");
 	mutex_lock(&cqp->mutex);
 
 	/* If we are in RESET state then no attributes are assigned */
@@ -1781,7 +1746,7 @@ static int crdma_query_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 
 	ret = crdma_qp_query_cmd(dev, cqp, qp_attr, qp_attr_mask);
 	if (ret) {
-		crdma_info("Microcode QP_QUERY error, %d\n", ret);
+		crdma_err("Microcode QP_QUERY error, %d\n", ret);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -1810,7 +1775,6 @@ static int crdma_destroy_qp(struct ib_qp *qp)
 	struct crdma_qp *cqp = to_crdma_qp(qp);
 	int err;
 
-	crdma_info("crdma_destroy_qp\n");
 
 	if (cqp->qp_state != IB_QPS_RESET) {
 		err = crdma_qp_destroy_cmd(dev, cqp);
@@ -1867,8 +1831,10 @@ static void set_wqe_sw_ownership(struct crdma_hw_workq *wq,
 
 	wqe_index &= wq->mask;
 	ownership = wq->buf + (wqe_index << wq->wqe_size_log2);
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_debug("Set ownership for WQE index %d, %p\n",
 					wqe_index, ownership);
+#endif
 	*ownership = 0xFFFFFFFF;
 	return;
 }
@@ -1890,12 +1856,11 @@ static inline int crdma_copy_inline(struct crdma_swqe_inline *data,
 	int i;
 	int length = 0;
 
-	crdma_debug("wr->num_sge %d, max = %d\n", wr->num_sge, max);
-
 	for (i = 0, sg = wr->sg_list; i < wr->num_sge; i++, sg++) {
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_debug("sg->length %d total length %d\n",
 						sg->length, length);
-
+#endif
 		if (length + sg->length > max)
 				return ENOMEM;
 		memcpy(&data->data[length], (void *)(uintptr_t)sg->addr,
@@ -1917,19 +1882,22 @@ static inline void crdma_set_wqe_sge(struct crdma_wqe_sge *wqe_sg, int num_sge,
                                 struct ib_sge *sge_list)
 {
 	int i;
-
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_debug("num_sge %d, wqe_sg %p, sge_list %p\n",
 					num_sge, wqe_sg, sge_list);
+#endif
 	for (i = 0; i < num_sge; i++, sge_list++, wqe_sg++) {
 		wqe_sg->io_addr_h = cpu_to_le32(sge_list->addr >> 32);
 		wqe_sg->io_addr_l = cpu_to_le32(sge_list->addr &
 						0x0FFFFFFFFull);
 		wqe_sg->l_key = cpu_to_le32(sge_list->lkey);
 		wqe_sg->byte_count = cpu_to_le32(sge_list->length);
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_debug("SGE %d addr_h 0x%08X, addr_l 0x%08X\n",
 			    i, wqe_sg->io_addr_h, wqe_sg->io_addr_l);
 		crdma_debug("l_key 0x%08X, byte_count 0x%08X\n",
 			    wqe_sg->l_key, wqe_sg->byte_count);
+#endif
 	}
 	return;
 }
@@ -1966,7 +1934,6 @@ static struct crdma_swqe *get_sq_tail(struct crdma_qp *cqp)
 	}
 
 	/* Post SWQE at the software producer tail */
-	crdma_debug("Use SWQE Index %d\n", cqp->sq.tail);
 	return cqp->sq.buf + (cqp->sq.tail << cqp->sq.wqe_size_log2);
 }
 
@@ -1989,7 +1956,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 	spin_lock(&cqp->sq.lock);
 	while (wr) {
 		if (wr->num_sge > cqp->sq.max_sg) {
-			crdma_info("WR num_sge too large %d\n", wr->num_sge);
+			crdma_warn("WR num_sge too large %d\n", wr->num_sge);
 			*bad_wr = wr;
 			ret = -EINVAL;
 			goto out;
@@ -1998,13 +1965,11 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		/* Post new SWQE's at the software tail, NULL if SQ full */
 		swqe = get_sq_tail(cqp);
 		if (!swqe) {
-			crdma_info("SQ Overflow\n");
+			crdma_warn("SQ Overflow\n");
 			*bad_wr = wr;
 			ret = -ENOMEM;
 			goto out;
 		}
-
-		crdma_debug(">>> SWQE Addr %p\n", swqe);
 
 		if (wr->opcode == IB_WR_SEND_WITH_IMM ||
 		    wr->opcode == IB_WR_RDMA_WRITE_WITH_IMM)
@@ -2017,7 +1982,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		case IB_QPT_GSI:
 			if (wr->opcode != IB_WR_SEND &&
 			    wr->opcode != IB_WR_SEND_WITH_IMM) {
-				crdma_info("Only UD SEND, SEND w/IMM "
+				crdma_warn("Only UD SEND, SEND w/IMM "
 					   "supported %d\n", wr->opcode);
 				*bad_wr = wr;
 				ret = -EINVAL;
@@ -2061,7 +2026,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 			break;
 
 		default:
-			crdma_info("Only UD and RC QP supported %d\n",
+			crdma_warn("Only UD and RC QP supported %d\n",
 				   qp->qp_type);
 			*bad_wr = wr;
 			ret = -EINVAL;
@@ -2102,7 +2067,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		wmb();
 		swqe->ctrl.owner.word = owner.word;
 
-#if 1 /* Extra debug only */
+#ifdef CRDMA_DEBUG_FLAG /* Extra debug only */
 		print_hex_dump(KERN_DEBUG, "SWQE:", DUMP_PREFIX_OFFSET, 8, 1,
 			       swqe, 128, 0);
 #endif
@@ -2178,7 +2143,6 @@ static struct crdma_rwqe *get_rq_tail(struct crdma_qp *cqp)
 	}
 
 	/* Post RWQE at the software producer tail */
-	crdma_debug("Use RWQE Index %d\n", cqp->rq.tail);
 	return cqp->rq.buf + (cqp->rq.tail << cqp->rq.wqe_size_log2);
 }
 
@@ -2192,7 +2156,7 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 	spin_lock(&cqp->rq.lock);
 	while(wr) {
 		if (wr->num_sge > cqp->rq.max_sg) {
-			crdma_info("RQ work request SG entries too large %d\n",
+			crdma_warn("RQ work request SG entries too large %d\n",
 				   wr->num_sge);
 			*bad_wr = wr;
 			ret = -EINVAL;
@@ -2201,13 +2165,11 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 
 		rwqe = get_rq_tail(cqp);
 		if (!rwqe) {
-			crdma_info("RQ overflow\n");
+			crdma_warn("RQ overflow\n");
 			*bad_wr = wr;
 			ret = -ENOMEM;
 			break;
 		}
-
-		crdma_debug("RWQE Addr %p\n", rwqe);
 
 		/*
 		 * Build the RWQE making sure not to clear the software
@@ -2252,7 +2214,7 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 	int i;
 
 	if (num_cqe < 1 || num_cqe > dev->cap.ib.max_cqe - 1) {
-		crdma_info("Too many CQE requested %d\n", num_cqe);
+		crdma_warn("Too many CQE requested %d\n", num_cqe);
 		return -EINVAL;
 	}
 
@@ -2260,14 +2222,14 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 	ccq->num_cqe = roundup_pow_of_two(num_cqe + 1);
 	ccq->ib_cq.cqe = ccq->num_cqe - 1;
 
-#if CRDMA_DETAIL_INFO_DEBUG_FLAG
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	crdma_info("Rounded up CQE count %d\n", ccq->num_cqe);
 #endif
 
 	/* Allocate resource index for the CQ control object */
 	ccq->cqn = crdma_alloc_bitmap_index(&dev->cq_map);
 	if (ccq->cqn < 0) {
-		crdma_info("No CQ index available\n");
+		crdma_warn("No CQ index available\n");
 		err = -ENOMEM;
 		goto free_mem;
 	}
@@ -2299,11 +2261,10 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 	ccq->ci_mbox = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
 			PAGE_SIZE, &ccq->ci_mbox_paddr, GFP_KERNEL);
 	if (!ccq->ci_mbox) {
-		crdma_info("ci_mbox allocation failed\n");
+		crdma_warn("ci_mbox allocation failed\n");
 		err = -ENOMEM;
 		goto free_queue_mem;
 	}
-	crdma_debug("CQ CI mailbox DMA addr 0x%016llX\n", ccq->ci_mbox_paddr);
 	ccq->ci_mbox->ci = 0;
 	ccq->ci_mbox->last_db_state = 0;
 	wmb();
@@ -2320,7 +2281,7 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 
 		err = crdma_cq_create_cmd(dev, ccq, &crdma_uctxt->uar);
 		if (err) {
-			crdma_info("Microcode error creating CQ, %d\n", err);
+			crdma_err("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
 		resp.cq_base_addr = sg_dma_address(ccq->mem->alloc);
@@ -2335,20 +2296,20 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 
 		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
 		if (err) {
-			crdma_info("Copy of UDATA failed, %d\n", err);
+			crdma_warn("Copy of UDATA failed, %d\n", err);
 			goto cq_destroy;
 		}
 
 		err = crdma_add_mmap_req(crdma_uctxt, resp.cq_base_addr,
 				ccq->mem->tot_len);
 		if (err) {
-			crdma_info("Failed to add pending mmap, %d\n", err);
+			crdma_warn("Failed to add pending mmap, %d\n", err);
 			goto cq_destroy;
 		}
 		err = crdma_add_mmap_req(crdma_uctxt, resp.ci_mbox_base_addr,
 				PAGE_SIZE);
 		if (err) {
-			crdma_info("Failed to add mbox pending mmap, %d\n",
+			crdma_warn("Failed to add mbox pending mmap, %d\n",
 					err);
 			crdma_remove_mmap_req(crdma_uctxt, resp.cq_base_addr,
 					ccq->mem->tot_len);
@@ -2357,7 +2318,7 @@ static int crdma_create_cq(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 	} else {
 		err = crdma_cq_create_cmd(dev, ccq, &dev->priv_uar);
 		if (err) {
-			crdma_info("Microcode error creating CQ, %d\n", err);
+			crdma_err("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
 		ccq->mask = ccq->num_cqe - 1;
@@ -2405,8 +2366,6 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 	int err;
 	int i;
 
-	crdma_info("=== crdma_create_cq ib_uctxt %p ===\n", ib_uctxt);
-
 	if (num_cqe < 1 || num_cqe > dev->cap.ib.max_cqe - 1) {
 		crdma_info("Too many CQE requested %d\n", num_cqe);
 		return ERR_PTR(-EINVAL);
@@ -2420,14 +2379,14 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 	ccq->num_cqe = roundup_pow_of_two(num_cqe + 1);
 	ccq->ib_cq.cqe = ccq->num_cqe - 1;
 
-#if CRDMA_DETAIL_INFO_DEBUG_FLAG
+#ifdef CRDMA_DETAIL_INFO_DEBUG_FLAG
 	crdma_info("Rounded up CQE count %d\n", ccq->num_cqe);
 #endif
 
 	/* Allocate resource index for the CQ control object */
 	ccq->cqn = crdma_alloc_bitmap_index(&dev->cq_map);
 	if (ccq->cqn < 0) {
-		crdma_info("No CQ index available\n");
+		crdma_warn("No CQ index available\n");
 		err = -ENOMEM;
 		goto free_mem;
 	}
@@ -2459,11 +2418,10 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 	ccq->ci_mbox = dma_alloc_coherent(&dev->nfp_info->pdev->dev,
 			PAGE_SIZE, &ccq->ci_mbox_paddr, GFP_KERNEL);
 	if (!ccq->ci_mbox) {
-		crdma_info("ci_mbox allocation failed\n");
+		crdma_warn("ci_mbox allocation failed\n");
 		err = -ENOMEM;
 		goto free_queue_mem;
 	}
-	crdma_debug("CQ CI mailbox DMA addr 0x%016llX\n", ccq->ci_mbox_paddr);
 	ccq->ci_mbox->ci = 0;
 	ccq->ci_mbox->last_db_state = 0;
 	wmb();
@@ -2479,7 +2437,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 
 		err = crdma_cq_create_cmd(dev, ccq, &crdma_uctxt->uar);
 		if (err) {
-			crdma_info("Microcode error creating CQ, %d\n", err);
+			crdma_err("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
 		resp.cq_base_addr = sg_dma_address(ccq->mem->alloc);
@@ -2488,26 +2446,27 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 		resp.ci_mbox_size = PAGE_SIZE;
 		resp.cqn = ccq->cqn;
 		resp.num_cqe = ccq->num_cqe;
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_debug("CQ buffer paddr 0x%016llX\n", resp.cq_base_addr);
 		crdma_debug("CI mbox paddr 0x%016llX\n",
 				resp.ci_mbox_base_addr);
-
+#endif
 		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
 		if (err) {
-			crdma_info("Copy of UDATA failed, %d\n", err);
+			crdma_warn("Copy of UDATA failed, %d\n", err);
 			goto cq_destroy;
 		}
 
 		err = crdma_add_mmap_req(crdma_uctxt, resp.cq_base_addr,
 				ccq->mem->tot_len);
 		if (err) {
-			crdma_info("Failed to add pending mmap, %d\n", err);
+			crdma_warn("Failed to add pending mmap, %d\n", err);
 			goto cq_destroy;
 		}
 		err = crdma_add_mmap_req(crdma_uctxt, resp.ci_mbox_base_addr,
 				PAGE_SIZE);
 		if (err) {
-			crdma_info("Failed to add mbox pending mmap, %d\n",
+			crdma_warn("Failed to add mbox pending mmap, %d\n",
 					err);
 			crdma_remove_mmap_req(crdma_uctxt, resp.cq_base_addr,
 					ccq->mem->tot_len);
@@ -2516,7 +2475,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev, const struct ib_cq
 	} else {
 		err = crdma_cq_create_cmd(dev, ccq, &dev->priv_uar);
 		if (err) {
-			crdma_info("Microcode error creating CQ, %d\n", err);
+			crdma_warn("Microcode error creating CQ, %d\n", err);
 			goto cmd_fail;
 		}
 		ccq->mask = ccq->num_cqe - 1;
@@ -2571,8 +2530,6 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 	struct crdma_cq *ccq = to_crdma_cq(cq);
 	int err;
 
-	crdma_info("crdma_destroy_cq cqn =  %d\n", ccq->cqn);
-
 	err = crdma_cq_destroy_cmd(dev, ccq);
 	if (err) {
 		/*
@@ -2615,14 +2572,12 @@ static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
 	int oldnum,i;
 	int ret = 0;
 
-	crdma_debug("%s ib_cq %p cqe %d\n", __func__, ibcq, num_cqe);
-
 	/* We don't downsize... */
 	if (num_cqe <= ibcq->cqe)
 		return 0;
 
 	if (num_cqe < 1 || num_cqe > dev->cap.ib.max_cqe - 1) {
-		crdma_info("Too many CQE requested %d\n", num_cqe);
+		crdma_warn("Too many CQE requested %d\n", num_cqe);
 		return -EINVAL;
 	}
 	
@@ -2759,8 +2714,6 @@ static struct ib_mr *crdma_get_dma_mr(struct ib_pd *pd, int access_flags)
 	struct crdma_mr *cmr;
 	int err;
 
-	crdma_info("crdma_get_dma_mr\n");
-
 	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
 	if (!cmr) {
 		crdma_info("No memory for MR object\n");
@@ -2772,7 +2725,6 @@ static struct ib_mr *crdma_get_dma_mr(struct ib_pd *pd, int access_flags)
 		err = -ENOMEM;
 		goto free_mem;
 	}
-	crdma_info("DMA MPT Index %d\n", cmr->mpt_index);
 
 	cmr->umem = NULL;
 	cmr->pdn = to_crdma_pd(pd)->pd_index;
@@ -2786,7 +2738,7 @@ static struct ib_mr *crdma_get_dma_mr(struct ib_pd *pd, int access_flags)
 	cmr->ib_mr.rkey = cmr->ib_mr.lkey = cmr->key;
 
 	if (crdma_init_mpt(dev, cmr, 0, 0)) {
-		crdma_info("init_mpt failed\n");
+		crdma_err("init_mpt failed\n");
 		err = -ENOMEM;
 		goto free_mpt;
 	}
@@ -2809,13 +2761,9 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 	int count, num_comp, shift, order, log2_page_sz;
 	int err;
 
-	crdma_info("crdma_reg_user_mr\n");
-	crdma_info("parameter: start=0x%llu, length=0x%llu, virt_addr=0x%llu\n",
-		start, length, virt_addr);
-
 	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
 	if (!cmr) {
-		crdma_info("No memory for MR object\n");
+		crdma_warn("No memory for MR object\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -2824,7 +2772,6 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 		err = -ENOMEM;
 		goto free_mem;
 	}
-	crdma_info("MPT Index %d\n", cmr->mpt_index);
 
 #if (VER_NON_RHEL_GE(5,6))
 	cmr->umem = ib_umem_get(pd->device, start, length, access_flags);
@@ -2838,7 +2785,7 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 #endif
 	if (IS_ERR(cmr->umem)) {
 		err = PTR_ERR(cmr->umem);
-		crdma_info("ib_umem_get() failed %d\n", err);
+		crdma_warn("ib_umem_get() failed %d\n", err);
 		goto free_mpt;
 	}
 
@@ -2847,13 +2794,8 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 #else
 	log2_page_sz = cmr->umem->page_shift;
 #endif
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("User Memory Page Size %d\n", log2_page_sz);
-#if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))
-	crdma_info("User Memory Num Pages %ld\n",
-				ib_umem_num_dma_blocks(cmr->umem, PAGE_SIZE));
-#else
-	crdma_info("User Memory Num Pages %d\n",
-				ib_umem_page_count(cmr->umem));
 #endif
 	/*
 	 * Find the largest compound page size that can be used
@@ -2862,20 +2804,22 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 	 */
 	crdma_compound_order(cmr->umem, start, &count, &num_comp,
 			&shift, &order);
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("User Memory Pages %d\n", count);
 	crdma_info("User Memory Compound Pages %d\n", num_comp);
 	crdma_info("User Memory Compound Page Shift %d\n", shift);
 	crdma_info("User Memory Compound Page Order %d\n", order);
-
+#endif
 	if (order + log2_page_sz > CRDMA_MTT_MAX_PAGESIZE_LOG2) {
 		num_comp <<= order  + log2_page_sz -
 				CRDMA_MTT_MAX_PAGESIZE_LOG2;
 		order -=  order + log2_page_sz -
 				CRDMA_MTT_MAX_PAGESIZE_LOG2;
 	}
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("Adjusted number of compound pages %d\n", num_comp);
 	crdma_info("Adjusted compound order %d\n", order);
-
+#endif
 	cmr->pdn = to_crdma_pd(pd)->pd_index;
 	cmr->io_vaddr = virt_addr;
 	cmr->len = length;
@@ -2891,7 +2835,7 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 	cmr->ib_mr.rkey = cmr->ib_mr.lkey = cmr->key;
 
 	if (crdma_init_mpt(dev, cmr, num_comp, order)) {
-		crdma_info("init_mpt failed\n");
+		crdma_err("init_mpt failed\n");
 		err = -ENOMEM;
 		goto release_umem;
 	}
@@ -2933,27 +2877,24 @@ static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 	struct crdma_mr *cmr;
 	int err;
 
-	crdma_info("crdma_alloc_mr\n");
-
 	if (type != IB_MR_TYPE_MEM_REG) {
 		crdma_info("MR type 0x%x not supported", type);
 		return ERR_PTR(-EINVAL);
 	}
 
 	if (max_num_sg > cdev->cap.ib.max_fast_reg_page_list_len) {
-		crdma_info("max num sg (0x%x) exceeded dev cap (0x%x)\n",
+		crdma_err("max num sg (0x%x) exceeded dev cap (0x%x)\n",
 		    max_num_sg, cdev->cap.ib.max_fast_reg_page_list_len);
 		return ERR_PTR(-EINVAL);
 	}
 
 	cmr = kmalloc(sizeof(*cmr), GFP_KERNEL);
 	if (!cmr) {
-		crdma_info("No memory for MR object\n");
+		crdma_err("No memory for MR object\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
 	cmr->num_mtt = max_num_sg;
-	crdma_info("MTT num_mtt %d\n", cmr->num_mtt);
 	if (cmr->num_mtt) {
 		cmr->base_mtt = crdma_alloc_bitmap_area(&cdev->mtt_map,
 						cmr->num_mtt);
@@ -2961,7 +2902,6 @@ static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 			err = -ENOMEM;
 			goto free_mem;
 		}
-		crdma_info("MTT base mtt %d\n", cmr->base_mtt);
 	}
 
 	cmr->mpt_index = crdma_alloc_bitmap_index(&cdev->mpt_map);
@@ -2969,7 +2909,6 @@ static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 		err = -ENOMEM;
 		goto free_mtt;
 	}
-	crdma_info("MPT Index %d\n", cmr->mpt_index);
 
 	cmr->pdn = to_crdma_pd(pd)->pd_index;
 	cmr->access = 0;
@@ -3055,7 +2994,7 @@ static int crdma_map_mr_sg(struct ib_mr *mr, struct scatterlist *sg,
 	cmr->page_shift = PAGE_SHIFT + order;
 
 	if(crdma_mpt_create_cmd(cdev, cmr)) {
-		crdma_info("crdma_mpt_create_cmd failed\n");
+		crdma_warn("crdma_mpt_create_cmd failed\n");
 		ret = -ENOMEM;
 		goto free_mbox;
 	}
@@ -3132,7 +3071,6 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 {
 	int ret;
 
-	crdma_dev_info(dev, "ib_register_device begin\n");
 	dev->ibdev.node_type = RDMA_NODE_IB_CA;
 	memcpy(dev->ibdev.node_desc, CRDMA_IB_NODE_DESC,
 			sizeof(CRDMA_IB_NODE_DESC));

@@ -120,25 +120,27 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 		return -EINVAL;
 	}
 	dev->cap.uc_mhz_clock = le32_to_cpu(attr.mhz_clock);
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_dev_info(dev, "UCode firmware:%d.%d\n",
 			dev->cap.uc_maj_rev, dev->cap.uc_min_rev);
-
+#endif
 	cap = kmalloc(sizeof(*cap), GFP_KERNEL);
 	if (!cap) {
-		crdma_dev_info(dev, "kmalloc failure\n");
+		crdma_dev_warn(dev, "kmalloc failure\n");
 		return -ENOMEM;
 	}
 
 	/* Get dev capacity from firmware */
 	ret = crdma_query_dev_cap(dev, cap);
 	if (ret) {
-		crdma_dev_info(dev, "Query device capabilities"
+		crdma_dev_warn(dev, "Query device capabilities"
 			       " cmd failed %d\n", ret);
 		goto free_mem;
 	}
 
 	dev->cap.opt_flags = cap->flags;
 
+#ifdef CRDMA_DEBUG_FLAG
 	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_RC)
 		crdma_dev_info(dev, "RC supported in ucode\n");
 	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_UD)
@@ -155,6 +157,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 		crdma_dev_info(dev, "MW supported in ucode\n");
 	if (dev->cap.opt_flags & CRDMA_DEV_CAP_FLAG_SRQ)
 		crdma_dev_info(dev, "SRQ supported in ucode\n");
+#endif
 
 	dev->cap.n_ports = (cap->ports_rsvd >> CRDMA_DEV_CAP_PORT_SHIFT) &
 				CRDMA_DEV_CAP_PORT_MASK;
@@ -379,8 +382,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	/* Get hardware board/build ID */
 	ret = crdma_query_nic(dev, &dev->cap.board_id);
 	if (ret)
-		crdma_dev_info(dev, "Query nic cmd failed %d\n", ret);
-
+		crdma_dev_warn(dev, "Query nic cmd failed %d\n", ret);
 free_mem:
 	kfree(cap);
 	return ret;
@@ -398,9 +400,10 @@ static int crdma_create_bs(struct crdma_ibdev *dev)
 	struct crdma_mem *bs_mem;
 	int ret;
 
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_dev_info(dev, "Ucode requested %d MBytes of BS\n",
 			dev->cap.bs_size_mb);
-
+#endif
 	/* Non-coherent memory for use by microcode */
 	bs_mem = crdma_alloc_dma_mem(dev, false, CRDMA_MEM_DEFAULT_ORDER,
 			dev->cap.bs_size_mb << 20);
@@ -410,12 +413,14 @@ static int crdma_create_bs(struct crdma_ibdev *dev)
 	}
 	dev->bs_mem = bs_mem;
 
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("BS size       %d\n", bs_mem->tot_len);
 	crdma_info("BS num allocs %d\n", bs_mem->num_allocs);
 	crdma_info("BS min order  %d\n", bs_mem->min_order);
 	crdma_info("BS num SG     %d\n", bs_mem->num_sg);
 	crdma_info("BS needs      %d MTT entries\n", bs_mem->num_mtt);
 	crdma_info("BS MTT ndx    %d\n", bs_mem->base_mtt_ndx);
+#endif
 
 	/*
 	 * It is a requirement that backing store entries start at the
@@ -437,7 +442,7 @@ static int crdma_create_bs(struct crdma_ibdev *dev)
 	ret = crdma_set_bs_mem_size(dev, bs_mem->num_mtt,
 			bs_mem->min_order, bs_mem->tot_len >> 20);
 	if (ret) {
-		crdma_info("crdma_set_bs_mem_size returned %d\n", ret);
+		crdma_warn("crdma_set_bs_mem_size returned %d\n", ret);
 		goto free_mem;
 	}
 
@@ -446,17 +451,20 @@ static int crdma_create_bs(struct crdma_ibdev *dev)
 			bs_mem->min_order + PAGE_SHIFT,
 			bs_mem->num_sg, 0);
 	if (ret) {
-		crdma_info("crdma_mtt_write_sg returned %d\n", ret);
+		crdma_warn("crdma_mtt_write_sg returned %d\n", ret);
 		goto free_mem;
 	}
-
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("SG virtual addr for alloc 0:%p\n",
 			sg_virt(&bs_mem->alloc[0]));
+#endif
 	ret = crdma_bs_map_mem(dev,  (0xFF8ull << 48),
 			bs_mem->tot_len >> 20, bs_mem->num_mtt,
 			bs_mem->min_order);
 	if (ret) {
+#ifdef CRDMA_DEBUG_FLAG
 		crdma_info("crdma_map_bs_mem returned %d\n", ret);
+#endif
 		goto free_mem;
 	}
 	return 0;
@@ -533,8 +541,6 @@ static int crdma_create_eqs(struct crdma_ibdev *dev)
 	 */
 	num_eq =  min_t(u32, dev->nfp_info->num_vectors, num_online_cpus());
 	num_eq = min_t(u32, num_eq, dev->cap.max_eq);
-
-	crdma_info("Number of EQ to be used %d\n", num_eq);
 
 	dev->eq_table.eq = kcalloc(num_eq, sizeof(struct crdma_eq),
 				GFP_KERNEL);
@@ -695,7 +701,6 @@ static ssize_t exec_command(struct device *device,
 #else
 	struct crdma_ibdev *dev = dev_get_drvdata(device);
 #endif
-	crdma_info("Issue hard-coded command %s\n", buf);
 	err = kstrtoint(buf, 0, &opcode);
 	if (err) {
 		crdma_warn("%s is not valid form\n", buf);
@@ -703,15 +708,12 @@ static ssize_t exec_command(struct device *device,
 	}
 	switch (opcode) {
 	case CRDMA_CMD_NO_OP:
-		crdma_info("%s supported\n", crdma_opcode_to_str(opcode));
 		err = crdma_noop(dev);
 		break;
 	case CRDMA_CMD_QUERY_UCODE:
-		crdma_info("%s supported\n", crdma_opcode_to_str(opcode));
 		err = crdma_query_ucode(dev, &ucode_attr);
 		break;
 	case CRDMA_CMD_QUERY_DEV_CAP:
-		crdma_info("%s supported\n", crdma_opcode_to_str(opcode));
 		cap = kmalloc(sizeof(*cap), GFP_KERNEL);
 		if (!cap) {
 			crdma_info("kmalloc failure\n");
@@ -721,7 +723,6 @@ static ssize_t exec_command(struct device *device,
 		kfree(cap);
 		break;
 	case CRDMA_CMD_QUERY_NIC:
-		crdma_info("%s supported\n", crdma_opcode_to_str(opcode));
 		err = crdma_query_nic(dev, &outparm);
 		break;
 	case CRDMA_CMD_SET_BS_HOST_MEM_SIZE:
@@ -733,27 +734,22 @@ static ssize_t exec_command(struct device *device,
 				crdma_opcode_to_str(opcode));
 		break;
 	case CRDMA_CMD_HCA_ENABLE:
-		crdma_info("%s supported\n", crdma_opcode_to_str(opcode));
 		err = crdma_hca_enable(dev);
 		break;
 	case CRDMA_CMD_HCA_DISABLE:
-		crdma_info("%s supported\n", crdma_opcode_to_str(opcode));
 		crdma_hca_disable(dev);
 		err = 0;
 		break;
 	case CRDMA_CMD_ROCE_PORT_ENABLE:
-		crdma_info("%s supported\n", crdma_opcode_to_str(opcode));
 		for (i = 0, err = 0; i < dev->cap.n_ports && !err; i++)
 			err = crdma_port_enable_cmd(dev, i);
 		break;
 	case CRDMA_CMD_ROCE_PORT_DISABLE:
-		crdma_info("%s supported\n", crdma_opcode_to_str(opcode));
 		for (i = 0; i < dev->cap.n_ports; i++)
 			crdma_port_disable_cmd(dev, i);
 		err = 0;
 		break;
 	case 0xCD:
-		crdma_info("Initiate test EQ enqueue command test\n");
 		err = crdma_test_eq_enqueue(dev, 1, 20);
 		break;
 	default:
@@ -761,7 +757,9 @@ static ssize_t exec_command(struct device *device,
 				crdma_opcode_to_str(opcode));
 		return -EINVAL;
 	}
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("%s returned %d\n", crdma_opcode_to_str(opcode), err);
+#endif
 	return count;
 }
 
@@ -785,45 +783,35 @@ static int crdma_init_maps(struct crdma_ibdev *dev)
 {
 	if (crdma_init_bitmap(&dev->uar_map, 0,
 				dev->cap.max_uar_pages - 1)) {
-		crdma_dev_info(dev, "Unable to allocate UAR map\n");
+		crdma_dev_warn(dev, "Unable to allocate UAR map\n");
 		return -ENOMEM;
 	}
-	crdma_info("Allocate UAR bitmap min %d, max %d\n",
-		0, dev->cap.max_uar_pages - 1);
 
 	if (crdma_init_bitmap(&dev->mpt_map, 0, dev->cap.max_mpt - 1)) {
-		crdma_dev_info(dev, "Unable to allocate MPT map\n");
+		crdma_dev_warn(dev, "Unable to allocate MPT map\n");
 		goto cleanup_uar;
 	}
-	crdma_info("Allocate MPT bitmap min %d, max %d\n",
-		0, dev->cap.max_mpt - 1);
 
 	if (crdma_init_bitmap(&dev->mtt_map, 0, dev->cap.max_mtt - 1)) {
-		crdma_dev_info(dev, "Unable to allocate MTT map\n");
+		crdma_dev_warn(dev, "Unable to allocate MTT map\n");
 		goto cleanup_mpt;
 	}
-	crdma_info("Allocate MTT bitmap min %d, max %d\n",
-		0, dev->cap.max_mtt - 1);
 
 	/* Start at PD index value of 1 */
 	if (crdma_init_bitmap(&dev->pd_map, 1, dev->cap.ib.max_pd - 1)) {
-		crdma_dev_info(dev, "Unable to allocate PD map\n");
+		crdma_dev_warn(dev, "Unable to allocate PD map\n");
 		goto cleanup_mtt;
 	}
-	crdma_info("Allocate PD bitmap min %d, max %d\n",
-		0, dev->cap.ib.max_pd - 1);
 
 	/* Start at CQ index value of 1 */
 	if (crdma_init_bitmap(&dev->cq_map, 1, dev->cap.ib.max_cq - 1)) {
-		crdma_dev_info(dev, "Unable to allocate CQ map\n");
+		crdma_dev_warn(dev, "Unable to allocate CQ map\n");
 		goto cleanup_pd;
 	}
-	crdma_info("Allocate CQ bitmap min %d, max %d\n",
-		1, dev->cap.ib.max_cq - 1);
 	dev->cq_table = kcalloc(dev->cap.ib.max_cq,
 				sizeof(struct crdma_cq *), GFP_KERNEL);
 	if (!dev->cq_table) {
-		crdma_dev_info(dev, "Unable to allocate CQ ID to CQ map\n");
+		crdma_dev_warn(dev, "Unable to allocate CQ ID to CQ map\n");
 		goto cleanup_cq;
 	}
 
@@ -834,11 +822,23 @@ static int crdma_init_maps(struct crdma_ibdev *dev)
 	if (crdma_init_bitmap(&dev->qp_map,
 				max(2, dev->cap.rsvd_qp),
 				dev->cap.ib.max_qp - 1)) {
-		crdma_dev_info(dev, "Unable to allocate QP map\n");
+		crdma_dev_warn(dev, "Unable to allocate QP map\n");
 		goto cleanup_cq_mem;
 	}
+#ifdef CRDMA_DEBUG_FLAG
+	crdma_info("Allocate UAR bitmap min %d, max %d\n",
+		0, dev->cap.max_uar_pages - 1);
+	crdma_info("Allocate MPT bitmap min %d, max %d\n",
+		0, dev->cap.max_mpt - 1);
+	crdma_info("Allocate MTT bitmap min %d, max %d\n",
+		0, dev->cap.max_mtt - 1);
+	crdma_info("Allocate PD bitmap min %d, max %d\n",
+		0, dev->cap.ib.max_pd - 1);
+	crdma_info("Allocate CQ bitmap min %d, max %d\n",
+		1, dev->cap.ib.max_cq - 1);
 	crdma_info("Allocate QP bitmap min %d, max %d\n",
 		2, dev->cap.ib.max_qp - 1);
+#endif
 	INIT_RADIX_TREE(&dev->qp_tree, GFP_ATOMIC);
 
 	return 0;
@@ -860,22 +860,24 @@ cleanup_uar:
 
 static void crdma_cleanup_maps(struct crdma_ibdev *dev)
 {
+	crdma_cleanup_bitmap(&dev->qp_map);
+	kfree(dev->cq_table);
+	crdma_cleanup_bitmap(&dev->cq_map);
+	crdma_cleanup_bitmap(&dev->pd_map);
+	crdma_cleanup_bitmap(&dev->mtt_map);
+	crdma_cleanup_bitmap(&dev->mpt_map);
+	crdma_cleanup_bitmap(&dev->uar_map);
+#ifdef CRDMA_DEBUG_FLAG
 	crdma_info("=== crdma_cleanup_maps ===  \n");
 	crdma_info("Cleanup QP bitmap \n");
-	crdma_cleanup_bitmap(&dev->qp_map);
 	crdma_info("Free CQ Table \n");
-	kfree(dev->cq_table);
 	crdma_info("Cleanup CQ bitmap \n");
-	crdma_cleanup_bitmap(&dev->cq_map);
 	crdma_info("Cleanup PD bitmap \n");
-	crdma_cleanup_bitmap(&dev->pd_map);
 	crdma_info("Cleanup MTT bitmap \n");
-	crdma_cleanup_bitmap(&dev->mtt_map);
 	crdma_info("Cleanup MAPT bitmap \n");
-	crdma_cleanup_bitmap(&dev->mpt_map);
 	crdma_info("Cleanup UAR bitmap \n");
-	crdma_cleanup_bitmap(&dev->uar_map);
-	crdma_info("=== crdma_cleanup_maps done===  \n");
+	crdma_info("=== crdma_cleanup_maps done=== \n");
+#endif
 	return;
 }
 
@@ -903,7 +905,8 @@ static int crdma_init_port(struct crdma_ibdev *dev)
 	spin_lock_init(&port->table_lock);
 	memcpy(port->mac, port->netdev->dev_addr, ETH_ALEN);
 	crdma_init_smac_table(dev, 0);
-	crdma_info("dev[%s] default mtu is %d\n", port->netdev->name, port->netdev->mtu);
+	crdma_info("dev[%s] default mtu is %d\n",
+			port->netdev->name, port->netdev->mtu);
 	crdma_set_port_mtu_cmd(dev, 0, port->netdev->mtu);
 	spin_lock_init(&port->qp1_lock);
 	return 0;
@@ -957,18 +960,13 @@ static int crdma_init_hca(struct crdma_ibdev *dev)
 	spin_lock_init(&dev->priv_uar_lock);
 	if (crdma_alloc_uar(dev, &dev->priv_eq_uar))
 		goto cleanup_maps;
-	crdma_info("Reserved EQ UAR page index: %d\n", dev->priv_eq_uar.index);
 	dev->priv_eq_uar.map = ioremap(dev->db_paddr + (PAGE_SIZE *
 					dev->priv_eq_uar.index), PAGE_SIZE);
 	if (!dev->priv_eq_uar.map)
 		goto cleanup_maps;
-	crdma_info("Reserved EQ UAR mapped addr: %p\n", dev->priv_eq_uar.map);
 
 	dev->priv_uar.index = dev->priv_eq_uar.index;
 	dev->priv_uar.map = dev->priv_eq_uar.map;
-
-	crdma_info("Reserved SQ/CQ UAR page %d\n", dev->priv_uar.index);
-	crdma_info("Reserved UAR mapped: %p\n", dev->priv_uar.map);
 
 	if (crdma_hca_enable(dev))
 		goto cleanup_uar;
@@ -1012,8 +1010,6 @@ static void crdma_cleanup_hca(struct crdma_ibdev *dev)
 {
 	int ret;
 
-	crdma_info("Cleanup HCA\n");
-
 	crdma_cleanup_port(dev);
 
 	/*
@@ -1053,7 +1049,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 	int i;
 	int j;
 
-	pr_info("crdma_add_dev: info %p\n", info);
+	crdma_info("crdma_add_dev: info %p\n", info);
 
 	/* The following test is for initial bring-up only, then remove */
 	if (unlikely(!info)) {
@@ -1099,6 +1095,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 	crdma_info("PCIDev->msi_enabled:%d\n",
 			dev->nfp_info->pdev->msi_enabled);
 	crdma_info("PCIDev->irq:%d\n", dev->nfp_info->pdev->irq);
+
 	dev->have_interrupts = have_interrupts;
 
 	dev->id = idr_alloc(&crdma_dev_id, NULL, 0, 0, GFP_KERNEL);
@@ -1174,9 +1171,6 @@ static void crdma_event_notifier(struct crdma_ibdev *dev,
 {
 	if (!dev)
 		return;
-
-	crdma_dev_info(dev, "NFP Event, port %d, state %d\n",
-			port, state);
 }
 
 static struct nfp_roce_drv crdma_drv = {
@@ -1188,13 +1182,13 @@ static struct nfp_roce_drv crdma_drv = {
 
 static int __init crdma_init(void)
 {
-	pr_info("crdma_init: calling nfp_register_roce_driver\n");
+	crdma_info("crdma_init: calling nfp_register_roce_driver\n");
 	return nfp_register_roce_driver(&crdma_drv);
 }
 
 static void __exit crdma_cleanup(void)
 {
-	pr_info("crdma_init: calling nfp_unregister_roce_driver\n");
+	crdma_info("crdma_init: calling nfp_unregister_roce_driver\n");
 	nfp_unregister_roce_driver(&crdma_drv);
 	return;
 }

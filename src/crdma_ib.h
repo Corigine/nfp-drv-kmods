@@ -57,7 +57,8 @@
 /* Internal crdma provider ABI between user library and kernel driver */
 #define CRDMA_UVERBS_ABI_VERSION	1
 
-#define CRDMA_DETAIL_INFO_DEBUG_FLAG 0
+#define CRDMA_DETAIL_INFO_DEBUG_FLAG
+#define CRDMA_DEBUG_FLAG
 
 /*
  * Maximum limits placed on IB resources by the driver.
