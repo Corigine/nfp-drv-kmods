@@ -1876,6 +1876,15 @@ int crdma_mpt_create_cmd(struct crdma_ibdev *dev, struct crdma_mr *cmr)
 	if (cmr->num_mtt == 1 && (dev->cap.opt_flags &
 			CRDMA_DEV_CAP_FLAG_PHYS))
 		flags_pdn |= CRDMA_MPT_PHYS;
+	/* CRDMA_MPT_INVALIDATE_ENABLE needed by microcode. */
+	if (cmr->type == CRDMA_MR_TYPE_FRMR) {
+		flags_pdn |= CRDMA_MPT_FRMR_ENABLE;
+		flags_pdn |= CRDMA_MPT_INVALIDATE_ENABLE;
+		param->frmr_entries = cpu_to_le32(cmr->num_mtt);
+	}
+	else {
+		param->frmr_entries = 0;
+	}
 	param->flags_pd	= cpu_to_le32(flags_pdn);
 
 	param->io_addr_h = cpu_to_le32(cmr->io_vaddr >> 32);

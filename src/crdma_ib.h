@@ -273,6 +273,7 @@ struct crdma_mr {
 	u32			mpt_index;
 	u32			base_mtt;
 	u32			num_mtt;
+	u32			type;
 
 	/*
 	 * The log2 page shift for the mapping can be any supported page
@@ -292,7 +293,6 @@ struct crdma_mr {
 	u32			key;		/* Both Lkey and Rkey */
 	u32			pdn;		/* Protection Domain */
 	u32			access;		/* IB enable flags */
-
 	u32			npages;
 	void			*buf;
 };

@@ -1843,8 +1843,9 @@ static void set_reg_seg(struct crdma_swqe_frmr *fseg,
 	       CRDMA_MR_ACCESS_FLAGS_L_WRITE_EN  : 0) |
 		CRDMA_MR_ACCESS_FLAGS_L_READ_EN | CRDMA_MR_ACCESS_FLAGS_INVAL_EN);
 	fseg->key		= cpu_to_le32(wr->key);
-	fseg->page_list_paddr_h	= cpu_to_le32(cmr->page_shift >> 32);
-	fseg->page_list_paddr_l = cpu_to_le32(cmr->page_shift & 0x0FFFFFFFFull);
+/* TO DO: by now, they are not used by firmware */
+	fseg->page_list_paddr_h	= 0;
+	fseg->page_list_paddr_l = 0;
 	fseg->io_addr_h		= cpu_to_le32(cmr->io_vaddr >> 32);
 	fseg->io_addr_l 	= cpu_to_le32(cmr->io_vaddr & 0x0FFFFFFFFull);
 	fseg->length 		= cpu_to_le32(cmr->len & 0x0FFFFFFFFull);
@@ -2714,8 +2715,10 @@ static struct ib_mr *crdma_get_dma_mr(struct ib_pd *pd, int access_flags)
 	cmr->page_shift = 0;
 	cmr->mpt_order = 0;
 
-	cmr->key = cmr->mpt_index;
+	cmr->key = cmr->mpt_index << 8;
 	cmr->ib_mr.rkey = cmr->ib_mr.lkey = cmr->key;
+
+	cmr->type = CRDMA_MR_TYPE_DMA;
 
 	if (crdma_init_mpt(dev, cmr, 0, 0)) {
 		crdma_err("init_mpt failed\n");
@@ -2811,8 +2814,9 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 #endif
 	cmr->mpt_order = order;
 
-	cmr->key = cmr->mpt_index;
+	cmr->key = cmr->mpt_index << 8;
 	cmr->ib_mr.rkey = cmr->ib_mr.lkey = cmr->key;
+	cmr->type = CRDMA_MR_TYPE_DEFAULT;
 
 	if (crdma_init_mpt(dev, cmr, num_comp, order)) {
 		crdma_err("init_mpt failed\n");
@@ -2896,10 +2900,11 @@ static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 	cmr->len = 0;
 	cmr->mpt_order = 0;
 	cmr->page_shift = PAGE_SHIFT;
-	cmr->key = cmr->mpt_index;
+	cmr->key = cmr->mpt_index << 8;
 	cmr->ib_mr.rkey = cmr->key;
 	cmr->ib_mr.lkey = cmr->key;
 	cmr->umem = NULL;
+	cmr->type = CRDMA_MR_TYPE_FRMR;
 
 	return &cmr->ib_mr;
 

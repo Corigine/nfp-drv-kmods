@@ -298,6 +298,12 @@ enum {
 	CRDMA_MR_ACCESS_FLAGS_INVAL_EN		= 1 << 5
 };
 
+enum{
+	CRDMA_MR_TYPE_DEFAULT 	= 0,
+	CRDMA_MR_TYPE_FRMR 	= 1,
+	CRDMA_MR_TYPE_DMA 	= 2
+};
+
 struct crdma_swqe_frmr {
 	__le32          flags;
 	__le32		key;
@@ -1028,17 +1034,11 @@ enum {
 	CRDMA_MPT_LOCAL_WRITE_ENABLE		= 1 << 24,
 	CRDMA_MPT_REMOTE_READ_ENABLE		= 1 << 25,
 	CRDMA_MPT_REMOTE_WRITE_ENABLE		= 1 << 26,
-#if 0 /* The following is required, but not yet used */
 	CRDMA_MPT_ATOMIC_ENABLE			= 1 << 27,
-#endif
 	CRDMA_MPT_DMA				= 1 << 28,
-#if 0 /* The following is required, but not yet used */
 	CRDMA_MPT_INVALIDATE_ENABLE		= 1 << 29,
-#endif
 	CRDMA_MPT_PHYS				= 1 << 30,
-#if 0 /* The following is required, but not yet used */
 	CRDMA_MPT_FRMR_ENABLE			= 1 << 31,
-#endif
 	CRDMA_MPT_LOG2_PAGE_SZ_SHIFT		= 27,
 };
 
