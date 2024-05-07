@@ -735,18 +735,6 @@ static int crdma_query_pkey(struct ib_device *ibdev, u8 port_num,
 	return 0;
 }
 
-static int crdma_modify_device(struct ib_device *ibdev, int dev_mod_mask,
-			struct ib_device_modify *dev_modify)
-{
-	return 0;
-}
-
-static int crdma_modify_port(struct ib_device *ibdev, u8 port_num,
-			int port_mod_mask, struct ib_port_modify *port_modify)
-{
-	return 0;
-}
-
 #if (VER_NON_RHEL_GE(5,1) || VER_RHEL_GE(8,0))
 static int crdma_alloc_ucontext(struct ib_ucontext *ib_uctxt,
 				struct ib_udata *udata)
@@ -1101,57 +1089,6 @@ static int crdma_destroy_ah(struct ib_ah *ah)
 	return 0;
 }
 #endif
-
-#if (VER_NON_RHEL_GE(5,2) || VER_RHEL_GE(8,0))
-static int crdma_create_srq(struct ib_srq *srq,
-			struct ib_srq_init_attr *srq_init_attr,
-			struct ib_udata *udata)
-{
-	crdma_warn("crdma_create_srq not implemented\n");
-	return -ENOMEM;
-}
-#else
-static struct ib_srq *crdma_create_srq(struct ib_pd *pd,
-			struct ib_srq_init_attr *srq_init_attr,
-			struct ib_udata *udata)
-{
-	crdma_warn("crdma_create_srq not implemented\n");
-	return ERR_PTR(-ENOMEM);
-}
-#endif
-
-static int crdma_modify_srq(struct ib_srq *srq,
-			struct ib_srq_attr *srq_attr,
-			enum ib_srq_attr_mask srq_attr_mask,
-			struct ib_udata *udata)
-{
-	crdma_warn("crdma_modify_srq not implemented\n");
-	return 0;
-}
-
-static int crdma_query_srq(struct ib_srq *srq,
-			struct ib_srq_attr *srq_attr)
-{
-	crdma_warn("crdma_query_srq not implemented\n");
-	return 0;
-}
-
-#if (VER_NON_RHEL_GE(5,10) || VER_RHEL_GE(8,0))
-static int crdma_destroy_srq(struct ib_srq *srq, struct ib_udata *udata)
-#else
-static int crdma_destroy_srq(struct ib_srq *srq)
-#endif
-{
-	crdma_warn("crdma_destroy_srq not implemented\n");
-	return 0;
-}
-
-static int crdma_post_srq_recv(struct ib_srq *srq, const struct ib_recv_wr *wr,
-			           const struct ib_recv_wr **bad_recv_wr)
-{
-	crdma_warn("crdma_post_srq_recv not implemented\n");
-	return 0;
-}
 
 static int crdma_qp_val_check(struct crdma_ibdev *dev,
 		struct ib_qp_cap *cap, bool use_srq)
@@ -3021,7 +2958,6 @@ static const struct ib_device_ops crdma_dev_ops = {
     .create_ah          = crdma_create_ah,
     .create_cq          = crdma_create_cq,
     .create_qp          = crdma_create_qp,
-    .create_srq         = crdma_create_srq,
 #if (VER_NON_RHEL_GE(5,11) || VER_RHEL_GE(8,0))
     .create_user_ah     = crdma_create_ah,
 #endif
@@ -3032,7 +2968,6 @@ static const struct ib_device_ops crdma_dev_ops = {
     .destroy_ah         = crdma_destroy_ah,
     .destroy_cq         = crdma_destroy_cq,
     .destroy_qp         = crdma_destroy_qp,
-    .destroy_srq        = crdma_destroy_srq,
     .detach_mcast       = crdma_detach_mcast,
     .get_dev_fw_str     = crdma_get_dev_fw_str,
     .get_dma_mr         = crdma_get_dma_mr,
@@ -3041,21 +2976,16 @@ static const struct ib_device_ops crdma_dev_ops = {
     .map_mr_sg          = crdma_map_mr_sg,
     .mmap               = crdma_mmap,
     .modify_cq          = crdma_modify_cq,
-    .modify_device      = crdma_modify_device,
-    .modify_port        = crdma_modify_port,
     .modify_qp          = crdma_modify_qp,
-    .modify_srq         = crdma_modify_srq,
     .poll_cq            = crdma_poll_cq,
     .post_recv          = crdma_post_recv,
     .post_send          = crdma_post_send,
-    .post_srq_recv      = crdma_post_srq_recv,
     .query_ah           = crdma_query_ah,
     .query_device       = crdma_query_device,
     .query_gid          = crdma_query_gid,
     .query_pkey         = crdma_query_pkey,
     .query_port         = crdma_query_port,
     .query_qp           = crdma_query_qp,
-    .query_srq          = crdma_query_srq,
     .reg_user_mr        = crdma_reg_user_mr,
     .req_notify_cq      = crdma_req_notify_cq,
     .resize_cq          = crdma_resize_cq,
@@ -3130,7 +3060,6 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.create_ah            = crdma_create_ah;
 	dev->ibdev.create_cq            = crdma_create_cq;
 	dev->ibdev.create_qp            = crdma_create_qp;
-	dev->ibdev.create_srq           = crdma_create_srq;
 	dev->ibdev.dealloc_pd           = crdma_dealloc_pd;
 	dev->ibdev.dealloc_ucontext     = crdma_dealloc_ucontext;
 	dev->ibdev.del_gid		= crdma_del_gid;
@@ -3138,7 +3067,6 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.destroy_ah           = crdma_destroy_ah;
 	dev->ibdev.destroy_cq           = crdma_destroy_cq;
 	dev->ibdev.destroy_qp           = crdma_destroy_qp;
-	dev->ibdev.destroy_srq          = crdma_destroy_srq;
 	dev->ibdev.detach_mcast         = crdma_detach_mcast;
 	dev->ibdev.get_dev_fw_str       = crdma_get_dev_fw_str;
 	dev->ibdev.get_dma_mr           = crdma_get_dma_mr;
@@ -3150,21 +3078,16 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.map_mr_sg            = crdma_map_mr_sg;
 	dev->ibdev.mmap                 = crdma_mmap;
 	dev->ibdev.modify_cq            = crdma_modify_cq;
-	dev->ibdev.modify_device        = crdma_modify_device;
-	dev->ibdev.modify_port          = crdma_modify_port;
 	dev->ibdev.modify_qp            = crdma_modify_qp;
-	dev->ibdev.modify_srq           = crdma_modify_srq;
 	dev->ibdev.poll_cq              = crdma_poll_cq;
 	dev->ibdev.post_recv            = crdma_post_recv;
 	dev->ibdev.post_send            = crdma_post_send;
-	dev->ibdev.post_srq_recv        = crdma_post_srq_recv;
 	dev->ibdev.query_ah             = crdma_query_ah;
 	dev->ibdev.query_device         = crdma_query_device;
 	dev->ibdev.query_gid            = crdma_query_gid;
 	dev->ibdev.query_pkey           = crdma_query_pkey;
 	dev->ibdev.query_port           = crdma_query_port;
 	dev->ibdev.query_qp             = crdma_query_qp;
-	dev->ibdev.query_srq            = crdma_query_srq;
 	dev->ibdev.reg_user_mr          = crdma_reg_user_mr;
 	dev->ibdev.req_notify_cq        = crdma_req_notify_cq;
 	dev->ibdev.resize_cq            = crdma_resize_cq;
