@@ -2716,11 +2716,65 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 	return 0;
 }
 
-static int crdma_resize_cq(struct ib_cq *ibcq, int cqe,
+static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
 			struct ib_udata *udata)
 {
-	crdma_warn("crdma_resize_cq not implemented\n");
-	return 0;
+	struct crdma_cq *cq = to_crdma_cq(ibcq);
+	struct crdma_ibdev *dev = to_crdma_ibdev(ibcq->device);
+	struct crdma_mem *newmem;
+	struct crdma_cqe *newcqe;
+	struct crdma_cqe *tmpcqe;
+	int oldnum,i;
+	int ret = 0;
+
+	crdma_debug("%s ib_cq %p cqe %d\n", __func__, ibcq, num_cqe);
+
+	/* We don't downsize... */
+	if (num_cqe <= ibcq->cqe)
+		return 0;
+
+	if (num_cqe < 1 || num_cqe > dev->cap.ib.max_cqe - 1) {
+		crdma_info("Too many CQE requested %d\n", num_cqe);
+		return -EINVAL;
+	}
+	
+	num_cqe = roundup_pow_of_two(num_cqe + 1);
+	oldnum = cq->num_cqe;
+	cq->num_cqe = num_cqe - 1;
+	if (num_cqe == ibcq->cqe + 1) 
+		return 0;
+	spin_lock_irq(&cq->lock);
+	
+	newmem = crdma_alloc_hw_queue(dev,
+                                num_cqe * dev->cap.cqe_size);
+        if (IS_ERR(newmem)) {
+                crdma_dev_err(dev, "Unable to allocate CQ HW queue\n");
+                ret = -ENOMEM;
+                goto out;
+        }
+	
+	newcqe = sg_virt(newmem->alloc);
+	for (i = 0, tmpcqe = newcqe; i < cq->num_cqe; i++, tmpcqe++)
+                tmpcqe->owner = 0;
+	memcpy(newcqe, cq->cqe_buf,oldnum * sizeof(struct crdma_cqe));
+	crdma_free_hw_queue(dev, cq->mem);
+	cq->mem = newmem;
+	cq->cqe_buf = newcqe;
+	cq->num_cqe_log2 = ilog2(num_cqe);
+	ibcq->cqe = num_cqe -1;
+	
+	ret = crdma_cq_resize_cmd(dev, cq);
+	if (ret) {
+		
+		crdma_warn("Microcode resize CQ command failed\n");
+		dma_free_coherent(&dev->nfp_info->pdev->dev, PAGE_SIZE,
+			cq->ci_mbox, cq->ci_mbox_paddr);
+		ret = -EINVAL;
+		goto out;
+	}
+out:
+	spin_unlock_irq(&cq->lock);
+	return ret;
 }
 
 static inline struct crdma_cqe *crdma_cq_head(struct crdma_cq *ncq)

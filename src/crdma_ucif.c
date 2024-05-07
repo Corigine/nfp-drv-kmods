@@ -1567,6 +1567,54 @@ int crdma_cq_create_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq,
 	return status;
 }
 
+int crdma_cq_resize_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq)
+{
+	struct crdma_cq_resize_params *param;
+	struct crdma_cmd_mbox in_mbox;
+	struct crdma_cmd cmd;
+	int status;
+
+	if (crdma_init_mailbox(dev, &in_mbox))
+		return -1;
+
+	param = in_mbox.buf;
+	while ((1 << param->cqe_log2) < cq->num_cqe)
+		param->cqe_log2++;
+
+	param->cq_log2_pg_sz = cq->mem->min_order + PAGE_SHIFT;
+	param->cq_page_offset = 0;
+	param->cq_mtt_index = cpu_to_le32(cq->mem->base_mtt_ndx);
+
+	crdma_info("CQ resize values (LE)\n");
+	pr_info("  Num CQE Log2: %d", param->cqe_log2);
+	pr_info("  Pg_Sz log2: 0x%08x", param->cq_log2_pg_sz);
+	pr_info("  MTT Index:    0x%08X\n", param->cq_mtt_index);
+	
+
+#if CRDMA_DETAIL_INFO_DEBUG_FLAG
+	print_hex_dump(KERN_DEBUG, "IN:",
+			DUMP_PREFIX_OFFSET, 8, 1, in_mbox.buf, 16, 0);
+#endif
+
+	crdma_info("Send CQ_RESIZE to Firmware\n");
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opcode = CRDMA_CMD_CQ_RESIZE;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
+	cmd.input_param = in_mbox.dma_addr;
+	cmd.input_mod = cq->cqn;
+	status = crdma_cmd(dev, &cmd);
+
+	/* While command not supported provide hard-coded response */
+	if (status == CRDMA_STS_UNSUPPORTED_OPCODE) {
+		crdma_info("Using hard coded CQ_RESIZE results\n");
+		status = CRDMA_STS_OK;
+	}
+	crdma_info("Get status [%d] from Firmware\n", status);
+
+	crdma_cleanup_mailbox(dev, &in_mbox);
+	return status;
+}
+
 int crdma_cq_destroy_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq)
 {
 	return __crdma_no_param_cmd(dev, CRDMA_CMD_CQ_DESTROY, 0,

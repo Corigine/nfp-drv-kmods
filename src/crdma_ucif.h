@@ -816,6 +816,15 @@ enum {
 	CRDMA_CQ_MBOX_CONSUMER_NDX_MASK		= 0x00FFFFFF,
 };
 
+struct crdma_cq_resize_params {
+	u8		rsvd1;
+	u8		cq_log2_pg_sz;
+	u8		rsvd2;
+	u8		cqe_log2;
+	__le32		cq_page_offset;
+	__le32		cq_mtt_index;
+};
+
 struct crdma_ci_mbox {
 	__le32		ci;		/* Consumer Index */
 	__le32		last_db_state;
@@ -835,6 +844,16 @@ struct crdma_uar;
  */
 int crdma_cq_create_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq,
 		struct crdma_uar *uar);
+
+/**
+ * Resize a completion queue.
+ * 
+ * @dev: RoCE IB device.
+ * @cq: The driver CQ object.
+ * 
+ * Returns 0 on success, otherwise an error.
+*/
+int crdma_cq_resize_cmd(struct crdma_ibdev *dev, struct crdma_cq *cq);
 
 /**
  * Destroy a microcode completion queue control object.
