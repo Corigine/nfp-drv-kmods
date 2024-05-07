@@ -1567,11 +1567,9 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	 */
 	if (qp_attr_mask & IB_QP_CUR_STATE &&
 	    qp_attr->cur_qp_state != cqp->qp_state) {
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_info("IB_QP_CUR_STATE is set, but qp_attr->cur_qp_state "
+		crdma_warn("IB_QP_CUR_STATE is set, but qp_attr->cur_qp_state "
 			   "%d, cqp->qp_state %d\n",
 			   qp_attr->cur_qp_state, cqp->qp_state);
-#endif
 		ret = -EINVAL;
 		goto out;
 	}
@@ -1588,13 +1586,11 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 	if (!ib_modify_qp_is_ok(cur_state, new_state,
 			qp->qp_type, qp_attr_mask, IB_LINK_LAYER_ETHERNET)) {
 #endif
-#ifdef CRDMA_DEBUG_FLAG
-		crdma_info("QPN %d, invalid attribute mask specified "
+		crdma_warn("QPN %d, invalid attribute mask specified "
 				"for transition %d to %d. qp_type %d, "
 				"attr_mask 0x%08X\n",
 				qp->qp_num, cur_state, new_state,
 				qp->qp_type, qp_attr_mask);
-#endif
 		goto out;
 	}
 

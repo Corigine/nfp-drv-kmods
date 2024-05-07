@@ -1851,7 +1851,7 @@ int crdma_qp_modify_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 
 	modifier = crdma_qp_modify_opcode_mod(cur_state, new_state);
 	if (modifier < 0) {
-		crdma_info("Illegal state transition\n");
+		crdma_warn("Illegal state transition\n");
 		return -EINVAL;
 	}
 	if (crdma_init_mailbox(dev, &in_mbox))
@@ -1873,7 +1873,7 @@ int crdma_qp_modify_cmd(struct crdma_ibdev *dev, struct crdma_qp *qp,
 	 */
 	if (crdma_set_qp_attr(dev, qp, qp_attr, qp_attr_mask,
 			&param->attr, &param->attr_mask)) {
-		crdma_info("Illegal QP attribute detected\n");
+		crdma_warn("Illegal QP attribute detected\n");
 		status = -EINVAL;
 		goto out;
 	}
@@ -2481,7 +2481,7 @@ int crdma_init_cmdif(struct crdma_ibdev *dev)
 	dev->mbox_pool = dma_pool_create("crdma_cmd", &dev->nfp_info->pdev->dev,
 			CRDMA_CMDIF_MBOX_SIZE, CRDMA_CMDIF_MBOX_SIZE, 0);
 	if (!dev->mbox_pool) {
-		crdma_dev_info(dev, "RoCEv2 command mailbox pool create"
+		crdma_dev_warn(dev, "RoCEv2 command mailbox pool create"
 			       " failure\n");
 		return -ENOMEM;
 	}
