@@ -484,7 +484,8 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 
 		RCU_INIT_POINTER(reprs->reprs[i], repr);
 		nfp_info(app->cpp, "%s%d Representor(%s) created\n",
-			 repr_type == NFP_REPR_TYPE_PF ? "PF" : "VF", i,
+			 repr_type == NFP_REPR_TYPE_PF ? "PF" : "VF",
+			 repr_type == NFP_REPR_TYPE_PF ? idx : i,
 			 repr->name);
 	}
 
