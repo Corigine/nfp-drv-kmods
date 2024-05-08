@@ -29,9 +29,6 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION(DRV_VERSION);
 
 static DEFINE_IDR(crdma_dev_id);
-static const char crdma_version[] =
-	DRV_NAME ": Corigine NFP RoCEv2 HCA provider driver"
-	DRV_VERSION " (" DRV_RELDATE ")\n";
 
 /*
  * Prior to having working/integrated EQ interrupts use the following
