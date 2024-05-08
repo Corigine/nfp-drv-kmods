@@ -508,7 +508,7 @@ int nfp_devlink_port_register(struct nfp_app *app, struct nfp_port *port)
 	case NFP_PORT_PF_PORT:
 		attrs.flavour = DEVLINK_PORT_FLAVOUR_PCI_PF;
 		attrs.pci_pf.pf = port->pf_id;
-		dl_port_index = NFP_DEVLINK_ID_PF_START + port->pf_id;
+		dl_port_index = NFP_DEVLINK_ID_PF_START;
 		break;
 	case NFP_PORT_VF_PORT:
 		attrs.flavour = DEVLINK_PORT_FLAVOUR_PCI_VF;
