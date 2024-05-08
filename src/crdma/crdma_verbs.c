@@ -1771,7 +1771,7 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 
 	/* State transition attribute/transport type validation */
 	ret = -EINVAL;
-#if (VER_NON_RHEL_OR_KYL_GE(4, 20) || VER_RHEL_GE(8, 1) || VER_KYL_GE(10, 3))
+#if (VER_NON_RHEL_OR_KYL_GE(4, 20) || (VER_RHEL_GE(7, 7) && !(VER_RHEL_EQ(8, 0))) || VER_KYL_GE(10, 3))
 	if (!ib_modify_qp_is_ok(cur_state, new_state,
 			qp->qp_type, qp_attr_mask)) {
 #else
@@ -2408,7 +2408,7 @@ static struct crdma_swqe *get_sq_tail(struct crdma_qp *cqp)
 #define CRDMA_SQ_DB_READY_RETRIES	20
 
 
-#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(8, 1))
+#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(7, 7) || VER_RHEL_EQ(8, 0))
 int crdma_post_send(struct ib_qp *qp, struct ib_send_wr *wr,
 		    struct ib_send_wr **bad_wr)
 #else
@@ -2632,7 +2632,7 @@ static struct crdma_rwqe *get_rq_tail(struct crdma_qp *cqp)
 	return cqp->rq.buf + (cqp->rq.tail << cqp->rq.wqe_size_log2);
 }
 
-#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(8, 1))
+#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(7, 7) || VER_RHEL_EQ(8, 0))
 int crdma_post_recv(struct ib_qp *qp, struct ib_recv_wr *wr,
 					struct ib_recv_wr **bad_wr)
 #else
@@ -2714,7 +2714,7 @@ static struct crdma_rwqe *get_srq_tail(struct crdma_srq *csrq)
 	return csrq->wq.buf + (csrq->wq.tail << csrq->wq.wqe_size_log2);
 }
 
-#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(8, 1))
+#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(7, 7) || VER_RHEL_EQ(8, 0))
 static int crdma_post_srq_recv(struct ib_srq *ib_srq, struct ib_recv_wr *wr,
 			       struct ib_recv_wr **bad_wr)
 #else
@@ -3954,7 +3954,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 		&dev->nfp_info->pdev->dev);
 #elif (VER_NON_RHEL_OR_KYL_GE(5, 1) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
 	ret = ib_register_device(&dev->ibdev, name);
-#elif (VER_NON_KYL_GE(4, 20) || VER_RHEL_GE(8, 1) || COMPAT_KYLINUX_V10SP2)
+#elif (VER_NON_KYL_GE(4, 20) || (VER_RHEL_GE(7, 7) && !(VER_RHEL_EQ(8, 0))) || COMPAT_KYLINUX_V10SP2)
 	ret = ib_register_device(&dev->ibdev, name, NULL);
 #else
 	ret = ib_register_device(&dev->ibdev, NULL);

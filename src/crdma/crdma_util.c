@@ -517,7 +517,7 @@ int crdma_set_av(struct ib_pd *pd,
 {
 	const struct ib_global_route *grh = rdma_ah_read_grh(ah_attr);
 	u8 nw_type;
-#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(8, 1))
+#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(7, 7) || VER_RHEL_EQ(8, 0))
 	union ib_gid sgid;
 	struct ib_gid_attr sgid_attr;
 	int ret;
@@ -547,7 +547,7 @@ int crdma_set_av(struct ib_pd *pd,
 				(to_crdma_pd(pd)->pd_index & CRDMA_AV_PD_MASK));
 
 	/* Get gid type */
-#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(8, 1))
+#if (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(7, 7) || VER_RHEL_EQ(8, 0))
 	ret = ib_get_cached_gid(pd->device,
 		rdma_ah_get_port_num(ah_attr),
 		grh->sgid_index, &sgid, &sgid_attr);
@@ -573,7 +573,7 @@ int crdma_set_av(struct ib_pd *pd,
 		crdma_warn("Get vlan failed from gid_attr\n");
 		return -EINVAL;
 	}
-#elif (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(8, 1))
+#elif (VER_NON_RHEL_LT(4, 19) || VER_RHEL_LT(7, 7) || VER_RHEL_EQ(8, 0))
 	if (is_vlan_dev(sgid_attr.ndev))
 		vlan = vlan_dev_vlan_id(sgid_attr.ndev);
 #else
