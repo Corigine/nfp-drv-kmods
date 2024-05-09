@@ -1004,6 +1004,30 @@ free_pd:
 	crdma_free_bitmap_index(&dev->pd_map, pd->pd_index);
 	return err;
 }
+#elif (VER_NON_RHEL_OR_KYL_GE(5, 1))
+static int crdma_alloc_pd(struct ib_pd *ibpd,
+			struct ib_ucontext *ib_uctxt,
+			struct ib_udata *udata)
+{
+	struct ib_device *ibdev = ibpd->device;
+	struct crdma_pd *pd = container_of(ibpd, struct crdma_pd, ib_pd);
+	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
+	int err;
+
+	if (crdma_alloc_bitmap_index(&dev->pd_map, &pd->pd_index))
+		return -ENOMEM;
+
+	if (udata) {
+		err = ib_copy_to_udata(udata, &pd->pd_index, sizeof(u32));
+		if (err)
+			goto free_pd;
+	}
+	return 0;
+
+free_pd:
+	crdma_free_bitmap_index(&dev->pd_map, pd->pd_index);
+	return err;
+}
 #else
 static struct ib_pd *crdma_alloc_pd(struct ib_device *ibdev,
 			struct ib_ucontext *ib_uctxt,
@@ -1022,7 +1046,7 @@ static struct ib_pd *crdma_alloc_pd(struct ib_device *ibdev,
 		goto free_mem;
 	}
 
-	if (ib_uctxt) {
+	if (udata) {
 		err = ib_copy_to_udata(udata, &pd->pd_index, sizeof(u32));
 		if (err)
 			goto free_pd;
@@ -1049,6 +1073,14 @@ static int crdma_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata)
 }
 #elif (VER_NON_RHEL_OR_KYL_GE(5, 2) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
 static void crdma_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata)
+{
+	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
+	struct crdma_pd *npd = to_crdma_pd(pd);
+
+	crdma_free_bitmap_index(&dev->pd_map, npd->pd_index);
+}
+#elif (VER_NON_RHEL_OR_KYL_GE(5, 1))
+static void crdma_dealloc_pd(struct ib_pd *pd)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(pd->device);
 	struct crdma_pd *npd = to_crdma_pd(pd);

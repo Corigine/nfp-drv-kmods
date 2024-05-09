@@ -568,7 +568,7 @@ int crdma_set_av(struct ib_pd *pd,
 	}
 
 	/* Get vlan id*/
-#if (VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 2))
+#if (VER_NON_RHEL_GE(5, 2) || VER_RHEL_GE(8, 2))
 	if (rdma_read_gid_l2_fields(grh->sgid_attr, &vlan, NULL)) {
 		crdma_warn("Get vlan failed from gid_attr\n");
 		return -EINVAL;
