@@ -3135,7 +3135,7 @@ static int crdma_modify_cq(struct ib_cq *cq, u16 cq_count, u16 cq_period)
 	return 0;
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5, 8) || VER_RHEL_GE(8, 5) || VER_KYL_GE(10, 4))
+#if (VER_NON_RHEL_OR_KYL_GE(5, 10) || VER_RHEL_GE(8, 5) || VER_KYL_GE(10, 4))
 static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
