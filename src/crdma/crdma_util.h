@@ -92,7 +92,11 @@ void crdma_free_bitmap_area(struct crdma_bitmap *bitmap, u32 index, u32 count);
  * used (in multiples of host PAGE_SIZE).
  */
 enum {
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	CRDMA_MEM_DEFAULT_ORDER		= HPAGE_PMD_ORDER,
+#else
+	CRDMA_MEM_DEFAULT_ORDER		= 0,
+#endif
 	CRDMA_MEM_MAX_ALLOCS		= 512
 };
 
