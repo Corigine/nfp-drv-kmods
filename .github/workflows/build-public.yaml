@@ -12,6 +12,7 @@ on:
       - 'Makefile'
       - 'src/**'
       - '.github/workflows/build-public.yaml'
+      - '.github/workflows/build.yaml'
     secrets:
       GHUB_TOKEN:
         required: true
