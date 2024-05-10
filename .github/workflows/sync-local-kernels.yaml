@@ -25,7 +25,7 @@ jobs:
       - self-hosted
       - ci-linter-vm
     env:
-      LOCAL_KERNELS: tmp/misc/kernel-devel-c4c
+      LOCAL_KERNELS: binaries/misc/kernel-devel-c4c
     steps:
       # --- PREPARE ENVIRONMENT ---
       - name: Clean up the working directory
