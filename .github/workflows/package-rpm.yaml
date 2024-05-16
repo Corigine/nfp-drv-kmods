@@ -274,7 +274,9 @@ jobs:
           matrix.release.container != 'centos:7'
         run: |
           dnf clean all
-          dnf distro-sync -y
+          if [[ "${{ matrix.release.container }}" != *"nfschina-server"* ]]; then
+            dnf distro-sync -y
+          fi
           if [[ "${{ matrix.release.container }}" != "opencloudos/opencloudos"*"9.0" && \
                 "${{ matrix.release.container }}" != *"kylinos"* && \
                 "${{ matrix.release.container }}" != *"openeuler"* && \
