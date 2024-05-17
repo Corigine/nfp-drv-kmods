@@ -1459,8 +1459,12 @@ static int crdma_set_qp_attr(struct crdma_ibdev *dev,
 	if (ib_attr_mask & IB_QP_QKEY)
 		attr->qkey = cpu_to_le32(ib_attr->qkey);
 
-	if (ib_attr_mask & IB_QP_AV)
+	if (ib_attr_mask & IB_QP_AV) {
 		crdma_set_av(qp->ib_qp.pd, &attr->av, &ib_attr->ah_attr);
+		crdma_set_loopback_mode(dev, qp, &ib_attr->ah_attr);
+		if (qp->lb_mode)
+			attr->lb_mode = 1;
+	}
 
 	if (ib_attr_mask & IB_QP_PATH_MTU)
 		attr->mtu_access |= (ib_attr->path_mtu + 7) <<

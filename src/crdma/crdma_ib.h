@@ -215,6 +215,8 @@ struct crdma_qp {
 	/* Work queues, RQ only valid if QP is not attached to SRQ */
 	struct crdma_hw_workq	sq;
 	struct crdma_hw_workq	rq;
+
+	int			lb_mode;
 };
 
 struct crdma_srq {

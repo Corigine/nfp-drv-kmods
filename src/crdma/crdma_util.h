@@ -249,4 +249,16 @@ int crdma_set_av(struct ib_pd *pd,
 		 struct crdma_av *av,
 		 struct rdma_ah_attr *ah_attr);
 
+int crdma_get_gid(struct crdma_ibdev *dev, u8 port_num,
+		  unsigned int index, union ib_gid *gid);
+
+bool crdma_check_loopback_mode(struct crdma_ibdev *dev,
+			       const union ib_gid *dgid,
+			       __u8  sgid_index,
+			       bool swap);
+
+int crdma_set_loopback_mode(struct crdma_ibdev *dev,
+			    struct crdma_qp *qp,
+			    struct rdma_ah_attr *ah_attr);
+
 #endif /* CRDMA_UTIL_H */

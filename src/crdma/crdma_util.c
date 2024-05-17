@@ -595,3 +595,68 @@ int crdma_set_av(struct ib_pd *pd,
 
 	return 0;
 }
+
+int crdma_get_gid(struct crdma_ibdev *dev, u8 port_num,
+		  unsigned int index, union ib_gid *gid)
+{
+	struct crdma_port *port = &dev->port;
+	struct crdma_gid_entry *entry;
+	unsigned long flags;
+
+	if ((port_num > 1) || (index >= dev->cap.sgid_table_size))
+		return -EINVAL;
+
+	entry = &port->gid_table_entry[index];
+	if (!entry->valid)
+		return -EINVAL;
+
+	spin_lock_irqsave(&port->table_lock, flags);
+	memcpy(gid, &entry->gid, sizeof(*gid));
+	spin_unlock_irqrestore(&port->table_lock, flags);
+
+	return 0;
+}
+
+bool crdma_check_loopback_mode(struct crdma_ibdev *dev,
+			       const union ib_gid *dgid,
+			       __u8  sgid_index,
+			       bool swap)
+{
+	union ib_gid sgid;
+	union {
+		__u32   d_gid_word[4];
+		__u8    d_gid[16];
+	} temp_gid;
+
+	if (crdma_get_gid(dev, 0, sgid_index, &sgid)) {
+		crdma_warn("crdma_get_gid failed\n");
+		return false;
+	}
+
+	if (swap) {
+		memcpy(&temp_gid.d_gid, &sgid, sizeof(union ib_gid));
+		temp_gid.d_gid_word[0] = __swab32(temp_gid.d_gid_word[0]);
+		temp_gid.d_gid_word[1] = __swab32(temp_gid.d_gid_word[1]);
+		temp_gid.d_gid_word[2] = __swab32(temp_gid.d_gid_word[2]);
+		temp_gid.d_gid_word[3] = __swab32(temp_gid.d_gid_word[3]);
+		memcpy(&sgid, &temp_gid.d_gid, sizeof(union ib_gid));
+	}
+
+	if (memcmp(&sgid, dgid, sizeof(union ib_gid)) == 0)
+		return true;
+
+	return false;
+}
+
+int crdma_set_loopback_mode(struct crdma_ibdev *dev,
+			    struct crdma_qp *qp,
+			    struct rdma_ah_attr *ah_attr)
+{
+	const struct ib_global_route *grh = rdma_ah_read_grh(ah_attr);
+
+	if (crdma_check_loopback_mode(dev, &grh->dgid, grh->sgid_index, false))
+		qp->lb_mode = 1;
+
+	return 0;
+}
+

@@ -2457,6 +2457,7 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 	int wr_cnt = 0;
 	int ret = 0;
 	int db_value = 0;
+	bool lb_mode = false;
 	u8 flags;
 	u8 is_read = 0;
 	unsigned long irq_flags;
@@ -2507,6 +2508,11 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 				cpu_to_le32(ud_wr(wr)->remote_qkey);
 			inline_data = &swqe->ud.inline_data;
 			sg = &swqe->ud.sg[0];
+
+			/* LB check */
+			lb_mode = crdma_check_loopback_mode(dev,
+				 (union ib_gid *)&swqe->ud.addr.av.d_gid,
+				  swqe->ud.addr.av.s_gid_ndx, true);
 			break;
 
 		case IB_QPT_RC:
@@ -2552,9 +2558,10 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		}
 
 		owner.word = 0;
-		if (send_loopback)
+		if (send_loopback || lb_mode) {
 			flags = CRDMA_WQE_CTRL_LOOPBACK_BIT;
-		else
+			lb_mode = false;
+		} else
 			flags = wr->send_flags & CRDMA_IB_SEND_LOOPBACK ?
 					CRDMA_WQE_CTRL_LOOPBACK_BIT : 0;
 		if (wr->send_flags & IB_SEND_INLINE) {

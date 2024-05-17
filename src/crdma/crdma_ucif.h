@@ -901,7 +901,7 @@ enum {
 };
 
 struct crdma_qp_attr_params {
-	u8		rsvd;
+	u8		lb_mode;
 	u8		phys_port_num;
 	u8		mtu_access;
 	u8		qp_state;
