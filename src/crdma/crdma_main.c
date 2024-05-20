@@ -640,7 +640,7 @@ static ssize_t command_store(struct device *device,
 static DEVICE_ATTR_RO(hw_rev);
 static DEVICE_ATTR_RO(hca_type);
 static DEVICE_ATTR_RO(board_id);
-static DEVICE_ATTR(command,  0444, NULL, command_store);
+static DEVICE_ATTR(command,  0200, NULL, command_store);
 static DEVICE_ATTR(doorbell, 0444, doorbell_show, doorbell_store);
 static DEVICE_ATTR_RO(uc_gid);
 static DEVICE_ATTR_RO(dcqcn_enable);
