@@ -626,6 +626,7 @@ int crdma_add_gid(struct ib_device *device, u8 port_num, unsigned int index,
 	struct crdma_gid_entry *entry;
 	int ret = 0;
 	unsigned long flags;
+	u8 nw_type = 0;
 
 	/* CRDMA HCA only support RoCEv2*/
 	if (!rdma_protocol_roce_udp_encap(device, port_num))
@@ -640,7 +641,13 @@ int crdma_add_gid(struct ib_device *device, u8 port_num, unsigned int index,
 	entry = &port->gid_table_entry[index];
 	spin_lock_irqsave(&port->table_lock, flags);
 	memcpy(&entry->gid, gid, sizeof(*gid));
-	entry->type = RDMA_ROCE_V2_GID_TYPE;
+#if VER_RHEL_EQ(7, 6)
+	nw_type = ib_gid_to_network_type(attr->gid_type, (union ib_gid *)gid);
+#else
+	nw_type = ib_gid_to_network_type(attr->gid_type, gid);
+#endif
+	entry->type = nw_type == RDMA_NETWORK_IPV4 ? CRDMA_AV_ROCE_V2_IPV4_GID_TYPE :
+				  CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
 	entry->valid = 1;
 	spin_unlock_irqrestore(&port->table_lock, flags);
 
@@ -652,7 +659,7 @@ int crdma_add_gid(struct ib_device *device, u8 port_num, unsigned int index,
 
 	return 0;
 }
-#elif (VER_NON_RHEL_GE(4, 17) && VER_NON_RHEL_LT(4, 19) || VER_RHEL_EQ(8, 0))
+#elif (VER_NON_RHEL_GE(4, 17) && VER_NON_RHEL_LT(4, 19)) || VER_RHEL_EQ(8, 0)
 static int crdma_add_gid(const union ib_gid *gid,
 			 const struct ib_gid_attr *attr, void **context)
 {
@@ -662,6 +669,7 @@ static int crdma_add_gid(const union ib_gid *gid,
 	int ret = 0;
 	unsigned long flags;
 	u16 index = attr->index;
+	u8 nw_type = 0;
 
 	/* CRDMA HCA only support RoCEv2*/
 	if (!rdma_protocol_roce_udp_encap(attr->device, attr->port_num))
@@ -676,7 +684,13 @@ static int crdma_add_gid(const union ib_gid *gid,
 	entry = &port->gid_table_entry[index];
 	spin_lock_irqsave(&port->table_lock, flags);
 	memcpy(&entry->gid, gid, sizeof(entry->gid));
-	entry->type = RDMA_ROCE_V2_GID_TYPE;
+#if VER_RHEL_EQ(8, 0)
+	nw_type = ib_gid_to_network_type(attr->gid_type, (union ib_gid *)gid);
+#else
+	nw_type = ib_gid_to_network_type(attr->gid_type, gid);
+#endif
+	entry->type = nw_type == RDMA_NETWORK_IPV4 ? CRDMA_AV_ROCE_V2_IPV4_GID_TYPE :
+				  CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
 	entry->valid = 1;
 	spin_unlock_irqrestore(&port->table_lock, flags);
 
@@ -698,6 +712,7 @@ static int crdma_add_gid(const struct ib_gid_attr *attr, void **context)
 	int ret = 0;
 	unsigned long flags;
 	u16 index = attr->index;
+	u8 nw_type = 0;
 
 	/* CRDMA HCA only support RoCEv2*/
 	if (!rdma_protocol_roce_udp_encap(attr->device, attr->port_num))
@@ -712,7 +727,13 @@ static int crdma_add_gid(const struct ib_gid_attr *attr, void **context)
 	entry = &port->gid_table_entry[index];
 	spin_lock_irqsave(&port->table_lock, flags);
 	memcpy(&entry->gid, &attr->gid, sizeof(attr->gid));
-	entry->type = RDMA_ROCE_V2_GID_TYPE;
+#if VER_RHEL_LT(7, 7)
+	nw_type = ib_gid_to_network_type(attr->gid_type, attr->gid);
+#else
+	nw_type = rdma_gid_attr_network_type(attr);
+#endif
+	entry->type = nw_type == RDMA_NETWORK_IPV4 ? CRDMA_AV_ROCE_V2_IPV4_GID_TYPE :
+				  CRDMA_AV_ROCE_V2_IPV6_GID_TYPE;
 	entry->valid = 1;
 	spin_unlock_irqrestore(&port->table_lock, flags);
 
