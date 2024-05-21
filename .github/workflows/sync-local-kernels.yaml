@@ -68,27 +68,30 @@ jobs:
         run: |
           UP_TO_DATE=true
 
-          for DIR in latest/kernel-devel-c4c/*; do
-            OS=${DIR##*/}
-            MIRROR=$(sed -n 's/.*\"mirror\": \"\(.*\)\"/\1/p' $DIR/buildinfo.json)
-            if [[ "${OS}" != "opensuse"* ]]; then
-              (
-                sudo wget -r --spider -o $DIR/packages.txt --no-parent \
-                  "${MIRROR}" -A 'kernel-devel*'
+          for ARCH in x86_64 aarch64; do
+            for DIR in latest/kernel-devel-c4c/${ARCH}/*; do
+              OS=${DIR##*/}
+              MIRROR=$(sed -n 's/.*\"mirror\": \"\(.*\)\"/\1/p' $DIR/buildinfo.json)
+              if [[ "${OS}" != "opensuse"* ]]; then
+                (
+                  sudo wget -r --spider -o $DIR/packages.txt --no-parent \
+                    "${MIRROR}" -A 'kernel-devel*'
 
-                PACKAGES=$(grep -o "kernel-devel.*\.rpm$" $DIR/packages.txt)
+                  PACKAGES=$(grep -o "kernel-devel.*\.rpm$" $DIR/packages.txt)
 
-                PRESENT=$(echo "${{ steps.local-kernels.outputs.file-list }}" | grep -o "$dir[^ ]*rpm" || true)
-                for package in $PACKAGES; do
-                  if [[ "$PRESENT" != *"$package"* || "$PRESENT" == "" ]]; then
-                    echo "::notice::$package not present locally"
-                    echo "${MIRROR}/$package" | sudo tee -a $DIR/downloads.txt
-                  fi
-                done
+                  PRESENT=$(echo "${{ steps.local-kernels.outputs.file-list }}" | \
+                            grep -o "$dir[^ ]*rpm" || true)
+                  for package in $PACKAGES; do
+                    if [[ "$PRESENT" != *"$package"* || "$PRESENT" == "" ]]; then
+                      echo "::notice::$package not present locally"
+                      echo "${MIRROR}/$package" | sudo tee -a $DIR/downloads.txt
+                    fi
+                  done
 
-                sudo wget -q -i $DIR/downloads.txt -P $DIR/
-              ) &
-            fi
+                  sudo wget -q -i $DIR/downloads.txt -P $DIR/
+                ) &
+              fi
+            done
           done
           wait
 
