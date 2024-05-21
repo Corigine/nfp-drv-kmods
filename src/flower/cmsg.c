@@ -8,8 +8,11 @@
 #include <net/dst_metadata.h>
 
 #include "main.h"
+#include "nfp_main.h"
+#include "../nfpcore/nfp_nsp.h"
 #include "../nfp_net.h"
 #include "../nfp_net_repr.h"
+#include "../nfp_port.h"
 #include "./cmsg.h"
 
 static struct nfp_flower_cmsg_hdr *
@@ -148,6 +151,28 @@ nfp_flower_process_mtu_ack(struct nfp_app *app, struct sk_buff *skb)
 }
 
 static void
+nfp_flower_notify_phy_repr_speed(struct net_device *netdev, struct nfp_app *app)
+{
+	struct nfp_port *port = nfp_port_from_netdev(netdev);
+	struct nfp_flower_priv *priv = app->priv;
+	u16 sts;
+
+	if (!port || (port->type != NFP_PORT_PHYS_PORT))
+		return;
+
+	sts = nn_readw(priv->nn, NFP_NET_CFG_STS);
+
+	if (!(sts & NFP_NET_CFG_STS_LINK)) {
+		nn_writew(priv->nn, NFP_NET_CFG_STS_NSP_LINK_RATE,
+			  NFP_NET_CFG_STS_LINK_RATE_UNKNOWN);
+		return;
+	}
+
+	nn_writew(priv->nn, NFP_NET_CFG_STS_NSP_LINK_RATE,
+		  nfp_net_speed2lr(port->eth_port->speed));
+}
+
+static void
 nfp_flower_cmsg_portmod_rx(struct nfp_app *app, struct sk_buff *skb)
 {
 	struct nfp_flower_cmsg_portmod *msg;
@@ -176,6 +201,7 @@ nfp_flower_cmsg_portmod_rx(struct nfp_app *app, struct sk_buff *skb)
 		/* An MTU of 0 from the firmware should be ignored */
 		if (mtu)
 			dev_set_mtu(netdev, mtu);
+		nfp_flower_notify_phy_repr_speed(netdev, app);
 	} else {
 		netif_carrier_off(netdev);
 	}
