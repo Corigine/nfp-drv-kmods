@@ -62,7 +62,7 @@ cd %{buildroot}
 find lib -name "nfp.ko" -printf "/%p\n" \
 	>%{_builddir}/%{name}-%{version}/file.list
 find lib -name "crdma.ko" -printf "/%p\n" \
-	>%{_builddir}/%{name}-%{version}/file.list
+	>>%{_builddir}/%{name}-%{version}/file.list
 find lib -name "nfp_driver.symvers" -printf "/%p\n" \
 	>>%{_builddir}/%{name}-%{version}/file.list
 find ./ -name "nfp_set_irq_affinity" -printf "/%p\n" \
