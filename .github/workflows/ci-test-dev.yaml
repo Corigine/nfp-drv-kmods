@@ -130,6 +130,24 @@ env:
   CUSTOM_STABLE_KERNELS: binaries/misc/kernels/linux_stable_builds
   CUSTOM_TMP_KERNELS: tmp/misc/kernels/${{ inputs.kernel_source }}_builds
 
+# Cancel outdated workflows.
+# --------------------------
+# Group construction:
+# - Cases: Workflow triggered by manual run or on default branch ("main").
+#   Resolves to: ${{ github.workflow }}-${{ github.run_id }}
+# - All other cases, resolves to:
+#   ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+concurrency:
+  cancel-in-progress: true
+  group: >-
+    ${{ github.workflow }}-${{
+    (!((github.head_ref || github.ref_name) == github.event.repository.default_branch)
+    && !((github.head_ref || github.ref_name) == 'main')
+    && !(github.event_name == 'workflow_dispatch'))
+    && (github.head_ref || github.ref_name)
+    || (github.run_id)
+    }}
+
 jobs:
  call-test-dev:
   uses: Corigine/ci-libs/.github/workflows/ci-drv-test-dev.yaml@main
