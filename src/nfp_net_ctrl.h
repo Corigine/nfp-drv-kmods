@@ -17,12 +17,10 @@
 /* 64-bit per app capabilities */
 #define NFP_NET_APP_CAP_SP_INDIFF	BIT_ULL(0) /* indifferent to port speed */
 
-/* Configuration BAR size.
- *
- * The configuration BAR is 8K in size, but due to
- * THB-350, 32k needs to be reserved.
- */
-#define NFP_NET_CFG_BAR_SZ		(32 * 1024)
+/* Configuration BAR size */
+#define NFP_NET_CFG_BAR_SZ_32K		(32 * 1024)
+#define NFP_NET_CFG_BAR_SZ_8K		(8 * 1024)
+#define NFP_NET_CFG_BAR_SZ_MIN		NFP_NET_CFG_BAR_SZ_8K
 
 /* Offset in Freelist buffer where packet starts on RX */
 #define NFP_NET_RX_OFFSET		32
@@ -182,6 +180,8 @@
 #define   NFP_NET_CFG_VERSION_CLASS_MASK  (0xff << 16)
 #define   NFP_NET_CFG_VERSION_CLASS(x)	  (((x) & 0xff) << 16)
 #define   NFP_NET_CFG_VERSION_CLASS_GENERIC	0
+#define   NFP_NET_CFG_VERSION_CLASS_NO_EMEM	1
+#define   NFP_NET_CFG_VERSION_CLASS_MAX		1
 #define   NFP_NET_CFG_VERSION_MAJOR_MASK  (0xff <<  8)
 #define   NFP_NET_CFG_VERSION_MAJOR(x)	  (((x) & 0xff) <<  8)
 #define   NFP_NET_CFG_VERSION_MINOR_MASK  (0xff <<  0)
@@ -588,5 +588,5 @@ struct nfp_net_tlv_caps {
 };
 
 int nfp_net_tlv_caps_parse(struct device *dev, u8 __iomem *ctrl_mem,
-			   struct nfp_net_tlv_caps *caps);
+			   u32 ctrl_bar_sz, struct nfp_net_tlv_caps *caps);
 #endif /* _NFP_NET_CTRL_H_ */

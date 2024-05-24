@@ -36,8 +36,6 @@
 
 #include "nfpcore/nfp_roce.h"
 
-#define NFP_PF_CSR_SLICE_SIZE	(32 * 1024)
-
 #ifdef CONFIG_NFP_ROCE
 unsigned int nfp_roce_ints_num = 4;
 module_param(nfp_roce_ints_num, uint, 0444);
@@ -112,7 +110,7 @@ static void nfp_net_pf_free_vnics(struct nfp_pf *pf)
 static struct nfp_net *
 nfp_net_pf_alloc_vnic(struct nfp_pf *pf, bool needs_netdev,
 		      void __iomem *ctrl_bar, void __iomem *qc_bar,
-		      int stride, unsigned int id)
+		      int stride, u32 ctrl_bar_sz, unsigned int id)
 {
 	u32 tx_base, rx_base, n_tx_rings, n_rx_rings;
 	struct nfp_net *nn;
@@ -124,8 +122,8 @@ nfp_net_pf_alloc_vnic(struct nfp_pf *pf, bool needs_netdev,
 	n_rx_rings = readl(ctrl_bar + NFP_NET_CFG_MAX_RXRINGS);
 
 	/* Allocate and initialise the vNIC */
-	nn = nfp_net_alloc(pf->pdev, pf->dev_info, ctrl_bar, needs_netdev,
-			   n_tx_rings, n_rx_rings);
+	nn = nfp_net_alloc(pf->pdev, pf->dev_info, ctrl_bar, ctrl_bar_sz,
+			   needs_netdev, n_tx_rings, n_rx_rings);
 	if (IS_ERR(nn))
 		return nn;
 
@@ -207,15 +205,15 @@ err_devlink_port_clean:
 
 static int
 nfp_net_pf_alloc_vnics(struct nfp_pf *pf, void __iomem *ctrl_bar,
-		       void __iomem *qc_bar, int stride)
+		       void __iomem *qc_bar, int stride, u32 ctrl_bar_sz)
 {
 	struct nfp_net *nn;
 	unsigned int i;
 	int err;
 
 	for (i = 0; i < pf->max_data_vnics; i++) {
-		nn = nfp_net_pf_alloc_vnic(pf, true, ctrl_bar, qc_bar,
-					   stride, pf->multi_pf.en ? pf->multi_pf.id : i);
+		nn = nfp_net_pf_alloc_vnic(pf, true, ctrl_bar, qc_bar, stride, ctrl_bar_sz,
+					   pf->multi_pf.en ? pf->multi_pf.id : i);
 		if (IS_ERR(nn)) {
 			err = PTR_ERR(nn);
 			goto err_free_prev;
@@ -224,7 +222,7 @@ nfp_net_pf_alloc_vnics(struct nfp_pf *pf, void __iomem *ctrl_bar,
 		if (nn->port)
 			nn->port->link_cb = nfp_net_refresh_port_table;
 
-		ctrl_bar += NFP_PF_CSR_SLICE_SIZE;
+		ctrl_bar += ctrl_bar_sz;
 
 		/* Kill the vNIC if app init marked it as invalid */
 		if (nn->port && nn->port->type == NFP_PORT_INVALID)
@@ -347,7 +345,8 @@ static void nfp_net_pf_clean_vnics(struct nfp_pf *pf)
 }
 
 static int
-nfp_net_pf_app_init(struct nfp_pf *pf, u8 __iomem *qc_bar, unsigned int stride)
+nfp_net_pf_app_init(struct nfp_pf *pf, u8 __iomem *qc_bar,
+		    int stride, u32 ctrl_bar_sz)
 {
 	struct devlink *devlink = priv_to_devlink(pf);
 	u8 __iomem *ctrl_bar;
@@ -367,7 +366,7 @@ nfp_net_pf_app_init(struct nfp_pf *pf, u8 __iomem *qc_bar, unsigned int stride)
 		return 0;
 
 	ctrl_bar = nfp_pf_map_rtsym(pf, "net.ctrl", "_pf%u_net_ctrl_bar",
-				    NFP_PF_CSR_SLICE_SIZE, &pf->ctrl_vnic_bar);
+				    ctrl_bar_sz, &pf->ctrl_vnic_bar);
 	if (IS_ERR(ctrl_bar)) {
 		nfp_err(pf->cpp, "Failed to find ctrl vNIC memory symbol\n");
 		err = PTR_ERR(ctrl_bar);
@@ -375,7 +374,7 @@ nfp_net_pf_app_init(struct nfp_pf *pf, u8 __iomem *qc_bar, unsigned int stride)
 	}
 
 	pf->ctrl_vnic =	nfp_net_pf_alloc_vnic(pf, false, ctrl_bar, qc_bar,
-					      stride, 0);
+					      stride, ctrl_bar_sz, 0);
 	if (IS_ERR(pf->ctrl_vnic)) {
 		err = PTR_ERR(pf->ctrl_vnic);
 		goto err_unmap;
@@ -497,13 +496,13 @@ static void nfp_net_pci_unmap_mem(struct nfp_pf *pf)
 	nfp_roce_free_configure_resource(pf);
 }
 
-static int nfp_net_pci_map_mem(struct nfp_pf *pf)
+static int nfp_net_pci_map_mem(struct nfp_pf *pf, u32 ctrl_bar_sz)
 {
 	u32 min_size, cpp_id;
 	u8 __iomem *mem;
 	int err;
 
-	min_size = pf->max_data_vnics * NFP_PF_CSR_SLICE_SIZE;
+	min_size = pf->max_data_vnics * ctrl_bar_sz;
 	mem = nfp_pf_map_rtsym(pf, "net.bar0", "_pf%d_net_bar0",
 			       min_size, &pf->data_vnic_bar);
 	if (IS_ERR(mem)) {
@@ -526,8 +525,8 @@ static int nfp_net_pci_map_mem(struct nfp_pf *pf)
 	}
 
 	pf->vf_cfg_mem = nfp_pf_map_rtsym_offset(pf, "net.vfcfg", "_pf%d_net_vf_bar",
-						 NFP_NET_CFG_BAR_SZ * pf->multi_pf.vf_fid,
-						 NFP_NET_CFG_BAR_SZ * pf->limit_vfs,
+						 ctrl_bar_sz * pf->multi_pf.vf_fid,
+						 ctrl_bar_sz * pf->limit_vfs,
 						 &pf->vf_cfg_bar);
 	if (IS_ERR(pf->vf_cfg_mem)) {
 		if (PTR_ERR(pf->vf_cfg_mem) != -ENOENT) {
@@ -755,14 +754,14 @@ int nfp_net_refresh_eth_port(struct nfp_port *port)
 	return ret;
 }
 
-static int nfp_net_pre_init(struct nfp_pf *pf, int *stride)
+static int nfp_net_pre_init(struct nfp_pf *pf, int *stride, u32 *ctrl_bar_sz)
 {
 	struct nfp_net_fw_version fw_ver;
 	struct nfp_cpp_area *area;
 	u8 __iomem *ctrl_bar;
 	int err = 0;
 
-	ctrl_bar = nfp_pf_map_rtsym(pf, NULL, "_pf%d_net_bar0", NFP_PF_CSR_SLICE_SIZE, &area);
+	ctrl_bar = nfp_pf_map_rtsym(pf, NULL, "_pf%d_net_bar0", NFP_NET_CFG_BAR_SZ_MIN, &area);
 	if (IS_ERR(ctrl_bar)) {
 		nfp_err(pf->cpp, "Failed to find data vNIC memory symbol\n");
 		return pf->fw_loaded ? PTR_ERR(ctrl_bar) : 1;
@@ -770,13 +769,16 @@ static int nfp_net_pre_init(struct nfp_pf *pf, int *stride)
 
 	nfp_net_get_fw_version(&fw_ver, ctrl_bar);
 	if (fw_ver.extend & NFP_NET_CFG_VERSION_RESERVED_MASK ||
-	    fw_ver.class != NFP_NET_CFG_VERSION_CLASS_GENERIC) {
+	    fw_ver.class > NFP_NET_CFG_VERSION_CLASS_MAX) {
 		nfp_err(pf->cpp, "Unknown Firmware ABI %d.%d.%d.%d\n",
 			fw_ver.extend, fw_ver.class,
 			fw_ver.major, fw_ver.minor);
 		err = -EINVAL;
 		goto end;
 	}
+
+	*ctrl_bar_sz = fw_ver.class == NFP_NET_CFG_VERSION_CLASS_NO_EMEM ?
+			NFP_NET_CFG_BAR_SZ_8K : NFP_NET_CFG_BAR_SZ_32K;
 
 	/* Determine stride */
 	if (nfp_net_fw_ver_eq(&fw_ver, 0, 0, 0, 1)) {
@@ -848,6 +850,7 @@ int nfp_net_pci_probe(struct nfp_pf *pf)
 {
 	struct devlink *devlink = priv_to_devlink(pf);
 	u8 __iomem *ctrl_bar, *qc_bar;
+	u32 ctrl_bar_sz = 0;
 	int stride = 0;
 	int err;
 
@@ -859,7 +862,7 @@ int nfp_net_pci_probe(struct nfp_pf *pf)
 		return 1;
 	}
 
-	err = nfp_net_pre_init(pf, &stride);
+	err = nfp_net_pre_init(pf, &stride, &ctrl_bar_sz);
 	if (err)
 		return err;
 
@@ -871,7 +874,7 @@ int nfp_net_pci_probe(struct nfp_pf *pf)
 		return -EPERM;
 	}
 
-	err = nfp_net_pci_map_mem(pf);
+	err = nfp_net_pci_map_mem(pf, ctrl_bar_sz);
 	if (err)
 		return err;
 
@@ -882,7 +885,7 @@ int nfp_net_pci_probe(struct nfp_pf *pf)
 		goto err_unmap;
 	}
 
-	err = nfp_net_pf_app_init(pf, qc_bar, stride);
+	err = nfp_net_pf_app_init(pf, qc_bar, stride, ctrl_bar_sz);
 	if (err)
 		goto err_unmap;
 
@@ -910,7 +913,7 @@ int nfp_net_pci_probe(struct nfp_pf *pf)
 	pf->ddir = nfp_net_debugfs_device_add(pf->pdev, pf);
 
 	/* Allocate the vnics and do basic init */
-	err = nfp_net_pf_alloc_vnics(pf, ctrl_bar, qc_bar, stride);
+	err = nfp_net_pf_alloc_vnics(pf, ctrl_bar, qc_bar, stride, ctrl_bar_sz);
 	if (err)
 		goto err_clean_ddir;
 

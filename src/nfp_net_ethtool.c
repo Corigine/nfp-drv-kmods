@@ -2189,7 +2189,9 @@ static int nfp_net_set_rxfh_indir(struct net_device *netdev, const u32 *indir)
  */
 static int nfp_net_get_regs_len(struct net_device *netdev)
 {
-	return NFP_NET_CFG_BAR_SZ;
+	struct nfp_net *nn = netdev_priv(netdev);
+
+	return nn->ctrl_bar_sz;
 }
 
 static void nfp_net_get_regs(struct net_device *netdev,
@@ -2201,7 +2203,7 @@ static void nfp_net_get_regs(struct net_device *netdev,
 
 	regs->version = nn_readl(nn, NFP_NET_CFG_VERSION);
 
-	for (i = 0; i < NFP_NET_CFG_BAR_SZ / sizeof(u32); i++)
+	for (i = 0; i < nn->ctrl_bar_sz / sizeof(u32); i++)
 		regs_buf[i] = readl(nn->dp.ctrl_bar + (i * sizeof(u32)));
 }
 

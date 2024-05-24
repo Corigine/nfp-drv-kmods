@@ -2999,7 +2999,7 @@ void nfp_net_info(struct nfp_net *nn)
  */
 struct nfp_net *
 nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
-	      void __iomem *ctrl_bar, bool needs_netdev,
+	      void __iomem *ctrl_bar, u32 ctrl_bar_sz, bool needs_netdev,
 	      unsigned int max_tx_rings, unsigned int max_rx_rings)
 {
 	u64 dma_mask = dma_get_mask(&pdev->dev);
@@ -3025,6 +3025,7 @@ nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
 
 	nn->dp.dev = &pdev->dev;
 	nn->dp.ctrl_bar = ctrl_bar;
+	nn->ctrl_bar_sz = ctrl_bar_sz;
 	nn->dev_info = dev_info;
 	nn->pdev = pdev;
 	nfp_net_get_fw_version(&nn->fw_ver, ctrl_bar);
@@ -3089,7 +3090,7 @@ nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
 	timer_setup(&nn->reconfig_timer, nfp_net_reconfig_timer, 0);
 
 	err = nfp_net_tlv_caps_parse(&nn->pdev->dev, nn->dp.ctrl_bar,
-				     &nn->tlv_caps);
+				     ctrl_bar_sz, &nn->tlv_caps);
 	if (err)
 		goto err_free_nn;
 

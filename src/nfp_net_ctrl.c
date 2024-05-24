@@ -46,10 +46,10 @@ nfp_net_tls_parse_crypto_ops(struct device *dev, struct nfp_net_tlv_caps *caps,
 }
 
 int nfp_net_tlv_caps_parse(struct device *dev, u8 __iomem *ctrl_mem,
-			   struct nfp_net_tlv_caps *caps)
+			   u32 ctrl_bar_sz, struct nfp_net_tlv_caps *caps)
 {
 	u8 __iomem *data = ctrl_mem + NFP_NET_CFG_TLV_BASE;
-	u8 __iomem *end = ctrl_mem + NFP_NET_CFG_BAR_SZ;
+	u8 __iomem *end = ctrl_mem + ctrl_bar_sz;
 	u32 hdr;
 
 	nfp_net_tlv_caps_reset(caps);

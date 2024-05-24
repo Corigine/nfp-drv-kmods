@@ -579,6 +579,7 @@ struct nfp_net_dp {
  * @cap:                Capabilities advertised by the Firmware
  * @cap_w1:             Extended capabilities word advertised by the Firmware
  * @max_mtu:            Maximum support MTU advertised by the Firmware
+ * @ctrl_bar_sz:        Size of mapped control bar
  * @rss_hfunc:		RSS selected hash function
  * @rss_cfg:            RSS configuration
  * @rss_key:            RSS secret key
@@ -669,6 +670,7 @@ struct nfp_net {
 	u32 cap;
 	u32 cap_w1;
 	u32 max_mtu;
+	u32 ctrl_bar_sz;
 
 	u8 rss_hfunc;
 	u32 rss_cfg;
@@ -1025,7 +1027,7 @@ void nfp_net_get_fw_version(struct nfp_net_fw_version *fw_ver,
 
 struct nfp_net *
 nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
-	      void __iomem *ctrl_bar, bool needs_netdev,
+	      void __iomem *ctrl_bar, u32 ctrl_bar_sz, bool needs_netdev,
 	      unsigned int max_tx_rings, unsigned int max_rx_rings);
 void nfp_net_free(struct nfp_net *nn);
 

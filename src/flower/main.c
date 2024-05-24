@@ -459,7 +459,7 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 			port->pf_id = app->pf->multi_pf.id;
 			port->vf_id = i;
 			port->vnic =
-				app->pf->vf_cfg_mem + i * NFP_NET_CFG_BAR_SZ;
+				app->pf->vf_cfg_mem + i * priv->nn->ctrl_bar_sz;
 		}
 
 		eth_hw_addr_random(repr);

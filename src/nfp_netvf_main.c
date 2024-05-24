@@ -86,11 +86,11 @@ static int nfp_netvf_pci_probe(struct pci_dev *pdev,
 	u32 tx_bar_off, rx_bar_off;
 	u32 tx_bar_sz, rx_bar_sz;
 	int tx_bar_no, rx_bar_no;
+	u32 startq, ctrl_bar_sz;
 	struct nfp_net_vf *vf;
 	unsigned int num_irqs;
 	u8 __iomem *ctrl_bar;
 	struct nfp_net *nn;
-	u32 startq;
 	int stride;
 	int err;
 
@@ -126,7 +126,7 @@ static int nfp_netvf_pci_probe(struct pci_dev *pdev,
 	 * the identical for PF and VF drivers.
 	 */
 	ctrl_bar = ioremap(pci_resource_start(pdev, NFP_NET_CTRL_BAR),
-			   NFP_NET_CFG_BAR_SZ);
+			   NFP_NET_CFG_BAR_SZ_MIN);
 	if (!ctrl_bar) {
 		dev_err(&pdev->dev,
 			"Failed to map resource %d\n", NFP_NET_CTRL_BAR);
@@ -136,12 +136,26 @@ static int nfp_netvf_pci_probe(struct pci_dev *pdev,
 
 	nfp_net_get_fw_version(&fw_ver, ctrl_bar);
 	if (fw_ver.extend & NFP_NET_CFG_VERSION_RESERVED_MASK ||
-	    fw_ver.class != NFP_NET_CFG_VERSION_CLASS_GENERIC) {
+	    fw_ver.class > NFP_NET_CFG_VERSION_CLASS_MAX) {
 		dev_err(&pdev->dev, "Unknown Firmware ABI %d.%d.%d.%d\n",
 			fw_ver.extend, fw_ver.class,
 			fw_ver.major, fw_ver.minor);
 		err = -EINVAL;
 		goto err_ctrl_unmap;
+	}
+
+	ctrl_bar_sz = fw_ver.class == NFP_NET_CFG_VERSION_CLASS_NO_EMEM ?
+			NFP_NET_CFG_BAR_SZ_8K : NFP_NET_CFG_BAR_SZ_32K;
+	if (ctrl_bar_sz != NFP_NET_CFG_BAR_SZ_MIN) {
+		iounmap(ctrl_bar);
+		ctrl_bar = ioremap(pci_resource_start(pdev, NFP_NET_CTRL_BAR),
+				   ctrl_bar_sz);
+		if (!ctrl_bar) {
+			dev_err(&pdev->dev,
+				"Failed to map resource %d\n", NFP_NET_CTRL_BAR);
+			err = -EIO;
+			goto err_pci_regions;
+		}
 	}
 
 	/* Determine stride */
@@ -193,7 +207,7 @@ static int nfp_netvf_pci_probe(struct pci_dev *pdev,
 	rx_bar_off = nfp_qcp_queue_offset(dev_info, startq);
 
 	/* Allocate and initialise the netdev */
-	nn = nfp_net_alloc(pdev, dev_info, ctrl_bar, true,
+	nn = nfp_net_alloc(pdev, dev_info, ctrl_bar, ctrl_bar_sz, true,
 			   max_tx_rings, max_rx_rings);
 	if (IS_ERR(nn)) {
 		err = PTR_ERR(nn);
