@@ -464,8 +464,13 @@ static int crdma_query_device(struct ib_device *ibdev,
 	return 0;
 }
 
+#if (VER_NON_RHEL_GE(5, 13) || RHEL_RELEASE_GE(8, 365, 0, 0))
+int crdma_modify_port(struct ib_device *ibdev, u32 port, int mask,
+                      struct ib_port_modify *props)
+#else
 int crdma_modify_port(struct ib_device *ibdev, u8 port, int mask,
 		       struct ib_port_modify *props)
+#endif
 {
 	return 0;
 }
@@ -546,8 +551,13 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 	return 0;
 }
 
-#if !(VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 0)) || VER_RHEL_EQ(8, 5)
+#if !(VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 0)) || VER_RHEL_EQ(8, 5) || \
+      VER_NON_RHEL_GE(5, 13)
+#if VER_NON_RHEL_GE(5, 13)
+struct net_device *crdma_get_netdev(struct ib_device *ibdev, u32 port_num)
+#else
 struct net_device *crdma_get_netdev(struct ib_device *ibdev, u8 port_num)
+#endif
 {
 	struct crdma_ibdev *crdma_dev = to_crdma_ibdev(ibdev);
 	struct net_device *netdev;
@@ -3760,8 +3770,8 @@ static int crdma_dereg_mr(struct ib_mr *mr)
 	return 0;
 }
 
-#if ((VER_NON_RHEL_OR_KYL_GE(5, 9) || VER_NON_RHEL_OR_KYL_LT(5, 2) || \
-      VER_RHEL_GE(8, 4) || VER_RHEL_LT(8, 2)))
+#if (VER_NON_RHEL_OR_KYL_GE(5, 9) || VER_NON_RHEL_OR_KYL_LT(5, 2) || \
+     VER_RHEL_GE(8, 4) || VER_RHEL_LT(8, 2))
 static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 			enum ib_mr_type type, u32 max_num_sg)
 {
@@ -4021,6 +4031,7 @@ static const struct ib_device_ops crdma_dev_ops = {
 	.modify_cq		= crdma_modify_cq,
 	.modify_qp		= crdma_modify_qp,
 	.modify_srq		= crdma_modify_srq,
+	.modify_port		= crdma_modify_port,
 	.poll_cq		= crdma_poll_cq,
 	.post_recv		= crdma_post_recv,
 	.post_srq_recv		= crdma_post_srq_recv,
@@ -4030,7 +4041,7 @@ static const struct ib_device_ops crdma_dev_ops = {
 	.query_gid		= crdma_query_gid,
 	.query_pkey		= crdma_query_pkey,
 	.query_port		= crdma_query_port,
-#if VER_RHEL_EQ(8, 5)
+#if (VER_RHEL_EQ(8, 5) || VER_NON_RHEL_GE(5, 13))
 	.get_netdev		= crdma_get_netdev,
 #endif
 	.query_qp		= crdma_query_qp,
