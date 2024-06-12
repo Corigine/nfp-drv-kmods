@@ -1445,7 +1445,6 @@ int nfp_nfdk_poll(struct napi_struct *napi, int budget)
 		if (napi_complete_done(napi, pkts_polled))
 			nfp_net_irq_unmask(r_vec->nfp_net, r_vec->irq_entry);
 
-#ifdef COMPAT_HAVE_DIM
 	if (r_vec->nfp_net->rx_coalesce_adapt_on && r_vec->rx_ring) {
 		struct dim_sample dim_sample = {};
 		unsigned int start;
@@ -1475,7 +1474,6 @@ int nfp_nfdk_poll(struct napi_struct *napi, int budget)
 		dim_update_sample(r_vec->event_ctr, pkts, bytes, &dim_sample);
 		net_dim(&r_vec->tx_dim, dim_sample);
 	}
-#endif
 
 	return pkts_polled;
 }

@@ -241,6 +241,15 @@
 #define BITS_TO_LONGS(n)	DIV_ROUND_UP(n, sizeof(long) * 8)
 #endif
 
+#ifndef BITS_PER_TYPE
+#define BITS_PER_TYPE(type) (sizeof(type) * BITS_PER_BYTE)
+#endif
+
+#ifndef DIV_ROUND_DOWN_ULL
+#define DIV_ROUND_DOWN_ULL(ll, d) \
+	({ unsigned long long _tmp = (ll); do_div(_tmp, d); _tmp; })
+#endif
+
 #ifndef GENMASK
 #define GENMASK(h, l) \
 	((~0UL << (l)) & (~0UL >> (BITS_PER_LONG - (h) - 1)))

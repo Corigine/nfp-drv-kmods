@@ -466,13 +466,11 @@ static irqreturn_t nfp_net_irq_rxtx(int irq, void *data)
 {
 	struct nfp_net_r_vector *r_vec = data;
 
-#ifdef COMPAT_HAVE_DIM
 	/* Currently we cannot tell if it's a rx or tx interrupt,
 	 * since dim does not need accurate event_ctr to calculate,
 	 * we just use this counter for both rx and tx dim.
 	 */
 	r_vec->event_ctr++;
-#endif
 
 	napi_schedule_irqoff(&r_vec->napi);
 
@@ -1163,13 +1161,11 @@ static void nfp_net_close_stack(struct nfp_net *nn)
 		disable_irq(r_vec->irq_vector);
 		napi_disable(&r_vec->napi);
 
-#ifdef COMPAT_HAVE_DIM
 		if (r_vec->rx_ring)
 			cancel_work_sync(&r_vec->rx_dim.work);
 
 		if (r_vec->tx_ring)
 			cancel_work_sync(&r_vec->tx_dim.work);
-#endif
 	}
 
 	netif_tx_disable(nn->dp.netdev);
@@ -1254,7 +1250,6 @@ void nfp_ctrl_close(struct nfp_net *nn)
 	rtnl_unlock();
 }
 
-#ifdef COMPAT_HAVE_DIM
 static const struct dim_cq_moder rx_profile[] = {
 	{.usec = 0, .pkts = 1},
 	{.usec = 4, .pkts = 32},
@@ -1329,7 +1324,6 @@ static void nfp_net_tx_dim_work(struct work_struct *work)
 
 	dim->state = DIM_START_MEASURE;
 }
-#endif
 
 /**
  * nfp_net_open_stack() - Start the device from stack's perspective
@@ -1343,17 +1337,11 @@ static void nfp_net_open_stack(struct nfp_net *nn)
 	for (r = 0; r < nn->dp.num_r_vecs; r++) {
 		r_vec = &nn->r_vecs[r];
 
-#ifdef COMPAT_HAVE_DIM
-		if (r_vec->rx_ring) {
+		if (r_vec->rx_ring)
 			INIT_WORK(&r_vec->rx_dim.work, nfp_net_rx_dim_work);
-			r_vec->rx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
-		}
 
-		if (r_vec->tx_ring) {
+		if (r_vec->tx_ring)
 			INIT_WORK(&r_vec->tx_dim.work, nfp_net_tx_dim_work);
-			r_vec->tx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
-		}
-#endif
 
 		napi_enable(&r_vec->napi);
 		enable_irq(r_vec->irq_vector);
@@ -3206,10 +3194,8 @@ static void nfp_net_irqmod_init(struct nfp_net *nn)
 	nn->tx_coalesce_usecs      = 50;
 	nn->tx_coalesce_max_frames = 64;
 
-#ifdef COMPAT_HAVE_DIM
 	nn->rx_coalesce_adapt_on   = true;
 	nn->tx_coalesce_adapt_on   = true;
-#endif
 }
 
 static void nfp_net_netdev_init(struct nfp_net *nn)

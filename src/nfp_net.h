@@ -22,6 +22,8 @@
 
 #ifdef COMPAT_HAVE_DIM
 #include <linux/dim.h>
+#else
+#include "nfp_dim.h"
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
@@ -422,11 +424,9 @@ struct nfp_net_r_vector {
 
 	u16 irq_entry;
 
-#ifdef COMPAT_HAVE_DIM
 	u16 event_ctr;
 	struct dim rx_dim;
 	struct dim tx_dim;
-#endif
 
 	struct u64_stats_sync rx_sync;
 	u64 rx_pkts;
@@ -707,10 +707,8 @@ struct nfp_net {
 
 	struct semaphore bar_lock;
 
-#ifdef COMPAT_HAVE_DIM
 	bool rx_coalesce_adapt_on;
 	bool tx_coalesce_adapt_on;
-#endif
 	u32 rx_coalesce_usecs;
 	u32 rx_coalesce_max_frames;
 	u32 tx_coalesce_usecs;

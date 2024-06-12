@@ -2219,10 +2219,8 @@ static int nfp_net_get_coalesce(struct net_device *netdev,
 	if (!(nn->cap & NFP_NET_CFG_CTRL_IRQMOD))
 		return -EOPNOTSUPP;
 
-#ifdef COMPAT_HAVE_DIM
 	ec->use_adaptive_rx_coalesce = nn->rx_coalesce_adapt_on;
 	ec->use_adaptive_tx_coalesce = nn->tx_coalesce_adapt_on;
-#endif
 
 	ec->rx_coalesce_usecs       = nn->rx_coalesce_usecs;
 	ec->rx_max_coalesced_frames = nn->rx_coalesce_max_frames;
@@ -2488,10 +2486,6 @@ static int nfp_net_set_coalesce(struct net_device *netdev,
 	    ec->tx_coalesce_usecs_irq ||
 	    ec->tx_max_coalesced_frames_irq ||
 	    ec->stats_block_coalesce_usecs ||
-#ifndef COMPAT_HAVE_DIM
-	    ec->use_adaptive_rx_coalesce ||
-	    ec->use_adaptive_tx_coalesce ||
-#endif
 	    ec->pkt_rate_low ||
 	    ec->rx_coalesce_usecs_low ||
 	    ec->rx_max_coalesced_frames_low ||
@@ -2574,10 +2568,8 @@ static int nfp_net_set_coalesce(struct net_device *netdev,
 	}
 
 	/* configuration is valid */
-#ifdef COMPAT_HAVE_DIM
 	nn->rx_coalesce_adapt_on = !!ec->use_adaptive_rx_coalesce;
 	nn->tx_coalesce_adapt_on = !!ec->use_adaptive_tx_coalesce;
-#endif
 
 	nn->rx_coalesce_usecs      = ec->rx_coalesce_usecs;
 	nn->rx_coalesce_max_frames = ec->rx_max_coalesced_frames;
@@ -2890,12 +2882,8 @@ nfp_net_set_eeprom(struct net_device *netdev,
 static const struct ethtool_ops nfp_net_ethtool_ops = {
 #if VER_NON_RHEL_GE(5, 7) || VER_RHEL_GE(8, 4)
 	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
-#ifndef COMPAT_HAVE_DIM
-				     ETHTOOL_COALESCE_MAX_FRAMES,
-#else
 				     ETHTOOL_COALESCE_MAX_FRAMES |
 				     ETHTOOL_COALESCE_USE_ADAPTIVE,
-#endif
 #endif /* 5.7 */
 	.get_drvinfo		= nfp_net_get_drvinfo,
 	.nway_reset             = nfp_net_nway_reset,
