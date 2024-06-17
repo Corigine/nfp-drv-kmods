@@ -2912,7 +2912,7 @@ static int crdma_create_cq(struct ib_cq *cq,
 		goto free_queue_mem;
 	}
 	ccq->ci_mbox_paddr = dma_map_single(&dev->nfp_info->pdev->dev,
-		ccq->ci_mbox, PAGE_SIZE, DMA_TO_DEVICE);
+			     ccq->ci_mbox, PAGE_SIZE, DMA_BIDIRECTIONAL);
 	if (dma_mapping_error(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr)) {
 		crdma_warn("Failed to map DMA address\n");
 		err = -ENOMEM;
@@ -3232,7 +3232,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev,
 		goto free_queue_mem;
 	}
 	ccq->ci_mbox_paddr = dma_map_single(&dev->nfp_info->pdev->dev,
-		ccq->ci_mbox, PAGE_SIZE, DMA_TO_DEVICE);
+			     ccq->ci_mbox, PAGE_SIZE, DMA_BIDIRECTIONAL);
 	if (dma_mapping_error(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr)) {
 		crdma_warn("Failed to map DMA address\n");
 		err = -ENOMEM;
