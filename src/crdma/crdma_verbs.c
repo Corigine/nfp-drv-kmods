@@ -2337,7 +2337,9 @@ static int crdma_destroy_qp(struct ib_qp *qp)
 	crdma_free_hw_queue(dev, cqp->mem);
 	if (cqp->ib_qp.qp_type != IB_QPT_GSI)
 		crdma_free_bitmap_index(&dev->qp_map, cqp->qp_index);
+#if !(VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 394, 0, 0))
 	kfree(cqp);
+#endif
 	return 0;
 }
 
