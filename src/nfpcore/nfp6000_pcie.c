@@ -922,6 +922,19 @@ static int enable_bars(struct nfp6000_pcie *nfp, u16 interface,
 		nfp->iomem.expl[i] = bar->iomem;
 	}
 
+	if (nfp->pdev->device == PCI_DEVICE_ID_NFP3800) {
+		/* Reserve BAR2.0 for expansion rom mapping. */
+		bar = &nfp->bar[16];
+		msg += scnprintf(msg, end - msg, "2.0: Expansion ROM, ");
+		atomic_inc(&bar->refcnt);
+		bars_free--;
+		if (nfp->iomem.csr) {
+			unsigned int xbar = NFP_PCIE_P2C_EXPBAR_OFFSET(bar->index);
+
+			bar->barcfg = readl(nfp->iomem.csr + xbar);
+		}
+	}
+
 	/* Sort bars by bit size - use the smallest possible first. */
 	sort(&nfp->bar[0], nfp->bars, sizeof(nfp->bar[0]),
 	     bar_cmp, NULL);
