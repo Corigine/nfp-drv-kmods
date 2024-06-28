@@ -1567,6 +1567,15 @@ static int nfp_net_get_rss_hash_opts(struct nfp_net *nn,
 }
 
 #define NFP_FS_MAX_ENTRY	1024
+static u32 nfp_net_fs_max_entry(struct nfp_net *nn)
+{
+	u32 cnt = nn_readl(nn, NFP_NET_CFG_MAX_FS_CAP);
+
+	if (cnt)
+		return cnt;
+
+	return NFP_FS_MAX_ENTRY;
+}
 
 static int nfp_net_fs_to_ethtool(struct nfp_fs_entry *entry, struct ethtool_rxnfc *cmd)
 {
@@ -1653,7 +1662,7 @@ static int nfp_net_get_fs_rule(struct nfp_net *nn, struct ethtool_rxnfc *cmd)
 	if (!(nn->cap_w1 & NFP_NET_CFG_CTRL_FLOW_STEER))
 		return -EOPNOTSUPP;
 
-	if (cmd->fs.location >= NFP_FS_MAX_ENTRY)
+	if (cmd->fs.location >= nfp_net_fs_max_entry(nn))
 		return -EINVAL;
 
 	list_for_each_entry(entry, &nn->fs.list, node) {
@@ -1697,7 +1706,7 @@ static int nfp_net_get_rxnfc(struct net_device *netdev,
 	case ETHTOOL_GRXCLSRULE:
 		return nfp_net_get_fs_rule(nn, cmd);
 	case ETHTOOL_GRXCLSRLALL:
-		cmd->data = NFP_FS_MAX_ENTRY;
+		cmd->data = nfp_net_fs_max_entry(nn);
 		return nfp_net_get_fs_loc(nn, rule_locs);
 	case ETHTOOL_GRXFH:
 		return nfp_net_get_rss_hash_opts(nn, cmd);
@@ -1877,7 +1886,7 @@ static int nfp_net_fs_add(struct nfp_net *nn, struct ethtool_rxnfc *cmd)
 		return -EOPNOTSUPP;
 #endif
 
-	if (fs->location >= NFP_FS_MAX_ENTRY)
+	if (fs->location >= nfp_net_fs_max_entry(nn))
 		return -EINVAL;
 
 	if (fs->ring_cookie != RX_CLS_FLOW_DISC &&
@@ -1963,7 +1972,7 @@ static int nfp_net_fs_add(struct nfp_net *nn, struct ethtool_rxnfc *cmd)
 			break;
 	}
 
-	if (nn->fs.count == NFP_FS_MAX_ENTRY) {
+	if (nn->fs.count == nfp_net_fs_max_entry(nn)) {
 		err = -ENOSPC;
 		goto err;
 	}
@@ -1990,7 +1999,7 @@ static int nfp_net_fs_del(struct nfp_net *nn, struct ethtool_rxnfc *cmd)
 	if (!(nn->cap_w1 & NFP_NET_CFG_CTRL_FLOW_STEER))
 		return -EOPNOTSUPP;
 
-	if (!nn->fs.count || cmd->fs.location >= NFP_FS_MAX_ENTRY)
+	if (!nn->fs.count || cmd->fs.location >= nfp_net_fs_max_entry(nn))
 		return -EINVAL;
 
 	list_for_each_entry(entry, &nn->fs.list, node) {

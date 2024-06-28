@@ -281,9 +281,13 @@
 
 #define NFP_NET_CFG_CAP_WORD1		0x00a4
 
-/* 16B reserved for future use (0x00b0 - 0x00c0) */
-#define NFP_NET_CFG_RESERVED		0x00b0
-#define NFP_NET_CFG_RESERVED_SZ		0x0010
+/* 0x00b0 - 0x00b7 is defined for rx-scatter, not used by driver yet */
+
+#define NFP_NET_CFG_MAX_FS_CAP		0x00b8
+
+/* 4B reserved for future use (0x00bc - 0x00bf) */
+#define NFP_NET_CFG_RESERVED		0x00bc
+#define NFP_NET_CFG_RESERVED_SZ		0x0004
 
 /* RSS configuration (0x0100 - 0x01ac):
  * Used only when NFP_NET_CFG_CTRL_RSS is enabled
