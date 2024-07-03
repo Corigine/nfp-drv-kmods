@@ -3610,9 +3610,11 @@ static int crdma_req_notify_cq(struct ib_cq *cq, enum ib_cq_notify_flags flags)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
 	struct crdma_cq *ccq = to_crdma_cq(cq);
+	unsigned long irq_flags;
 	u32 arm;
 	u32 db;
 
+	spin_lock_irqsave(&ccq->lock, irq_flags);
 	arm = (ccq->arm_seqn << CRDMA_DB_CQ_SEQ_SHIFT) |
 		((flags & IB_CQ_SOLICITED_MASK) == IB_CQ_SOLICITED ?
 			0 : CRDMA_DB_CQ_ARM_ANY_BIT) |
@@ -3622,6 +3624,8 @@ static int crdma_req_notify_cq(struct ib_cq *cq, enum ib_cq_notify_flags flags)
 	/* Memory barrier */
 	wmb();
 	crdma_cq_ring_db32(dev, db);
+	spin_unlock_irqrestore(&ccq->lock, irq_flags);
+
 	return 0;
 }
 
