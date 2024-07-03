@@ -2478,6 +2478,10 @@ static int nfp_net_set_coalesce(struct net_device *netdev,
 #endif /* VERSION__ETHTOOL_COALESCE */
 {
 	struct nfp_net *nn = netdev_priv(netdev);
+	bool rx_coalesce_adapt_enabled;
+	bool tx_coalesce_adapt_enabled;
+	bool rx_coalesce_need_reset;
+	bool tx_coalesce_need_reset;
 	unsigned int factor;
 
 #if VER_NON_RHEL_LT(5, 7) || VER_RHEL_LT(8, 4)
@@ -2567,14 +2571,30 @@ static int nfp_net_set_coalesce(struct net_device *netdev,
 		return -EINVAL;
 	}
 
-	/* configuration is valid */
-	nn->rx_coalesce_adapt_on = !!ec->use_adaptive_rx_coalesce;
-	nn->tx_coalesce_adapt_on = !!ec->use_adaptive_tx_coalesce;
+	rx_coalesce_adapt_enabled = !!ec->use_adaptive_rx_coalesce;
+	tx_coalesce_adapt_enabled = !!ec->use_adaptive_tx_coalesce;
+	rx_coalesce_need_reset = rx_coalesce_adapt_enabled && !nn->rx_coalesce_adapt_on;
+	tx_coalesce_need_reset = tx_coalesce_adapt_enabled && !nn->tx_coalesce_adapt_on;
 
-	nn->rx_coalesce_usecs      = ec->rx_coalesce_usecs;
-	nn->rx_coalesce_max_frames = ec->rx_max_coalesced_frames;
-	nn->tx_coalesce_usecs      = ec->tx_coalesce_usecs;
-	nn->tx_coalesce_max_frames = ec->tx_max_coalesced_frames;
+	/* configuration is valid */
+	nn->rx_coalesce_adapt_on = rx_coalesce_adapt_enabled;
+	nn->tx_coalesce_adapt_on = tx_coalesce_adapt_enabled;
+
+	if (rx_coalesce_need_reset) {
+		nn->rx_coalesce_usecs = NFP_COALESCE_ADAPTIVE_DEFAULT_USECS;
+		nn->rx_coalesce_max_frames = NFP_COALESCE_ADAPTIVE_DEFAULT_MAX_FRAMES;
+	} else {
+		nn->rx_coalesce_usecs = ec->rx_coalesce_usecs;
+		nn->rx_coalesce_max_frames = ec->rx_max_coalesced_frames;
+	}
+
+	if (tx_coalesce_need_reset) {
+		nn->tx_coalesce_usecs = NFP_COALESCE_ADAPTIVE_DEFAULT_USECS;
+		nn->tx_coalesce_max_frames = NFP_COALESCE_ADAPTIVE_DEFAULT_MAX_FRAMES;
+	} else {
+		nn->tx_coalesce_usecs = ec->tx_coalesce_usecs;
+		nn->tx_coalesce_max_frames = ec->tx_max_coalesced_frames;
+	}
 
 	/* write configuration to device */
 	nfp_net_coalesce_write_cfg(nn);

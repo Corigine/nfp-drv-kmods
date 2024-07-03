@@ -116,6 +116,9 @@
 #define NFP_NET_MAX_ROCE_VECTORS        8
 #endif
 
+#define NFP_COALESCE_ADAPTIVE_DEFAULT_USECS 0
+#define NFP_COALESCE_ADAPTIVE_DEFAULT_MAX_FRAMES 64
+
 /* Forward declarations */
 struct nfp_pf;
 struct nfp_cpp;

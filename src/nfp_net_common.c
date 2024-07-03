@@ -3189,10 +3189,10 @@ static void nfp_net_rss_init(struct nfp_net *nn)
  */
 static void nfp_net_irqmod_init(struct nfp_net *nn)
 {
-	nn->rx_coalesce_usecs      = 50;
-	nn->rx_coalesce_max_frames = 64;
-	nn->tx_coalesce_usecs      = 50;
-	nn->tx_coalesce_max_frames = 64;
+	nn->rx_coalesce_usecs      = NFP_COALESCE_ADAPTIVE_DEFAULT_USECS;
+	nn->rx_coalesce_max_frames = NFP_COALESCE_ADAPTIVE_DEFAULT_MAX_FRAMES;
+	nn->tx_coalesce_usecs      = NFP_COALESCE_ADAPTIVE_DEFAULT_USECS;
+	nn->tx_coalesce_max_frames = NFP_COALESCE_ADAPTIVE_DEFAULT_MAX_FRAMES;
 
 	nn->rx_coalesce_adapt_on   = true;
 	nn->tx_coalesce_adapt_on   = true;
