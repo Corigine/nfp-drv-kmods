@@ -278,7 +278,11 @@ done:
 }
 
 static struct crdma_eqe *crdma_next_eqe(struct crdma_eq *eq);
-static irqreturn_t crdma_interrupt(int irq, void *eq_ptr);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+static void crdma_eq_poll(struct tasklet_struct *t);
+#else
+static void crdma_eq_poll(unsigned long arg);
+#endif
 
 #ifdef CRDMA_EVENT_CMDS
 /**
@@ -541,16 +545,33 @@ static void crdma_qp_async_event(struct crdma_ibdev *dev,
 }
 
 /**
- * Event queue MSI/MSI-X interrupt handler, dispatch events.
+ * Event queue MSI/MSI-X interrupt handler.
  *
  * irq: Interrupt vector.
  * eq_ptr: The EQ associated with the interrupt vector.
  *
  * Returns IRQ_HANDLED.
  */
-static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
+irqreturn_t crdma_eq_irq_handler(int irq, void *eq_ptr)
 {
-	struct crdma_eq *eq = eq_ptr;
+        struct crdma_eq *eq = eq_ptr;
+
+        tasklet_schedule(&eq->tasklet);
+
+        return IRQ_HANDLED;
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+static void crdma_eq_poll(struct tasklet_struct *t)
+#else
+static void crdma_eq_poll(unsigned long arg)
+#endif
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+	struct crdma_eq *eq = from_tasklet(eq, t, tasklet);
+#else
+	struct crdma_eq *eq = (void *)arg;
+#endif
 	struct crdma_ibdev *dev = eq->dev;
 	struct crdma_cq *ccq;
 	struct crdma_eqe *eqe;
@@ -678,8 +699,6 @@ static irqreturn_t crdma_interrupt(int irq, void *eq_ptr)
 	crdma_set_eq_ci(dev, eq->eq_num,
 			eq->consumer_cnt,
 			dev->have_interrupts ? true : false);
-
-	return IRQ_HANDLED;
 }
 
 int crdma_init_eq(struct crdma_ibdev *dev, int index, int entries_log2,
@@ -745,8 +764,13 @@ int crdma_init_eq(struct crdma_ibdev *dev, int index, int entries_log2,
 	}
 
 	if (dev->have_interrupts) {
-		ret = request_irq(eq->vector, crdma_interrupt, 0,
-				eq->irq_name, eq);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+		tasklet_setup(&eq->tasklet, crdma_eq_poll);
+#else
+		tasklet_init(&eq->tasklet, crdma_eq_poll, (unsigned long)eq);
+#endif
+		ret = request_irq(eq->vector, crdma_eq_irq_handler, 0,
+				  eq->irq_name, eq);
 		if (ret) {
 			crdma_err("request_irq error %d\n", ret);
 			goto destroy_eq;
@@ -775,8 +799,10 @@ void crdma_cleanup_eq(struct crdma_ibdev *dev, int eqn)
 	crdma_set_eq_ci(dev, eq->eq_num,
 			eq->consumer_cnt & eq->consumer_mask, false);
 
-	if (dev->have_interrupts)
+	if (dev->have_interrupts) {
+		tasklet_kill(&eq->tasklet);
 		free_irq(eq->vector, eq);
+	}
 
 	if (crdma_eq_destroy_cmd(dev, eq))
 		crdma_warn("Destroy of ucode EQ %d failed\n", eq->eq_num);
@@ -2103,7 +2129,11 @@ int crdma_test_eq_enqueue(struct crdma_ibdev *dev, int eqn, int cnt)
 
 	crdma_cleanup_mailbox(dev, &in_mbox);
 	if (status == CRDMA_STS_OK)
-		crdma_interrupt(0, &dev->eq_table.eq[eqn]);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+		crdma_eq_poll(&dev->eq_table.eq[eqn].tasklet);
+#else
+		crdma_eq_poll((unsigned long)&dev->eq_table.eq[eqn]);
+#endif
 
 	return status;
 }

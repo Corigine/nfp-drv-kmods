@@ -375,6 +375,7 @@ struct crdma_eq {
 	 */
 	u16			time_mod;
 	u16			event_mod;
+	struct tasklet_struct 	tasklet;
 };
 
 struct crdma_eq_table {
