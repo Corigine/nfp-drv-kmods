@@ -67,7 +67,8 @@ enum {
 	CRDMA_CMD_SET_PORT_MTU		= 49,
 	CRDMA_CMD_DCQCN_ENABLE		= 50,
 	CRDMA_CMD_RETRANS_ENABLE	= 51,
-	CRDMA_CMD_BOND_CONFIG		= 52
+	CRDMA_CMD_BOND_CONFIG		= 52,
+	CRDMA_CMD_HIGH_PERF_READ_ENABLE	= 53
 };
 
 /* Microcode QP Modify opcode modifiers */
@@ -1062,6 +1063,15 @@ int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
  * Returns 0 on success, otherwise an error.
  */
 int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
+
+/**
+ * Enable or Disable high performance of bidirtional READ.
+ *
+ * @dev: RoCE IB device.
+ * @enbaled:  0x1: to enable, 0x0: to disable
+ * Returns 0 on success, otherwise an error.
+ */
+int crdma_high_perf_read_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
 
 /**
  * Issue microcode MPT create command.

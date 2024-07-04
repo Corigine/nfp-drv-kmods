@@ -64,6 +64,13 @@ bool retrans_timeout_enable = true;
 module_param(retrans_timeout_enable, bool, 0444);
 MODULE_PARM_DESC(retrans_timeout_enable, "During bring-up, allows selective use of setting timeout retransmit enable (default: true)");
 
+/*
+ * High performance of bidirectional READ for RoCEv2.
+ */
+bool high_perf_read_enable = false;
+module_param(high_perf_read_enable, bool, 0444);
+MODULE_PARM_DESC(high_perf_read_enable, "During bring-up, allows high performance of bidirectional READ(default: false)");
+
 /**
  * Load device capabilities/attributes.
  *
@@ -558,6 +565,17 @@ static int crdma_init_retrans(struct crdma_ibdev *dev)
 	return crdma_retrans_enable_cmd(dev, retrans_enable);
 }
 
+static ssize_t high_perf_read_enable_show(struct device *device,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "0x%x\n", high_perf_read_enable);
+}
+
+static int crdma_init_high_perf_read(struct crdma_ibdev *dev)
+{
+	return crdma_high_perf_read_enable_cmd(dev, high_perf_read_enable);
+}
+
 /**
  * Debug helper to initiate commands through sysfs
  *
@@ -646,6 +664,7 @@ static DEVICE_ATTR_RO(uc_gid);
 static DEVICE_ATTR_RO(dcqcn_enable);
 static DEVICE_ATTR_RO(retrans_ooo_enable);
 static DEVICE_ATTR_RO(retrans_timeout_enable);
+static DEVICE_ATTR_RO(high_perf_read_enable);
 
 static struct device_attribute *crdma_class_attrs[] = {
 	&dev_attr_hw_rev,
@@ -657,6 +676,7 @@ static struct device_attribute *crdma_class_attrs[] = {
 	&dev_attr_dcqcn_enable,
 	&dev_attr_retrans_ooo_enable,
 	&dev_attr_retrans_timeout_enable,
+	&dev_attr_high_perf_read_enable,
 };
 
 static int crdma_init_maps(struct crdma_ibdev *dev)
@@ -966,6 +986,9 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		goto err_cleanup_hca;
 
 	if (crdma_init_retrans(dev))
+		goto err_cleanup_hca;
+
+	if (crdma_init_high_perf_read(dev))
 		goto err_cleanup_hca;
 
 	for (i = 0; i < ARRAY_SIZE(crdma_class_attrs); i++)

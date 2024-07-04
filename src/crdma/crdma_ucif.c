@@ -15,6 +15,9 @@
 
 #define	CRDMA_UNDEFINED		"Undefined"
 
+#define MAX_BIDIRECTIONAL_SEGMENT		4
+#define MAX_DEFAULT_BIDIRECTIONAL_SEGMENT	3
+
 /**
  * Map a IB Verbs QP transition to the QP_MODIFY command opcode modifier.
  *
@@ -134,7 +137,8 @@ const char * const crdma_opcode_to_str(u8 opcode)
 		[CRDMA_CMD_SET_PORT_MTU]	= "SET_PORT_MTU",
 		[CRDMA_CMD_DCQCN_ENABLE]	= "DCQCN_ENABLE",
 		[CRDMA_CMD_RETRANS_ENABLE]	= "RETRANS_ENABLE",
-		[CRDMA_CMD_BOND_CONFIG]		= "BOND_CONFIG"
+		[CRDMA_CMD_BOND_CONFIG]		= "BOND_CONFIG",
+		[CRDMA_CMD_HIGH_PERF_READ_ENABLE]	= "HIGH_PERF_READ_ENABLE"
 	};
 
 	if (opcode < ARRAY_SIZE(cmd_to_str))
@@ -1699,6 +1703,13 @@ int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enbaled)
 {
 	return __crdma_no_param_cmd(dev, CRDMA_CMD_RETRANS_ENABLE, 0,
 			enbaled, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+}
+
+int crdma_high_perf_read_enable_cmd(struct crdma_ibdev *dev, u8 enbaled)
+{
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_HIGH_PERF_READ_ENABLE, 0,
+			(enbaled ? MAX_BIDIRECTIONAL_SEGMENT : MAX_DEFAULT_BIDIRECTIONAL_SEGMENT),
+			CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
 int crdma_set_port_mtu_cmd(struct crdma_ibdev *dev, u8 port, u32 mtu)
