@@ -130,6 +130,7 @@ jobs:
     timeout-minutes: 90
     env:
       KVER: "*"
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     strategy:
       matrix:
         release: [
@@ -413,6 +414,7 @@ jobs:
     env:
       CDN: "cdn.kernel.org/pub/linux/kernel"
       KERNEL_TARGET: "deb-pkg"
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     strategy:
       matrix:
         release: [
@@ -509,6 +511,7 @@ jobs:
     env:
       CDN: "cdn.kernel.org/pub/linux/kernel"
       KERNEL_TARGET: ""
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     strategy:
       matrix:
         release: [
