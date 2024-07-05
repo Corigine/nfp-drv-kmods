@@ -2482,6 +2482,7 @@ static int nfp_net_set_coalesce(struct net_device *netdev,
 	bool tx_coalesce_adapt_enabled;
 	bool rx_coalesce_need_reset;
 	bool tx_coalesce_need_reset;
+	bool write_rx, write_tx;
 	unsigned int factor;
 
 #if VER_NON_RHEL_LT(5, 7) || VER_RHEL_LT(8, 4)
@@ -2575,6 +2576,11 @@ static int nfp_net_set_coalesce(struct net_device *netdev,
 	tx_coalesce_adapt_enabled = !!ec->use_adaptive_tx_coalesce;
 	rx_coalesce_need_reset = rx_coalesce_adapt_enabled && !nn->rx_coalesce_adapt_on;
 	tx_coalesce_need_reset = tx_coalesce_adapt_enabled && !nn->tx_coalesce_adapt_on;
+	/* When adaptive coalesce keeps enabled, interrupt moderation
+	 * parameters shouldn't be configured manually.
+	 */
+	write_rx = !(rx_coalesce_adapt_enabled && nn->rx_coalesce_adapt_on);
+	write_tx = !(tx_coalesce_adapt_enabled && nn->tx_coalesce_adapt_on);
 
 	/* configuration is valid */
 	nn->rx_coalesce_adapt_on = rx_coalesce_adapt_enabled;
@@ -2597,7 +2603,7 @@ static int nfp_net_set_coalesce(struct net_device *netdev,
 	}
 
 	/* write configuration to device */
-	nfp_net_coalesce_write_cfg(nn);
+	nfp_net_coalesce_write_cfg(nn, write_rx, write_tx);
 	return nfp_net_reconfig(nn, NFP_NET_CFG_UPDATE_IRQMOD);
 }
 

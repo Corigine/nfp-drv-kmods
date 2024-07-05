@@ -1042,7 +1042,7 @@ int nfp_net_reconfig(struct nfp_net *nn, u32 update);
 unsigned int nfp_net_rss_key_sz(struct nfp_net *nn);
 void nfp_net_rss_write_itbl(struct nfp_net *nn);
 void nfp_net_rss_write_key(struct nfp_net *nn);
-void nfp_net_coalesce_write_cfg(struct nfp_net *nn);
+void nfp_net_coalesce_write_cfg(struct nfp_net *nn, bool write_rx, bool write_tx);
 int nfp_net_mbox_lock(struct nfp_net *nn, unsigned int data_size);
 int nfp_net_mbox_reconfig(struct nfp_net *nn, u32 mbox_cmd);
 int nfp_net_mbox_reconfig_and_unlock(struct nfp_net *nn, u32 mbox_cmd);

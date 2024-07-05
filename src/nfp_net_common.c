@@ -941,7 +941,7 @@ void nfp_net_rss_write_key(struct nfp_net *nn)
  * nfp_net_coalesce_write_cfg() - Write irq coalescence configuration to HW
  * @nn:      NFP Net device to reconfigure
  */
-void nfp_net_coalesce_write_cfg(struct nfp_net *nn)
+void nfp_net_coalesce_write_cfg(struct nfp_net *nn, bool write_rx, bool write_tx)
 {
 	u8 i;
 	u32 factor;
@@ -953,17 +953,21 @@ void nfp_net_coalesce_write_cfg(struct nfp_net *nn)
 	 */
 	factor = nn->tlv_caps.me_freq_mhz / 16;
 
-	/* copy RX interrupt coalesce parameters */
-	value = (nn->rx_coalesce_max_frames << 16) |
-		(factor * nn->rx_coalesce_usecs);
-	for (i = 0; i < nn->dp.num_rx_rings; i++)
-		nn_writel(nn, NFP_NET_CFG_RXR_IRQ_MOD(i), value);
+	if (write_rx) {
+		/* copy RX interrupt coalesce parameters */
+		value = (nn->rx_coalesce_max_frames << 16) |
+			(factor * nn->rx_coalesce_usecs);
+		for (i = 0; i < nn->dp.num_rx_rings; i++)
+			nn_writel(nn, NFP_NET_CFG_RXR_IRQ_MOD(i), value);
+	}
 
-	/* copy TX interrupt coalesce parameters */
-	value = (nn->tx_coalesce_max_frames << 16) |
-		(factor * nn->tx_coalesce_usecs);
-	for (i = 0; i < nn->dp.num_tx_rings; i++)
-		nn_writel(nn, NFP_NET_CFG_TXR_IRQ_MOD(i), value);
+	if (write_tx) {
+		/* copy TX interrupt coalesce parameters */
+		value = (nn->tx_coalesce_max_frames << 16) |
+			(factor * nn->tx_coalesce_usecs);
+		for (i = 0; i < nn->dp.num_tx_rings; i++)
+			nn_writel(nn, NFP_NET_CFG_TXR_IRQ_MOD(i), value);
+	}
 }
 
 /**
@@ -1059,7 +1063,7 @@ static int nfp_net_set_config_and_enable(struct nfp_net *nn)
 	}
 
 	if (nn->dp.ctrl & NFP_NET_CFG_CTRL_IRQMOD) {
-		nfp_net_coalesce_write_cfg(nn);
+		nfp_net_coalesce_write_cfg(nn, true, true);
 		update |= NFP_NET_CFG_UPDATE_IRQMOD;
 	}
 
