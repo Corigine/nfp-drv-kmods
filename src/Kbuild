@@ -437,56 +437,19 @@ ifneq (,$(filter y,$(CONFIG_NFP_NET_PF) $(CONFIG_NFP_NET_VF)))
   endif
 endif # CONFIG_NFP_NET_*
 
-# Use white list and only Operation Systems listed need build crdma
-BUILD_CRDMA := 0
+# Use check_crdma_sup.sh to determine if CRDMA is supported
+BUILD_CRDMA := $(shell /bin/bash -c '$(src)/../tools/check_crdma_sup.sh \
+                                     $(VERSION) $(srctree) 2>/dev/null')
 
-# Linux kernel > = 4.19
-ifeq ($(call kern_ge,4,19),y)
-	BUILD_CRDMA := y
-endif
-
-# Linux kernel  <= 5.16
-ifeq ($(call kern_ge,5,16),y)
-	BUILD_CRDMA := 0
-endif
-
-# Support Anolis Linux 8.*
-ifeq ($(COMPAT_ANOLISLINUX), y)
-	BUILD_CRDMA := y
-endif
-
-# CentOS >= 7.6
-ifeq ($(call rhel_ge,7,6), y)
-	BUILD_CRDMA := y
-endif
-
-# CentOS < 9.0
-ifeq ($(call rhel_ge,9,0), y)
-	BUILD_CRDMA := 0
-endif
-
-# Do not support Anolis Linux 7.*
-# Must be put after  rhel_ge judement, Anolis use RHEL_MAJOR and RHEL_MINOR too.
-# So we need to set 0 here.
-ifeq ($(COMPAT_ANOLISLINUX_MAJOR_7), y)
-	BUILD_CRDMA := 0
-endif
-
-# Open Clouds >= 8.*
-
-# Kylin os >= V10SP3
-ifeq ($(call kylin_ge,10,3), y)
-	BUILD_CRDMA := y
-endif
-
-# Do not support SUSE
-ifeq ($(COMPAT_SUSE), y)
-	BUILD_CRDMA := 0
-endif
-
-# Do not support UBUNTU
-ifneq ($(UTS_UBUNTU_RELEASE_ABI), 0)
-	BUILD_CRDMA := 0
+# Use nested if as 'AND' statement:
+#   if BUILD_CRDMA != y and BUILD_CRDMA != 0
+# then something went wrong during detection, use the safer option of disabling
+# BUILD_CRDMA
+ifneq ($(BUILD_CRDMA),0)
+    ifneq ($(BUILD_CRDMA),y)
+        $(warning Could not determine if CRDMA should be compiled, disabling)
+        BUILD_CRDMA := 0
+    endif
 endif
 
 ifeq ($(BUILD_CRDMA),y)
