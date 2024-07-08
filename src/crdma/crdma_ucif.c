@@ -593,6 +593,8 @@ static void crdma_eq_poll(unsigned long arg)
 			ccq = dev->cq_table[cqn];
 
 			ccq->arm_seqn++;
+			if ((ccq->arm_seqn & 0x3) == 0)
+				ccq->sn_rev = (ccq->sn_rev + 1) & 0xF;
 			atomic_inc(&ccq->ref_cnt);
 
 			/*

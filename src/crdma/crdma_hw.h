@@ -134,13 +134,16 @@ enum {
 	CRDMA_DB_SQ_MASK                =  0x00FFFFFF,
 	CRDMA_DB_SQ_TAIL_SHIFT          = 11,
 	CRDMA_DB_SWQE_TYPE_SHIFT        = 22,
+	CRDMA_DB_SQ_SN_SHIFT            = 25,
 	/* RQ Doorbell Register */
 	CRDMA_DB_RQ_ADDR_OFFSET         =  (0x204 * 4),
 	CRDMA_DB_RQ_MASK                =  0x000007FF,
 	CRDMA_DB_RQ_TAIL_SHIFT          =  11,
+	CRDMA_DB_RQ_SN_SHIFT            =  25,
 	/* CQ Doorbell Register */
 	CRDMA_DB_CQ_ADDR_OFFSET         =  (0x210 * 4),
 	CRDMA_DB_CQ_SEQ_SHIFT           =  30,
+	CRDMA_DB_CQ_SN_SHIFT            =  25,
 	CRDMA_DB_CQN_MASK               =  0x00FFFFFF,
 	CRDMA_DB_CQ_ARM_ANY_BIT         =  (1 << 24),
 	CRDMA_DB_CQCI_ADDR_OFFSET       =  0x24,

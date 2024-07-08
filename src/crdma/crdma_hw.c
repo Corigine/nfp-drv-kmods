@@ -171,6 +171,7 @@ void crdma_set_cq_db(struct crdma_ibdev *dev, u32 cqn, bool solicited)
 	ccq = dev->cq_table[cqn];
 
 	db = (ccq->arm_seqn << CRDMA_DB_CQ_SEQ_SHIFT) |
+		(ccq->sn_rev << CRDMA_DB_CQ_SN_SHIFT) |
 		(solicited ? 0 : CRDMA_DB_CQ_ARM_ANY_BIT) |
 		(ccq->cqn & CRDMA_DB_CQN_MASK);
 	addr = dev->priv_eq_uar.map + CRDMA_DB_CQ_ADDR_OFFSET;

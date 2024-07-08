@@ -148,6 +148,7 @@ struct crdma_cq {
 	struct crdma_cqe	*cqe_buf;	/* vaddr for kernel of above */
 
 	int			arm_seqn;	/* Rolling sequence number */
+	u32			sn_rev;		/* Serial Number for reverse */
 	u32			num_cqe;	/* Power of 2 */
 	u32			num_cqe_log2;	/* Above as a log2 value */
 	u32			consumer_cnt;	/* S/W consumer counter */
@@ -178,6 +179,7 @@ struct crdma_hw_workq {
 	u32			tail;		/* SW Producer */
 	u32			length;		/* Queue size in bytes */
 	u32			mask;		/* Num WQE - 1 */
+	u32			sn_rev;		/* Serial Number for reverse */
 };
 
 struct crdma_qp {

@@ -1586,6 +1586,7 @@ static int crdma_create_qp(struct ib_qp *qp,
 	} else {
 		cqp->sq.buf = sg_virt(cqp->mem->alloc) + cqp->sq_offset;
 		cqp->sq.mask = cqp->sq.wqe_cnt - 1;
+		cqp->sq.sn_rev = 0;
 		cqp->sq.wqe_size_log2 = ilog2(cqp->sq.wqe_size);
 
 		cqp->sq.wrid_map = kcalloc(cqp->sq.wqe_cnt, sizeof(u64),
@@ -1597,6 +1598,7 @@ static int crdma_create_qp(struct ib_qp *qp,
 
 		cqp->rq.buf = sg_virt(cqp->mem->alloc) + cqp->rq_offset;
 		cqp->rq.mask = cqp->rq.wqe_cnt - 1;
+		cqp->rq.sn_rev = 0;
 		cqp->rq.wqe_size_log2 = ilog2(cqp->rq.wqe_size);
 
 		cqp->rq.wrid_map = kcalloc(cqp->rq.wqe_cnt, sizeof(u64),
@@ -1756,6 +1758,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 	} else {
 		cqp->sq.buf = sg_virt(cqp->mem->alloc) + cqp->sq_offset;
 		cqp->sq.mask = cqp->sq.wqe_cnt - 1;
+		cqp->sq.sn_rev = 0;
 		cqp->sq.wqe_size_log2 = ilog2(cqp->sq.wqe_size);
 
 		cqp->sq.wrid_map = kcalloc(cqp->sq.wqe_cnt, sizeof(u64),
@@ -1767,6 +1770,7 @@ static struct ib_qp *crdma_create_qp(struct ib_pd *pd,
 
 		cqp->rq.buf = sg_virt(cqp->mem->alloc) + cqp->rq_offset;
 		cqp->rq.mask = cqp->rq.wqe_cnt - 1;
+		cqp->rq.sn_rev = 0;
 		cqp->rq.wqe_size_log2 = ilog2(cqp->rq.wqe_size);
 
 		cqp->rq.wrid_map = kcalloc(cqp->rq.wqe_cnt, sizeof(u64),
@@ -2630,6 +2634,8 @@ static int crdma_post_send(struct ib_qp *qp, const struct ib_send_wr *wr,
 		/* Advance to the next SWQE to consume */
 		wr_cnt++;
 		cqp->sq.tail = (cqp->sq.tail + 1) & cqp->sq.mask;
+		if (cqp->sq.tail == 0)
+			cqp->sq.sn_rev = (cqp->sq.sn_rev + 1) & 0xF;
 		wr = wr->next;
 
 		/*
@@ -2655,7 +2661,8 @@ out:
 		mb();
 		db_value = (cqp->qp_index & CRDMA_DB_SQ_MASK) |
 			cqp->sq.tail << CRDMA_DB_SQ_TAIL_SHIFT |
-			is_read << CRDMA_DB_SWQE_TYPE_SHIFT;
+			is_read << CRDMA_DB_SWQE_TYPE_SHIFT |
+			cqp->sq.sn_rev << CRDMA_DB_SQ_SN_SHIFT;
 		crdma_sq_ring_db32(dev, db_value);
 
 		/*
@@ -2715,6 +2722,7 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 	struct crdma_ibdev *dev = to_crdma_ibdev(qp->device);
 	struct crdma_qp *cqp = to_crdma_qp(qp);
 	struct crdma_rwqe *rwqe;
+	int wr_cnt = 0;
 	int ret = 0;
 	int db_value = 0;
 	unsigned long irq_flags;
@@ -2760,15 +2768,22 @@ static int crdma_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 		set_wqe_sw_ownership(&cqp->rq, cqp->rq.tail +
 				     CRDMA_WQ_WQE_SPARES);
 		cqp->rq.tail = (cqp->rq.tail + 1) & cqp->rq.mask;
+		if (cqp->rq.tail == 0)
+			cqp->rq.sn_rev = (cqp->rq.sn_rev + 1) & 0xF;
 
+		wr_cnt++;
+		wr = wr->next;
+	}
+
+	if (wr_cnt) {
 		/* Memory barrier */
 		mb();
 		db_value = (cqp->qp_index & CRDMA_DB_RQ_MASK) |
-			    cqp->rq.tail << CRDMA_DB_RQ_TAIL_SHIFT;
+			    cqp->rq.tail << CRDMA_DB_RQ_TAIL_SHIFT |
+			    cqp->rq.sn_rev << CRDMA_DB_RQ_SN_SHIFT;
 		crdma_rq_ring_db32(dev, db_value);
-
-		wr = wr->next;
 	}
+
 	spin_unlock_irqrestore(&cqp->rq.lock, irq_flags);
 
 	return ret;
@@ -2974,6 +2989,7 @@ static int crdma_create_cq(struct ib_cq *cq,
 		}
 		ccq->mask = ccq->num_cqe - 1;
 		ccq->arm_seqn = 1;
+		ccq->sn_rev = 0;
 		while ((1 << ccq->num_cqe_log2) < ccq->num_cqe)
 			ccq->num_cqe_log2++;
 	}
@@ -3293,6 +3309,7 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev,
 		}
 		ccq->mask = ccq->num_cqe - 1;
 		ccq->arm_seqn = 1;
+		ccq->sn_rev = 0;
 		while ((1 << ccq->num_cqe_log2) < ccq->num_cqe)
 			ccq->num_cqe_log2++;
 	}
@@ -3616,6 +3633,7 @@ static int crdma_req_notify_cq(struct ib_cq *cq, enum ib_cq_notify_flags flags)
 
 	spin_lock_irqsave(&ccq->lock, irq_flags);
 	arm = (ccq->arm_seqn << CRDMA_DB_CQ_SEQ_SHIFT) |
+		(ccq->sn_rev << CRDMA_DB_CQ_SN_SHIFT) |
 		((flags & IB_CQ_SOLICITED_MASK) == IB_CQ_SOLICITED ?
 			0 : CRDMA_DB_CQ_ARM_ANY_BIT) |
 		(ccq->cqn & CRDMA_DB_CQN_MASK);
