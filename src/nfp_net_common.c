@@ -1256,14 +1256,14 @@ void nfp_ctrl_close(struct nfp_net *nn)
 
 static const struct dim_cq_moder rx_profile[] = {
 	{.usec = 0, .pkts = 1},
-	{.usec = 4, .pkts = 32},
+	{.usec = 0, .pkts = 32},
 	{.usec = 64, .pkts = 64},
 	{.usec = 128, .pkts = 256},
 	{.usec = 256, .pkts = 256},
 };
 static const struct dim_cq_moder tx_profile[] = {
 	{.usec = 0, .pkts = 1},
-	{.usec = 4, .pkts = 16},
+	{.usec = 0, .pkts = 16},
 	{.usec = 32, .pkts = 64},
 	{.usec = 64, .pkts = 128},
 	{.usec = 128, .pkts = 128},
