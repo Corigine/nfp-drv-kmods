@@ -1721,22 +1721,22 @@ int crdma_port_disable_cmd(struct crdma_ibdev *dev, u8 port)
 			port, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
-int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enbaled)
+int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enabled)
 {
 	return __crdma_no_param_cmd(dev, CRDMA_CMD_DCQCN_ENABLE, 0,
-			enbaled, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+			enabled, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
-int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enbaled)
+int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enabled)
 {
 	return __crdma_no_param_cmd(dev, CRDMA_CMD_RETRANS_ENABLE, 0,
-			enbaled, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+			enabled, CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
-int crdma_high_perf_read_enable_cmd(struct crdma_ibdev *dev, u8 enbaled)
+int crdma_high_perf_read_enable_cmd(struct crdma_ibdev *dev, u8 enabled)
 {
 	return __crdma_no_param_cmd(dev, CRDMA_CMD_HIGH_PERF_READ_ENABLE, 0,
-			(enbaled ? MAX_BIDIRECTIONAL_SEGMENT : MAX_DEFAULT_BIDIRECTIONAL_SEGMENT),
+			(enabled ? MAX_BIDIRECTIONAL_SEGMENT : MAX_DEFAULT_BIDIRECTIONAL_SEGMENT),
 			CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 

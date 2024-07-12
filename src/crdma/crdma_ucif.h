@@ -1050,29 +1050,29 @@ int crdma_set_port_mtu_cmd(struct crdma_ibdev *dev, u8 port, u32 mtu);
  * Enable or Disable dcqcn to microcode.
  *
  * @dev: RoCE IB device.
- * @enbaled: TRUE: to enable, FALSE: to disable
+ * @enabled: TRUE: to enable, FALSE: to disable
  * Returns 0 on success, otherwise an error.
  */
-int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
+int crdma_dcqcn_enable_cmd(struct crdma_ibdev *dev, u8 enabled);
 
 /**
  * Enable or Disable ooo/timeout retransmit to microcode.
  *
  * @dev: RoCE IB device.
- * @enbaled: high 4bits: ooo, low 4bits:
+ * @enabled: high 4bits: ooo, low 4bits:
  *           timeout; 0x1: to enable, 0x0: to disable
  * Returns 0 on success, otherwise an error.
  */
-int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
+int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enabled);
 
 /**
  * Enable or Disable high performance of bidirtional READ.
  *
  * @dev: RoCE IB device.
- * @enbaled:  0x1: to enable, 0x0: to disable
+ * @enabled:  0x1: to enable, 0x0: to disable
  * Returns 0 on success, otherwise an error.
  */
-int crdma_high_perf_read_enable_cmd(struct crdma_ibdev *dev, u8 enbaled);
+int crdma_high_perf_read_enable_cmd(struct crdma_ibdev *dev, u8 enabled);
 
 /**
  * Issue microcode MPT create command.
