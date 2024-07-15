@@ -971,25 +971,25 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		goto err_free_idr;
 
 	if (crdma_init_net_notifiers(dev))
-		goto err_unregister_verbs;
+		goto err_cleanup_hca;
 	dev->ibdev.phys_port_cnt = dev->cap.n_ports;
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 1) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
 	if (ib_device_set_netdev(&dev->ibdev, dev->nfp_info->netdev, 1))
-		goto err_free_idr;
+		goto err_cleanup_net_notifiers;
 #endif
 
 	if (crdma_register_verbs(dev))
-		goto err_cleanup_hca;
+		goto err_cleanup_net_notifiers;
 
 	if (crdma_init_dcqcn(dev))
-		goto err_cleanup_hca;
+		goto err_unregister_verbs;
 
 	if (crdma_init_retrans(dev))
-		goto err_cleanup_hca;
+		goto err_unregister_verbs;
 
 	if (crdma_init_high_perf_read(dev))
-		goto err_cleanup_hca;
+		goto err_unregister_verbs;
 
 	for (i = 0; i < ARRAY_SIZE(crdma_class_attrs); i++)
 		if (device_create_file(&dev->ibdev.dev, crdma_class_attrs[i]))
@@ -999,9 +999,10 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 err_sysfs:
 	for (j = 0; j < i; j++)
 		device_remove_file(&dev->ibdev.dev, crdma_class_attrs[j]);
-	crdma_cleanup_net_notifiers(dev);
 err_unregister_verbs:
 	crdma_unregister_verbs(dev);
+err_cleanup_net_notifiers:
+	crdma_cleanup_net_notifiers(dev);
 err_cleanup_hca:
 	crdma_cleanup_hca(dev);
 err_free_idr:
