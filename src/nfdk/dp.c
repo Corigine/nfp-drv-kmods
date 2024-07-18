@@ -136,6 +136,7 @@ nfp_nfdk_tx_maybe_close_block(struct nfp_net_tx_ring *tx_ring,
 	unsigned int n_descs, wr_p, nop_slots;
 	const skb_frag_t *frag, *fend;
 	struct nfp_nfdk_tx_desc *txd;
+	bool unaligned = false;
 	unsigned int nr_frags;
 	unsigned int wr_idx;
 	int err;
@@ -145,15 +146,18 @@ recount_descs:
 	nr_frags = skb_shinfo(skb)->nr_frags;
 	frag = skb_shinfo(skb)->frags;
 	fend = frag + nr_frags;
-	for (; frag < fend; frag++)
+	for (; frag < fend; frag++) {
 		n_descs += DIV_ROUND_UP(skb_frag_size(frag),
 					NFDK_TX_MAX_DATA_PER_DESC);
+		unaligned |= !!(skb_frag_size(frag) & 0x3);
+	}
 
-	if (unlikely(n_descs > NFDK_TX_DESC_GATHER_MAX)) {
+	if (unlikely((n_descs > NFDK_TX_DESC_GATHER_MAX) || unaligned)) {
 		if (skb_is_nonlinear(skb)) {
 			err = skb_linearize(skb);
 			if (err)
 				return err;
+			unaligned = false;
 			goto recount_descs;
 		}
 		return -EINVAL;
