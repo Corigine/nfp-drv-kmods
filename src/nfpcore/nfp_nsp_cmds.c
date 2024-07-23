@@ -62,42 +62,43 @@ exit_free:
 	return nspi;
 }
 
-struct nfp_sensors {
-	__le32 chip_temp;
-	__le32 assembly_power;
-	__le32 assembly_12v_power;
-	__le32 assembly_3v3_power;
-};
-
-int nfp_hwmon_read_sensor(struct nfp_cpp *cpp, enum nfp_nsp_sensor_id id,
-			  long *val)
+#define NFP_SENSORS_CACHE_CYCLE		30
+int nfp_hwmon_read_sensor(struct nfp_cpp *cpp, struct nfp_nsp_identify *nspi,
+			  enum nfp_nsp_sensor_id id, long *val)
 {
+	unsigned long inv_cache = nspi->s_jifs + NFP_SENSORS_CACHE_CYCLE * HZ;
 	struct nfp_sensors s;
 	struct nfp_nsp *nsp;
 	int ret;
 
-	nsp = nfp_nsp_open(cpp);
-	if (IS_ERR(nsp))
-		return PTR_ERR(nsp);
+	if (time_is_before_eq_jiffies(inv_cache)) {
+		/* update all sensors from nsp */
+		nsp = nfp_nsp_open(cpp);
+		if (IS_ERR(nsp))
+			return PTR_ERR(nsp);
 
-	ret = nfp_nsp_read_sensors(nsp, BIT(id), &s, sizeof(s));
-	nfp_nsp_close(nsp);
+		ret = nfp_nsp_read_sensors(nsp, nspi->sensor_mask, &s, sizeof(s));
+		nfp_nsp_close(nsp);
 
-	if (ret < 0)
-		return ret;
+		if (ret < 0)
+			return ret;
+
+		memcpy(&nspi->s_cached, &s, sizeof(s));
+		nspi->s_jifs = jiffies;
+	}
 
 	switch (id) {
 	case NFP_SENSOR_CHIP_TEMPERATURE:
-		*val = le32_to_cpu(s.chip_temp);
+		*val = le32_to_cpu(nspi->s_cached.chip_temp);
 		break;
 	case NFP_SENSOR_ASSEMBLY_POWER:
-		*val = le32_to_cpu(s.assembly_power);
+		*val = le32_to_cpu(nspi->s_cached.assembly_power);
 		break;
 	case NFP_SENSOR_ASSEMBLY_12V_POWER:
-		*val = le32_to_cpu(s.assembly_12v_power);
+		*val = le32_to_cpu(nspi->s_cached.assembly_12v_power);
 		break;
 	case NFP_SENSOR_ASSEMBLY_3V3_POWER:
-		*val = le32_to_cpu(s.assembly_3v3_power);
+		*val = le32_to_cpu(nspi->s_cached.assembly_3v3_power);
 		break;
 	default:
 		return -EINVAL;

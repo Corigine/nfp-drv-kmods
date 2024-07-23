@@ -55,9 +55,9 @@ nfp_hwmon_read(struct device *dev, enum hwmon_sensor_types type, u32 attr,
 		return -EOPNOTSUPP;
 
 	if (type == hwmon_temp && attr == hwmon_temp_input)
-		return nfp_hwmon_read_sensor(pf->cpp, id, val);
+		return nfp_hwmon_read_sensor(pf->cpp, pf->nspi, id, val);
 	if (type == hwmon_power && attr == hwmon_power_input)
-		return nfp_hwmon_read_sensor(pf->cpp, id, val);
+		return nfp_hwmon_read_sensor(pf->cpp, pf->nspi, id, val);
 
 	return -EINVAL;
 }

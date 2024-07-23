@@ -288,8 +288,15 @@ int __nfp_eth_set_aneg(struct nfp_nsp *nsp, enum nfp_eth_aneg mode);
 int __nfp_eth_set_speed(struct nfp_nsp *nsp, unsigned int speed);
 int __nfp_eth_set_split(struct nfp_nsp *nsp, unsigned int lanes);
 
+struct nfp_sensors {
+	__le32 chip_temp;
+	__le32 assembly_power;
+	__le32 assembly_12v_power;
+	__le32 assembly_3v3_power;
+};
+
 /**
- * struct nfp_nsp_identify - NSP static information
+ * struct nfp_nsp_identify - NSP buffered information
  * @version:      opaque version string
  * @flags:        version flags
  * @br_primary:   branch id of primary bootloader
@@ -301,6 +308,8 @@ int __nfp_eth_set_split(struct nfp_nsp *nsp, unsigned int lanes);
  * @abi_major:    ABI major version
  * @abi_minor:    ABI minor version
  * @sensor_mask:  mask of present sensors available on NIC
+ * @s_jifs:       Jiffies when sesnsors are cached
+ * @s_cached:     Sensors' cached values
  */
 struct nfp_nsp_identify {
 	char version[40];
@@ -314,6 +323,8 @@ struct nfp_nsp_identify {
 	u16 abi_major;
 	u16 abi_minor;
 	u64 sensor_mask;
+	unsigned long s_jifs;
+	struct nfp_sensors s_cached;
 };
 
 struct nfp_nsp_identify *__nfp_nsp_identify(struct nfp_nsp *nsp);
@@ -325,8 +336,8 @@ enum nfp_nsp_sensor_id {
 	NFP_SENSOR_ASSEMBLY_3V3_POWER,
 };
 
-int nfp_hwmon_read_sensor(struct nfp_cpp *cpp, enum nfp_nsp_sensor_id id,
-			  long *val);
+int nfp_hwmon_read_sensor(struct nfp_cpp *cpp, struct nfp_nsp_identify *nspi,
+			  enum nfp_nsp_sensor_id id, long *val);
 
 struct nfp_eth_media_buf {
 	u8 eth_index;

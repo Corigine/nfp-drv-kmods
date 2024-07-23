@@ -27,7 +27,7 @@ nfp_hwmon_show_input(struct device *dev, struct device_attribute *dev_attr,
 
 	if (!(pf->nspi->sensor_mask & BIT(attr->index)))
 		return -EINVAL;
-	ret = nfp_hwmon_read_sensor(pf->cpp, attr->index, &val);
+	ret = nfp_hwmon_read_sensor(pf->cpp, pf->nspi, attr->index, &val);
 	if (ret < 0)
 		return ret;
 
