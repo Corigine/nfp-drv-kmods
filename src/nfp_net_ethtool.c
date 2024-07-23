@@ -193,6 +193,13 @@ static void nfp_net_get_nspinfo(struct nfp_app *app, char *version)
 	if (!app)
 		return;
 
+	if (app->pf->nspi) {
+		snprintf(version, ETHTOOL_FWVERS_LEN, "%hu.%hu",
+			 app->pf->nspi->abi_major,
+			 app->pf->nspi->abi_minor);
+		return;
+	}
+
 	nsp = nfp_nsp_open(app->cpp);
 	if (IS_ERR(nsp))
 		return;

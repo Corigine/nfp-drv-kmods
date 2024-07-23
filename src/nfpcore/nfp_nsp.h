@@ -298,6 +298,8 @@ int __nfp_eth_set_split(struct nfp_nsp *nsp, unsigned int lanes);
  * @primary:      version of primarary bootloader
  * @secondary:    version id of secondary bootloader
  * @nsp:          version id of NSP
+ * @abi_major:    ABI major version
+ * @abi_minor:    ABI minor version
  * @sensor_mask:  mask of present sensors available on NIC
  */
 struct nfp_nsp_identify {
@@ -309,6 +311,8 @@ struct nfp_nsp_identify {
 	u16 primary;
 	u16 secondary;
 	u16 nsp;
+	u16 abi_major;
+	u16 abi_minor;
 	u64 sensor_mask;
 };
 
