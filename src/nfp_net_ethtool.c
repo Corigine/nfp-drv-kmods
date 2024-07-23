@@ -804,7 +804,7 @@ static int nfp_test_nsp(struct net_device *netdev)
 	struct nfp_app *app = nfp_app_from_netdev(netdev);
 	struct nfp_nsp_identify *nspi;
 	struct nfp_nsp *nsp;
-	int err;
+	int err = 0;
 
 	nsp = nfp_nsp_open(app->cpp);
 	if (IS_ERR(nsp)) {
@@ -813,23 +813,11 @@ static int nfp_test_nsp(struct net_device *netdev)
 		goto exit;
 	}
 
-	if (nfp_nsp_get_abi_ver_minor(nsp) < 15) {
-		err = -EOPNOTSUPP;
-		goto exit_close_nsp;
-	}
-
-	nspi = kzalloc(sizeof(*nspi), GFP_KERNEL);
-	if (!nspi) {
-		err = -ENOMEM;
-		goto exit_close_nsp;
-	}
-
-	err = nfp_nsp_read_identify(nsp, nspi, sizeof(*nspi));
-	if (err < 0)
-		netdev_info(netdev, "NSP Test: reading bsp version failed %d\n", err);
+	nspi = __nfp_nsp_identify(nsp);
+	if (!nspi)
+		err = -EIO;
 
 	kfree(nspi);
-exit_close_nsp:
 	nfp_nsp_close(nsp);
 exit:
 	return err;
