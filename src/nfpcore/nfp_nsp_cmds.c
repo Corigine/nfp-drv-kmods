@@ -53,6 +53,8 @@ struct nfp_nsp_identify *__nfp_nsp_identify(struct nfp_nsp *nsp)
 	nspi->primary = le16_to_cpu(ni->primary);
 	nspi->secondary = le16_to_cpu(ni->secondary);
 	nspi->nsp = le16_to_cpu(ni->nsp);
+	nspi->abi_major = nfp_nsp_get_abi_ver_major(nsp);
+	nspi->abi_minor = nfp_nsp_get_abi_ver_minor(nsp);
 	nspi->sensor_mask = le64_to_cpu(ni->sensor_mask);
 
 exit_free:
