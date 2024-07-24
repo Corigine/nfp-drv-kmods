@@ -72,7 +72,7 @@ jobs:
             for DIR in latest/kernel-devel-c4c/${ARCH}/*; do
               OS=${DIR##*/}
               MIRROR=$(sed -n 's/.*\"mirror\": \"\(.*\)\"/\1/p' $DIR/buildinfo.json)
-              if [[ "${OS}" != "opensuse"* ]]; then
+              if [[ "${OS}" != "opensuse"* && "${OS}" != "uos"* ]]; then
                 (
                   sudo wget -r --spider -o $DIR/packages.txt --no-parent \
                     "${MIRROR}" -A 'kernel-devel*'
