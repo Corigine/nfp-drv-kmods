@@ -159,18 +159,6 @@ KYLIN_MINOR := \
 		     END {if (found != 1) print 0}' \
 		$(srctree)/include/generated/uapi/linux/version.h 2>/dev/null || echo 0)
 
-format_point_count=$(shell echo $(RHEL_RELEASE) | grep -o '\.' | wc -l)
-ifeq ($(format_point_count),0)
-	RHEL_REL_STANDARDIZE=$(shell echo $(RHEL_RELEASE).0.0)
-else ifeq ($(format_point_count),1)
-	RHEL_REL_STANDARDIZE=$(shell echo $(RHEL_RELEASE).0)
-else ifeq ($(format_point_count),2)
-	RHEL_REL_STANDARDIZE=$(shell echo $(RHEL_RELEASE))
-endif
-ccflags-y += -DRHEL_RELEASE_EXTRACT_X=$(shell echo $(RHEL_REL_STANDARDIZE) | cut -d '.' -f 1)
-ccflags-y += -DRHEL_RELEASE_EXTRACT_Y=$(shell echo $(RHEL_REL_STANDARDIZE) | cut -d '.' -f 2)
-ccflags-y += -DRHEL_RELEASE_EXTRACT_Z=$(shell echo $(RHEL_REL_STANDARDIZE) | cut -d '.' -f 3)
-
 VER_IS_NON_RHEL := $(shell [ $(RHEL_MAJOR) -eq 0 ] && echo y)
 
 # Check if it's RHEL kernel and not earlier than given version
@@ -240,6 +228,27 @@ else
   nfp-objs += nfp_hwmon_legacy.o
 endif
 
+# Standardize the EXTRAVERSION
+#
+# @param $1: the raw EXTRAVERSION
+# @param $2: the standardized EXTRAVERSION
+define standardize_extraversion
+$2 := $(shell awk 'BEGIN {output=sprintf("%s.%s.%s","$1",0,0); print output}')
+endef
+
+# Parse the EXTRAVERSION of kernel
+#
+# @param $1: the standardized EXTRAVERSION
+# @param $2: macro used in source code
+define parse_extraversion
+ccflags-y += -D$2_EXTRACT_X=$(shell echo $1 | cut -d '.' -f 1)
+ccflags-y += -D$2_EXTRACT_Y=$(shell echo $1 | cut -d '.' -f 2)
+ccflags-y += -D$2_EXTRACT_Z=$(shell echo $1 | cut -d '.' -f 3)
+endef
+
+# Parse the EXTRAVERSION for RedHat
+$(eval $(call standardize_extraversion,"$(RHEL_RELEASE)",RHEL_RELEASE_STANDARDIZED))
+$(eval $(call parse_extraversion,$(RHEL_RELEASE_STANDARDIZED),RHEL_RELEASE))
 
 # Check for eth_hw_addr_set
 $(eval $(call add_compat_flag,$(srctree)/include/linux/etherdevice.h,eth_hw_addr_set,COMPAT__HAVE_ETH_HW_ADDR_SET))
