@@ -152,11 +152,13 @@ nfp_port_get_phys_port_name(struct net_device *netdev, char *name, size_t len)
 	port = nfp_port_from_netdev(netdev);
 	if (!port)
 		return -EOPNOTSUPP;
+#ifdef COMPAT__HAVE_DEVLINK_PHYS_PORT_NAME
 	/* If devlink_port is registered, devlink core
 	 * is taking care of name formatting.
 	 */
 	if (nfp_devlink_is_port_registered(port))
 		return -EOPNOTSUPP;
+#endif
 
 	switch (port->type) {
 	case NFP_PORT_PHYS_PORT:
