@@ -309,6 +309,7 @@ struct nfp_sensors {
  * @abi_minor:    ABI minor version
  * @sensor_mask:  mask of present sensors available on NIC
  * @s_jifs:       Jiffies when sesnsors are cached
+ * @s_upd_inr:    Update interval of sensors (milliseconds)
  * @s_cached:     Sensors' cached values
  */
 struct nfp_nsp_identify {
@@ -324,6 +325,7 @@ struct nfp_nsp_identify {
 	u16 abi_minor;
 	u64 sensor_mask;
 	unsigned long s_jifs;
+	u32 s_upd_inr;
 	struct nfp_sensors s_cached;
 };
 

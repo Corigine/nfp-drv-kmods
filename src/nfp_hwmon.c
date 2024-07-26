@@ -46,6 +46,11 @@ nfp_hwmon_read(struct device *dev, enum hwmon_sensor_types type, u32 attr,
 			return 0;
 		}
 
+	if (type == hwmon_chip && attr == hwmon_chip_update_interval) {
+		*val = pf->nspi->s_upd_inr;
+		return 0;
+	}
+
 	err = nfp_hwmon_sensor_id(type, channel);
 	if (err < 0)
 		return err;
@@ -58,6 +63,20 @@ nfp_hwmon_read(struct device *dev, enum hwmon_sensor_types type, u32 attr,
 		return nfp_hwmon_read_sensor(pf->cpp, pf->nspi, id, val);
 	if (type == hwmon_power && attr == hwmon_power_input)
 		return nfp_hwmon_read_sensor(pf->cpp, pf->nspi, id, val);
+
+	return -EINVAL;
+}
+
+static int
+nfp_hwmon_write(struct device *dev, enum hwmon_sensor_types type, u32 attr,
+		int channel, long val)
+{
+	struct nfp_pf *pf = dev_get_drvdata(dev);
+
+	if (type == hwmon_chip && attr == hwmon_chip_update_interval) {
+		pf->nspi->s_upd_inr = val;
+		return 0;
+	}
 
 	return -EINVAL;
 }
@@ -79,12 +98,17 @@ nfp_hwmon_is_visible(const void *data, enum hwmon_sensor_types type, u32 attr,
 		case hwmon_power_max:
 			return 0444;
 		}
+	} else if (type == hwmon_chip) {
+		switch (attr) {
+		case hwmon_chip_update_interval:
+			return 0644;
+		}
 	}
 	return 0;
 }
 
 static u32 nfp_chip_config[] = {
-	HWMON_C_REGISTER_TZ,
+	HWMON_C_REGISTER_TZ | HWMON_C_UPDATE_INTERVAL,
 	0
 };
 
@@ -129,6 +153,7 @@ static const struct hwmon_channel_info * nfp_hwmon_info[] = {
 static const struct hwmon_ops nfp_hwmon_ops = {
 	.is_visible = nfp_hwmon_is_visible,
 	.read = nfp_hwmon_read,
+	.write = nfp_hwmon_write,
 };
 
 static const struct hwmon_chip_info nfp_chip_info = {
@@ -150,6 +175,9 @@ int nfp_hwmon_register(struct nfp_pf *pf)
 			 "not registering HWMON (NSP doesn't report sensors)\n");
 		return 0;
 	}
+
+	/* Initial update interval is 30s */
+	pf->nspi->s_upd_inr = 30000;
 
 	pf->hwmon_dev = hwmon_device_register_with_info(&pf->pdev->dev, "nfp",
 							pf, &nfp_chip_info,
