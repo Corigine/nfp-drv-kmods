@@ -62,11 +62,10 @@ exit_free:
 	return nspi;
 }
 
-#define NFP_SENSORS_CACHE_CYCLE		30
 int nfp_hwmon_read_sensor(struct nfp_cpp *cpp, struct nfp_nsp_identify *nspi,
 			  enum nfp_nsp_sensor_id id, long *val)
 {
-	unsigned long inv_cache = nspi->s_jifs + NFP_SENSORS_CACHE_CYCLE * HZ;
+	unsigned long inv_cache = nspi->s_jifs + msecs_to_jiffies(nspi->s_upd_inr);
 	struct nfp_sensors s;
 	struct nfp_nsp *nsp;
 	int ret;
