@@ -149,7 +149,7 @@ recount_descs:
 	for (; frag < fend; frag++) {
 		n_descs += DIV_ROUND_UP(skb_frag_size(frag),
 					NFDK_TX_MAX_DATA_PER_DESC);
-		unaligned |= !!(skb_frag_size(frag) & 0x3);
+		unaligned |= skb_is_gso(skb) && !!(skb_frag_size(frag) & 0x3);
 	}
 
 	if (unlikely((n_descs > NFDK_TX_DESC_GATHER_MAX) || unaligned)) {
