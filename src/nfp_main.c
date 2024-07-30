@@ -1510,15 +1510,10 @@ static pci_ers_result_t nfp_pci_error_detected(struct pci_dev *pdev,
 	struct nfp_pf *pf = pci_get_drvdata(pdev);
 
 	dev_warn(&pdev->dev, "nfp error detect reported.\n");
-	if (state == pci_channel_io_normal) {
-		dev_warn(&pdev->dev, "Non-correctable non-fatal error reported.\n");
-		return PCI_ERS_RESULT_CAN_RECOVER;
-	}
 
 	if (state == pci_channel_io_perm_failure)
 		return PCI_ERS_RESULT_DISCONNECT;
 
-	/* Only works when state is pci_channel_io_frozen */
 	if (pf) {
 		struct nfp_net *nn;
 
