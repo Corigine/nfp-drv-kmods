@@ -368,10 +368,6 @@ static pci_ers_result_t nfp_pci_vf_error_detected(struct pci_dev *pdev,
 	struct nfp_net *nn;
 
 	dev_warn(&pdev->dev, "nfp vf error detect reported.\n");
-	if (state == pci_channel_io_normal) {
-		dev_warn(&pdev->dev, "Non-correctable non-fatal error reported.\n");
-		return PCI_ERS_RESULT_CAN_RECOVER;
-	}
 
 	vf = pci_get_drvdata(pdev);
 	if (!vf || !vf->nn)
