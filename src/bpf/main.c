@@ -500,7 +500,10 @@ static int nfp_bpf_init(struct nfp_app *app)
 		app->ctrl_mtu = nfp_bpf_ctrl_cmsg_mtu(bpf);
 	}
 
-#if VER_NON_RHEL_OR_KYL_LT(5, 0) || VER_RHEL_LT(8, 1) || VER_KYL_LT(10, 3)
+#if (VER_NON_RHEL_OR_KYL_LT(5, 0) && !COMPAT_UOSLINUX_4_19) || \
+    VER_RHEL_LT(8, 1) || VER_KYL_LT(10, 3) || \
+    VER_UOSL_EXTRA_LT(4, 19, 0, 91, 82, 179) || \
+    VER_UOSL_EXTRA_LT(4, 19, 90, 2403, 3, 0)
 	bpf->bpf_dev = bpf_offload_dev_create();
 #elif VER_NON_RHEL_OR_KYL_LT(5, 1) || VER_RHEL_EQ(8, 1) || VER_KYL_GE(10, 3)
 	bpf->bpf_dev = bpf_offload_dev_create(&nfp_bpf_dev_ops);

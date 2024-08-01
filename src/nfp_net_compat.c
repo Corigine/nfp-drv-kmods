@@ -189,7 +189,9 @@ void nfp_devlink_params_unregister(struct nfp_pf *pf)
 #endif
 
 #ifdef COMPAT__HAVE_NFP_APP_FLOWER
-#if VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 1)
+#if (VER_NON_RHEL_GE(5, 0) && !COMPAT_UOSLINUX_4_19) || VER_RHEL_GE(8, 1) || \
+    VER_UOSL_EXTRA_GE(4, 19, 0, 91, 82, 179) || \
+    VER_UOSL_EXTRA_GE(4, 19, 90, 2403, 3, 0)
 #if VER_NON_RHEL_LT(5, 8) || VER_NON_BCL_LT(8, 4) || \
     (VER_BCL_LT(8, 3) || COMPAT_BC82_KERN_11)
 int compat__nfp_flower_indr_setup_tc_cb(struct net_device *netdev,
