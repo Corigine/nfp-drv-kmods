@@ -288,6 +288,9 @@ $(eval $(call add_compat_flag,$(srctree)/include/linux/netdevice.h,"__netdev_tx_
 # Check for flow_action_offload
 $(eval $(call add_compat_flag,$(srctree)/include/net/flow_offload.h,"struct flow_rule",COMPAT_FLOW_ACTION_OFFLOAD))
 
+# Check for bpf_prog_prepare
+$(eval $(call add_compat_flag,$(srctree)/include/linux/bpf.h,"int (\*prepare)(struct bpf_prog \*prog);",COMPAT__BPF_PROG_PREPARE))
+
 utsrelease_h_path :=$(srctree)/include/generated/utsrelease.h
 # Check for BC Linux
 $(eval $(call add_compat_flag,$(utsrelease_h_path),bclinux,COMPAT_BCLINUX=1))

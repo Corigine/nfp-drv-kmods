@@ -450,7 +450,7 @@ nfp_bpf_map_free(struct nfp_app_bpf *bpf, struct bpf_offloaded_map *offmap)
 int nfp_ndo_bpf(struct nfp_app *app, struct nfp_net *nn, struct netdev_bpf *bpf)
 {
 	switch (bpf->command) {
-#if VER_NON_RHEL_OR_KYL_LT(5, 0) || VER_RHEL_LT(8, 2) || VER_KYL_LT(10, 3)
+#ifndef COMPAT__BPF_PROG_PREPARE
 	case BPF_OFFLOAD_VERIFIER_PREP:
 		bpf->verifier.ops = &nfp_bpf_dev_ops;
 		return nfp_bpf_verifier_prep(bpf->verifier.prog);
@@ -664,7 +664,7 @@ const struct bpf_prog_offload_ops nfp_bpf_dev_ops = {
 	.replace_insn	= nfp_bpf_opt_replace_insn,
 	.remove_insns	= nfp_bpf_opt_remove_insns,
 #endif
-#if VER_NON_RHEL_OR_KYL_GE(5, 0) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3)
+#ifdef COMPAT__BPF_PROG_PREPARE
 	.prepare	= nfp_bpf_verifier_prep,
 	.translate	= nfp_bpf_translate,
 	.destroy	= nfp_bpf_destroy,
