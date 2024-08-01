@@ -312,6 +312,13 @@ $(eval $(call add_compat_var_flag,$(utsrelease_h_path),v2101.ky10,COMPAT_KYLINUX
 # Check for Anolis Linux
 $(eval $(call add_compat_var_flag,$(utsrelease_h_path),an8,COMPAT_ANOLISLINUX,COMPAT_ANOLISLINUX=1))
 $(eval $(call add_compat_var,$(utsrelease_h_path),an7,COMPAT_ANOLISLINUX_MAJOR_7))
+# Check for UOS
+$(eval $(call add_compat_var_flag,$(utsrelease_h_path),uel,COMPAT_UOSLINUX,COMPAT_UOSLINUX=1))
+ifeq ($(COMPAT_UOSLINUX), y)
+  uos_extraversion=$(shell cut -d '-' -f 2 $(utsrelease_h_path) | awk -F '.uel' '{print $$1}')
+  $(eval $(call standardize_extraversion,$(uos_extraversion),UOS_VER_STANDARDIZED))
+  $(eval $(call parse_extraversion,$(UOS_VER_STANDARDIZED),UOS))
+endif
 # Check for SUSE linux
 ifneq (, $(wildcard $(srctree)/include/generated/uapi/linux/suse_version.h))
   ccflags-y += -DCOMPAT_SLELINUX=1

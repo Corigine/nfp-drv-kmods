@@ -48,7 +48,9 @@
 #include <net/flow_offload.h>
 #endif
 
-#if VER_KYL_GE(10, 3)
+#if VER_KYL_GE(10, 3) || \
+    VER_UOSL_EXTRA_GE(4, 19, 0, 91, 82, 179) || \
+    VER_UOSL_EXTRA_GE(4, 19, 90, 2403, 3, 0)
 #include <net/ipv6_stubs.h>
 #endif
 
@@ -203,7 +205,9 @@
 #endif
 #endif
 
-#if !(VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0))
+#if !((VER_NON_RHEL_GE(5, 0) && !COMPAT_UOSLINUX_4_19) || VER_RHEL_GE(8, 0) || \
+     VER_UOSL_EXTRA_GE(4, 19, 0, 91, 82, 179) || \
+     VER_UOSL_EXTRA_GE(4, 19, 90, 2403, 3, 0))
 #define VERSION__FLOWER_EGRESS
 #endif
 
@@ -369,7 +373,10 @@ static inline int skb_xmit_more(struct sk_buff *skb)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0)
 	return false;
-#elif VER_NON_RHEL_OR_KYL_LT(5, 2) || VER_RHEL_LT(8, 2) || VER_KYL_LT(10, 3)
+#elif (VER_NON_RHEL_OR_KYL_LT(5, 2) && !COMPAT_UOSLINUX_4_19) || \
+      VER_RHEL_LT(8, 2) || VER_KYL_LT(10, 3) || \
+      VER_UOSL_EXTRA_LT(4, 19, 0, 91, 82, 179) || \
+      VER_UOSL_EXTRA_LT(4, 19, 90, 2403, 3, 0)
 	return skb->xmit_more;
 #else
 	return netdev_xmit_more();
@@ -1062,9 +1069,11 @@ static inline struct sk_buff *__skb_peek(const struct sk_buff_head *list)
 }
 #endif
 
-#if (!COMPAT_SLELINUX && VER_NON_RHEL_OR_KYL_LT(4, 20)) || \
+#if (VER_NON_RHEL_OR_KYL_LT(4, 20) && !COMPAT_SLELINUX && !COMPAT_UOSLINUX_4_19) || \
     VER_RHEL_LT(7, 7) || VER_RHEL_EQ(8, 0) || VER_KYL_LT(10, 3) || \
-    SLEL_LOCALVER_LT(4, 12, 14, 120, 0)
+    SLEL_LOCALVER_LT(4, 12, 14, 120, 0) || \
+    VER_UOSL_EXTRA_LT(4, 19, 0, 91, 82, 179) || \
+    VER_UOSL_EXTRA_LT(4, 19, 90, 2403, 3, 0)
 static inline bool netif_is_vxlan(const struct net_device *dev)
 {
 	return dev->rtnl_link_ops &&
@@ -1088,7 +1097,8 @@ static inline bool netif_is_geneve(const struct net_device *dev)
        return dev->rtnl_link_ops &&
               !strcmp(dev->rtnl_link_ops->kind, "geneve");
 }
-
+#if !COMPAT_UOSLINUX_4_19 || VER_UOSL_EXTRA_LT(4, 19, 0, 91, 82, 179) || \
+    VER_UOSL_EXTRA_LT(4, 19, 90, 2403, 3, 0)
 static inline bool netif_is_gretap(const struct net_device *dev)
 {
 	return dev->rtnl_link_ops &&
@@ -1100,6 +1110,7 @@ static inline bool netif_is_ip6gretap(const struct net_device *dev)
 	return dev->rtnl_link_ops &&
 	       !strcmp(dev->rtnl_link_ops->kind, "ip6gretap");
 }
+#endif
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
@@ -1388,7 +1399,9 @@ enum {
 	FLOW_ACTION_MIRRED_INGRESS = 0xff,
 };
 
-#if VER_NON_RHEL_GE(5, 0) || VER_RHEL_EQ(8, 1)
+#if (VER_NON_RHEL_GE(5, 0) && !COMPAT_UOSLINUX_4_19) || VER_RHEL_EQ(8, 1) || \
+    VER_UOSL_EXTRA_GE(4, 19, 0, 91, 82, 179) || \
+    VER_UOSL_EXTRA_GE(4, 19, 90, 2403, 3, 0)
 static inline int
 __flow_indr_block_cb_register(struct net_device *dev, void *cb_priv,
 			      tc_indr_block_bind_cb_t *cb, void *cb_ident)
@@ -1515,7 +1528,9 @@ int compat__nfp_flower_indr_setup_tc_cb(struct net_device *netdev,
 					void *cb_priv, enum tc_setup_type type,
 					void *type_data, void *data,
 					void (*cleanup)(struct flow_block_cb *block_cb));
-#elif VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 1)
+#elif (VER_NON_RHEL_GE(5, 0) && !COMPAT_UOSLINUX_4_19) || VER_RHEL_GE(8, 1) || \
+      VER_UOSL_EXTRA_GE(4, 19, 0, 91, 82, 179) || \
+      VER_UOSL_EXTRA_GE(4, 19, 90, 2403, 3, 0)
 int compat__nfp_flower_indr_setup_tc_cb(struct net_device *netdev,
 					void *cb_priv, enum tc_setup_type type,
 					void *type_data);

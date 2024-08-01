@@ -43,6 +43,9 @@
 #ifndef COMPAT_KYLINUX
 #define COMPAT_KYLINUX 0
 #endif
+#ifndef COMPAT_UOSLINUX
+#define COMPAT_UOSLINUX 0
+#endif
 #ifndef COMPAT_KYLINUX_V10SP2
 #define COMPAT_KYLINUX_V10SP2 0
 #endif
@@ -145,6 +148,18 @@
 #define VER_NON_RHEL_OR_SLEL_GE(x, y)					\
 	(!RHEL_RELEASE_CODE && !COMPAT_SLELINUX && VER_KERN_GE(x, y))
 
+#define VER_NON_UOSL_GE(x, y, z)	(!COMPAT_UOSLINUX && VER_KERN_GE(x, y, z))
+#define VER_NON_UOSL_LT(x, y, z)	(!COMPAT_UOSLINUX && VER_KERN_LT(x, y, z))
+#define VER_NON_UOSL_EQ(x, y, z)	(!COMPAT_UOSLINUX && VER_KERN_EQ(x, y, z))
+#define VER_UOSL_GE(x, y, z)		(COMPAT_UOSLINUX && VER_KERN_GE(x, y, z))
+#define VER_UOSL_LT(x, y, z)		(COMPAT_UOSLINUX && VER_KERN_LT(x, y, z))
+#define VER_UOSL_EQ(x, y, z)		(COMPAT_UOSLINUX && VER_KERN_EQ(x, y, z))
+#if VER_UOSL_GE(4, 19, 0) && VER_UOSL_LT(5, 0, 0)
+#define COMPAT_UOSLINUX_4_19 1
+#else
+#define COMPAT_UOSLINUX_4_19 0
+#endif
+
 #define ANOLIS_RELEASE_LT(r, x, y, z)\
 	(COMPAT_ANOLISLINUX && (VER_RHEL_LT(r, 0) || RHEL_MAJOR_EQ(r) && \
 	RHEL_RELEASE_EXTRACT < RHEL_RELEASE_MERGE(x, y, z)))
@@ -167,6 +182,15 @@
 	(VER_SLEL_LT(v, p, s) || (VER_SLEL_EQ(v, p, s) && SLEL_LOCALVER_EXTRACT < SLEL_LOCALVER_MERGE(x, y)))
 #define SLEL_LOCALVER_GE(v, p, s, x, y) \
 	(VER_SLEL_GE(v, p, s+1) || (VER_SLEL_EQ(v, p, s) && SLEL_LOCALVER_EXTRACT >= SLEL_LOCALVER_MERGE(x, y)))
+
+#define VER_UOSL_MERGE RHEL_RELEASE_MERGE
+#define VER_UOSL_EXTRACT\
+	VER_UOSL_MERGE(UOS_EXTRACT_X, UOS_EXTRACT_Y, UOS_EXTRACT_Z)
+#define VER_UOSL_EXTRA_LT(v, p, s, x, y, z)\
+	(VER_UOSL_EQ(v, p, s) && VER_UOSL_EXTRACT < VER_UOSL_MERGE(x, y, z))
+#define VER_UOSL_EXTRA_GE(v, p, s, x, y, z)\
+	(VER_UOSL_EQ(v, p, s) && VER_UOSL_EXTRACT >= VER_UOSL_MERGE(x, y, z))
+
 #define COMPAT__USE_DMA_SKIP_SYNC	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0))
 #define COMPAT__HAS_DEVLINK	(VER_NON_RHEL_GE(4, 6) || VER_RHEL_GE(7, 4))
 #define COMPAT__HAS_DEVLINK_SB	(VER_NON_RHEL_GE(4, 7) || VER_RHEL_GE(7, 4))
@@ -1024,8 +1048,11 @@ struct xdp_attachment_info {
 typedef siginfo_t kernel_siginfo_t;
 #endif
 
-#if (!COMPAT_SLELINUX && VER_NON_RHEL_OR_KYL_LT(5, 7)) || VER_RHEL_LT(8, 3) || \
-    VER_KYL_LT(10, 3) || SLEL_LOCALVER_LT(5, 3, 18, 57, 0)
+#if (VER_NON_RHEL_OR_KYL_LT(5, 7) && !COMPAT_SLELINUX && !COMPAT_UOSLINUX_4_19) || \
+    VER_RHEL_LT(8, 3) || VER_KYL_LT(10, 3) || \
+    SLEL_LOCALVER_LT(5, 3, 18, 57, 0) || \
+    VER_UOSL_EXTRA_LT(4, 19, 0, 91, 82, 179) || \
+    VER_UOSL_EXTRA_LT(4, 19, 90, 2403, 3, 0)
 /**
  * pci_get_dsn - Read and return the 8-byte Device Serial Number
  * @dev: PCI device to query
