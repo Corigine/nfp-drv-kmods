@@ -447,7 +447,7 @@ endif # CONFIG_NFP_NET_*
 
 # Use check_crdma_sup.sh to determine if CRDMA is supported
 BUILD_CRDMA := $(shell /bin/bash -c '$(src)/../tools/check_crdma_sup.sh \
-                                     $(VERSION) $(srctree) 2>/dev/null')
+                                     $(KERNELRELEASE) $(srctree) 2>/dev/null')
 
 # Use nested if as 'AND' statement:
 #   if BUILD_CRDMA != y and BUILD_CRDMA != 0
