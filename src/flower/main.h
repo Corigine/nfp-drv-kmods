@@ -731,6 +731,8 @@ void
 nfp_flower_non_repr_priv_put(struct nfp_app *app, struct net_device *netdev);
 u32 nfp_flower_get_port_id_from_netdev(struct nfp_app *app,
 				       struct net_device *netdev);
+int nfp_flower_vnic_init(struct nfp_app *app, struct nfp_net *nn);
+void nfp_flower_vnic_clean(struct nfp_app *app, struct nfp_net *nn);
 void nfp_flower_wait_host_bit(struct nfp_app *app);
 enum nfp_repr_type
 nfp_flower_repr_get_type_and_port(struct nfp_app *app, u32 port_id, u8 *port);

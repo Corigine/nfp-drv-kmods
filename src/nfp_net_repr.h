@@ -15,6 +15,7 @@ struct nfp_port;
 #include <net/dst_metadata.h>
 #endif
 
+#define NFP_REPR_RING_NUM_MAX		32
 #define NFP_PHY_REPR_INDEX_SHIFT	2    /* Port id shift transformation */
 
 /**
@@ -120,9 +121,10 @@ void nfp_reprs_clean_and_free_by_type(struct nfp_app *app,
 struct nfp_reprs *nfp_reprs_alloc(unsigned int num_reprs);
 int nfp_reprs_resync_phys_ports(struct nfp_app *app);
 
-static inline struct net_device *nfp_repr_alloc(struct nfp_app *app)
+static inline struct net_device *
+nfp_repr_alloc(struct nfp_app *app, unsigned int txqs, unsigned int rxqs)
 {
-	return nfp_repr_alloc_mqs(app, 1, 1);
+	return nfp_repr_alloc_mqs(app, txqs, rxqs);
 }
 
 #endif /* NFP_NET_REPR_H */

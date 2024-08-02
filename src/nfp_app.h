@@ -195,6 +195,11 @@ static inline bool nfp_app_is_locked(struct nfp_app *app)
 	return devl_lock_is_held(priv_to_devlink(app->pf));
 }
 
+static inline bool nfp_app_is_sgw(struct nfp_app *app)
+{
+	return app && (app->type->id == NFP_APP_SGW_NIC);
+}
+
 void nfp_check_rhashtable_empty(void *ptr, void *arg);
 bool __nfp_ctrl_tx(struct nfp_net *nn, struct sk_buff *skb);
 bool nfp_ctrl_tx(struct nfp_net *nn, struct sk_buff *skb);

@@ -294,6 +294,9 @@ const struct net_device_ops nfp_repr_netdev_ops = {
 #endif
 };
 
+const struct net_device_ops nfp_sgw_repr_netdev_ops = {
+};
+
 void
 nfp_repr_transfer_features(struct net_device *netdev, struct net_device *lower)
 {
@@ -355,8 +358,12 @@ int nfp_repr_init(struct nfp_app *app, struct net_device *netdev,
 	repr->dst->u.port_info.port_id = cmsg_port_id;
 	repr->dst->u.port_info.lower_dev = pf_netdev;
 
-	netdev->netdev_ops = &nfp_repr_netdev_ops;
-	netdev->ethtool_ops = &nfp_port_ethtool_ops;
+	if (nfp_app_is_sgw(app)) {
+		netdev->netdev_ops = &nfp_sgw_repr_netdev_ops;
+	} else {
+		netdev->netdev_ops = &nfp_repr_netdev_ops;
+		netdev->ethtool_ops = &nfp_port_ethtool_ops;
+	}
 
 	netdev->max_mtu = pf_netdev->max_mtu;
 
@@ -368,7 +375,7 @@ int nfp_repr_init(struct nfp_app *app, struct net_device *netdev,
 		netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
 
 	netdev->hw_features = NETIF_F_HIGHDMA;
-	if (repr_cap & NFP_NET_CFG_CTRL_RXCSUM_ANY)
+	if (!nfp_app_is_sgw(app) && (repr_cap & NFP_NET_CFG_CTRL_RXCSUM_ANY))
 		netdev->hw_features |= NETIF_F_RXCSUM;
 	if (repr_cap & NFP_NET_CFG_CTRL_TXCSUM)
 		netdev->hw_features |= NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM;
@@ -416,7 +423,7 @@ int nfp_repr_init(struct nfp_app *app, struct net_device *netdev,
 	netdev->priv_flags |= IFF_NO_QUEUE | IFF_DISABLE_NETPOLL;
 	netdev->features |= NETIF_F_LLTX;
 
-	if (nfp_app_has_tc(app)) {
+	if (!nfp_app_is_sgw(app) && nfp_app_has_tc(app)) {
 		netdev->features |= NETIF_F_HW_TC;
 		netdev->hw_features |= NETIF_F_HW_TC;
 	}

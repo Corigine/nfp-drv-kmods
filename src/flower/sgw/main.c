@@ -250,6 +250,8 @@ const struct nfp_app_type app_sgw = {
 	.repr_change_mtu = nfp_flower_repr_change_mtu,
 
 	.vnic_alloc	= nfp_sgw_vnic_alloc,
+	.vnic_init	= nfp_flower_vnic_init,
+	.vnic_clean	= nfp_flower_vnic_clean,
 
 	.repr_preclean	= nfp_sgw_repr_netdev_preclean,
 	.repr_clean	= nfp_sgw_repr_netdev_clean,

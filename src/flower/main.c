@@ -428,7 +428,7 @@ nfp_flower_spawn_vnic_reprs(struct nfp_app *app,
 		else
 			idx = i + app->pf->multi_pf.vf_fid;
 
-		repr = nfp_repr_alloc(app);
+		repr = nfp_repr_alloc(app, 1, 1);
 		if (!repr) {
 			err = -ENOMEM;
 			goto err_reprs_clean;
@@ -550,12 +550,18 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 
 	for (i = 0; i < phy_reprs_num; i++) {
 		int idx = app->pf->multi_pf.en ? app->pf->multi_pf.id : i;
-		unsigned int phys_port = eth_tbl->ports[idx].index;
+		unsigned int phys_port = nfp_app_is_sgw(app) ?
+						eth_tbl->ports[idx].eth_index :
+						eth_tbl->ports[idx].index;
 		struct net_device *repr;
 		struct nfp_port *port;
 		u32 cmsg_port_id;
 
-		repr = nfp_repr_alloc(app);
+		repr = nfp_app_is_sgw(app) ?
+			nfp_repr_alloc(app, NFP_REPR_RING_NUM_MAX,
+				       NFP_REPR_RING_NUM_MAX) :
+			nfp_repr_alloc(app, 1, 1);
+
 		if (!repr) {
 			err = -ENOMEM;
 			goto err_reprs_clean;
@@ -590,9 +596,11 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 		SET_NETDEV_DEV(repr, &priv->nn->pdev->dev);
 		nfp_net_get_mac_addr(app->pf, repr, port);
 
-		err = nfp_devlink_port_register(app, port);
-		if (err)
-			goto err_reprs_clean;
+		if (!nfp_app_is_sgw(app)) {
+			err = nfp_devlink_port_register(app, port);
+			if (err)
+				goto err_reprs_clean;
+		}
 
 		cmsg_port_id = nfp_flower_cmsg_phys_port(phys_port);
 		err = nfp_repr_init(app, repr,
@@ -605,15 +613,24 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 		}
 
 #if (VER_NON_RHEL_LT(6, 2)) || (RHEL_RELEASE_LT(9, 305, 0, 0))
-		nfp_devlink_port_type_eth_set(port);
+		if (!nfp_app_is_sgw(app))
+			nfp_devlink_port_type_eth_set(port);
 #endif
 
 		nfp_flower_cmsg_mac_repr_add(ctrl_skb, app->pf->multi_pf.en ? 0 : idx,
 					     eth_tbl->ports[idx].nbi,
-					     eth_tbl->ports[idx].base,
+					     nfp_app_is_sgw(app) ?
+						eth_tbl->ports[idx].eth_index :
+						eth_tbl->ports[idx].base,
 					     phys_port);
 
-		RCU_INIT_POINTER(reprs->reprs[phys_port], repr);
+		if (nfp_app_is_sgw(app))
+			RCU_INIT_POINTER(reprs->reprs[
+					 phys_port >> NFP_PHY_REPR_INDEX_SHIFT],
+					 repr);
+		else
+			RCU_INIT_POINTER(reprs->reprs[phys_port], repr);
+
 		nfp_info(app->cpp, "Phys Port %d Representor(%s) created\n",
 			 phys_port, repr->name);
 	}
@@ -670,19 +687,21 @@ err_invalid_port:
 	return PTR_ERR_OR_ZERO(nn->port);
 }
 
-static void nfp_flower_vnic_clean(struct nfp_app *app, struct nfp_net *nn)
+void nfp_flower_vnic_clean(struct nfp_app *app, struct nfp_net *nn)
 {
 	struct nfp_flower_priv *priv = app->priv;
 
 	if (app->pf->num_vfs)
 		nfp_reprs_clean_and_free_by_type(app, NFP_REPR_TYPE_VF);
-	nfp_reprs_clean_and_free_by_type(app, NFP_REPR_TYPE_PF);
+
 	nfp_reprs_clean_and_free_by_type(app, NFP_REPR_TYPE_PHYS_PORT);
+
+	nfp_reprs_clean_and_free_by_type(app, NFP_REPR_TYPE_PF);
 
 	priv->nn = NULL;
 }
 
-static int nfp_flower_vnic_init(struct nfp_app *app, struct nfp_net *nn)
+int nfp_flower_vnic_init(struct nfp_app *app, struct nfp_net *nn)
 {
 	struct nfp_flower_priv *priv = app->priv;
 	int err;
