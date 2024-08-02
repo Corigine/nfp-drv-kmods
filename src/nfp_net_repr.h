@@ -61,6 +61,10 @@ struct nfp_repr {
 	struct nfp_port *port;
 	struct nfp_app *app;
 	struct nfp_repr_pcpu_stats __percpu *stats;
+
+	/* phy repr support rx/tx ring config */
+	u16 nb_rx_rings;
+	u16 nb_tx_rings;
 	void *app_priv;
 };
 

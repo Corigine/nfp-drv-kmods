@@ -82,6 +82,7 @@ struct nfp_dumpspec {
  * @mip:		MIP handle
  * @rtbl:		RTsym table
  * @hwinfo:		HWInfo table
+ * @nic_type:		Nic type with different port number
  * @dumpspec:		Debug dump specification
  * @dump_flag:		Store dump flag between set_dump and get_dump_flag
  * @dump_len:		Store dump length between set_dump and get_dump_flag
@@ -153,6 +154,7 @@ struct nfp_pf {
 	const struct nfp_mip *mip;
 	struct nfp_rtsym_table *rtbl;
 	struct nfp_hwinfo *hwinfo;
+	int nic_type;
 	struct nfp_dumpspec *dumpspec;
 	u32 dump_flag;
 	u32 dump_len;

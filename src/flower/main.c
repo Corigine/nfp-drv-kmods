@@ -21,6 +21,7 @@
 #include "../nfp_net_repr.h"
 #include "../nfp_port.h"
 #include "./cmsg.h"
+#include "sgw/nfp_config.h"
 
 #define NFP_FLOWER_ALLOWED_VER 0x0001000000010000UL
 
@@ -576,6 +577,22 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 
 		nfp_repr = netdev_priv(repr);
 		nfp_repr->app_priv = repr_priv;
+
+		/* configurable rx/tx queue number for sgw */
+		if (nfp_app_is_sgw(app)) {
+			const struct phy_repr_ring_cfg *phy_ring_cfg;
+
+			phy_ring_cfg = nfp_phy_ring_setup_cfg_get(app->pf->nic_type,
+								  phys_port);
+			if (NULL == phy_ring_cfg) {
+				err = -ENOMEM;
+				goto err_reprs_clean;
+			}
+
+			nfp_repr->nb_rx_rings = phy_ring_cfg->nb_rx_ring;
+			nfp_repr->nb_tx_rings = phy_ring_cfg->nb_tx_ring;
+		}
+
 		repr_priv->nfp_repr = nfp_repr;
 
 		port = nfp_port_alloc(app, NFP_PORT_PHYS_PORT, repr);
@@ -624,15 +641,20 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 						eth_tbl->ports[idx].base,
 					     phys_port);
 
-		if (nfp_app_is_sgw(app))
+		if (nfp_app_is_sgw(app)) {
 			RCU_INIT_POINTER(reprs->reprs[
 					 phys_port >> NFP_PHY_REPR_INDEX_SHIFT],
 					 repr);
-		else
+			nfp_info(app->cpp, "Phys Port %d Representor(%s) created, "
+				 "nb_rx_ring: %d, nb_tx_ring: %d\n",
+				 phys_port, repr->name,
+				 nfp_repr->nb_rx_rings,
+				 nfp_repr->nb_tx_rings);
+		} else {
 			RCU_INIT_POINTER(reprs->reprs[phys_port], repr);
-
-		nfp_info(app->cpp, "Phys Port %d Representor(%s) created\n",
-			 phys_port, repr->name);
+			nfp_info(app->cpp, "Phys Port %d Representor(%s) created\n",
+				 phys_port, repr->name);
+		}
 	}
 
 	nfp_app_reprs_set(app, NFP_REPR_TYPE_PHYS_PORT, reprs);

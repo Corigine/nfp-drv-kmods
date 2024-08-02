@@ -11,6 +11,7 @@
 #include "../../nfp_main.h"
 #include "../../nfp_port.h"
 #include "../main.h"
+#include "nfp_config.h"
 
 #define NFP_SGW_ALLOWED_VER 0x0001000000010000UL
 
@@ -193,6 +194,13 @@ nfp_sgw_init(struct nfp_app *app)
 	err = nfp_sgw_sync_feature_bits(app);
 	if (err)
 		goto err_cleanup;
+
+	pf->nic_type = nfp_nic_type_get(nfp_hwinfo_lookup(pf->hwinfo,
+							  "assembly.partno"));
+	if (pf->nic_type < 0)
+		goto err_cleanup;
+
+	nfp_info(app->cpp, "nic type: %d\n", pf->nic_type);
 
 	return 0;
 
