@@ -44,6 +44,20 @@ static inline void nfp_net_dma_sync_cpu_rx(struct nfp_net_dp *dp,
 #endif
 }
 
+static inline u32
+nfp_net_free_tx_desc(struct nfp_net_tx_ring *tx_ring, int dcnt)
+{
+	u32 free_desc;
+
+	if (tx_ring->wr_p >= tx_ring->rd_p)
+		free_desc = tx_ring->cnt - (tx_ring->wr_p - tx_ring->rd_p);
+	else
+		free_desc = (tx_ring->rd_p - tx_ring->wr_p) &
+			    (tx_ring->cnt - 1);
+
+	return (free_desc > dcnt) ? (free_desc - dcnt) : 0;
+}
+
 /**
  * nfp_net_tx_full() - check if the TX ring is full
  * @tx_ring: TX ring to check
@@ -60,11 +74,30 @@ static inline int nfp_net_tx_full(struct nfp_net_tx_ring *tx_ring, int dcnt)
 	return (tx_ring->wr_p - tx_ring->rd_p) >= (tx_ring->cnt - dcnt);
 }
 
+/**
+ * nfp_sgw_tx_full() - check if the TX ring is full
+ * @tx_ring: TX ring to check
+ * @dcnt:    Number of descriptors that need to be enqueued (must be >= 1)
+ *
+ * This function checks, based on the *host copy* of read/write
+ * pointer if a given TX ring is full.  The real TX queue may have
+ * some newly made available slots.
+ *
+ * Return: True if the ring is full.
+ */
+static inline int
+nfp_sgw_tx_full(struct nfp_net_tx_ring *tx_ring, int dcnt)
+{
+	return ((nfp_net_free_tx_desc(tx_ring, dcnt) == 0) ? true : false);
+}
+
 static inline void nfp_net_tx_xmit_more_flush(struct nfp_net_tx_ring *tx_ring)
 {
-	wmb(); /* drain writebuffer */
-	nfp_qcp_wr_ptr_add(tx_ring->qcp_q, tx_ring->wr_ptr_add);
-	tx_ring->wr_ptr_add = 0;
+	if (tx_ring->wr_ptr_add > 0) {
+		wmb(); /* drain writebuffer */
+		nfp_qcp_wr_ptr_add(tx_ring->qcp_q, tx_ring->wr_ptr_add);
+		tx_ring->wr_ptr_add = 0;
+	}
 }
 
 static inline u32

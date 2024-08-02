@@ -709,6 +709,86 @@ next:
 		  tx_ring->rd_p, tx_ring->wr_p, tx_ring->cnt);
 }
 
+/**
+* nfp_nfdk_sgw_tx_complete() - Handled completed TX packets
+* @tx_ring:    TX ring structure
+* @budget: NAPI budget (only used as bool to determine if in NAPI context)
+*/
+static void
+nfp_nfdk_sgw_tx_complete(struct nfp_net_tx_ring *tx_ring, int budget)
+{
+	struct nfp_net_r_vector *r_vec = tx_ring->r_vec;
+	struct nfp_net_dp *dp = &r_vec->nfp_net->dp;
+	u32 done_pkts = 0, done_bytes = 0;
+	struct nfp_nfdk_tx_buf *ktxbufs;
+	struct sk_buff *last_skb = NULL;
+	u32 rd_p, qcp_rd_p, temp;
+	int todo;
+
+	rd_p = tx_ring->rd_p;
+	if (tx_ring->wr_p == rd_p)
+		return;
+
+	/* Work out how many descriptors have been transmitted */
+	qcp_rd_p = nfp_net_read_tx_cmpl(tx_ring, dp);
+
+	if (qcp_rd_p == tx_ring->qcp_rd_p)
+		return;
+
+	todo = D_IDX(tx_ring, qcp_rd_p - tx_ring->qcp_rd_p);
+	if (todo <= 0)
+		return;
+
+	temp = todo;
+
+	ktxbufs = tx_ring->ktxbufs;
+
+	while (todo > 0) {
+		struct nfp_nfdk_tx_buf *txbuf;
+		struct sk_buff *skb;
+
+		txbuf = &ktxbufs[D_IDX(tx_ring, rd_p)];
+
+		if (txbuf->type == NFP_NFDK_TX_BUF_SKB) {
+			skb = txbuf->skb;
+			if (!skb_is_gso(skb)) {
+				done_bytes += skb->len;
+				done_pkts++;
+			}
+			if (last_skb)
+				napi_consume_skb(last_skb, budget);
+
+			last_skb = skb;
+		} else if (txbuf->type == NFP_NFDK_TX_BUF_DMA_L) {
+			dma_unmap_single(dp->dev, txbuf->dma_addr,
+					 txbuf->dma_size, DMA_TO_DEVICE);
+		} else if (txbuf->type == NFP_NFDK_TX_BUF_DMA_F) {
+			dma_unmap_page(dp->dev, txbuf->dma_addr,
+				       txbuf->dma_size, DMA_TO_DEVICE);
+		} else if (txbuf->type == NFP_NFDK_TX_BUF_GSOLEN) {
+			done_bytes += txbuf->real_len;
+			done_pkts += txbuf->pkt_cnt;
+		}
+		txbuf->raw = 0;
+		txbuf->raw2 = 0;
+		rd_p++;
+		todo--;
+	}
+
+	if (last_skb)
+		napi_consume_skb(last_skb, budget);
+
+	tx_ring->rd_p += temp;
+	tx_ring->qcp_rd_p += temp;
+
+	WARN_ONCE(tx_ring->wr_p - tx_ring->rd_p > tx_ring->cnt,
+		  "TX ring tx complete rd_p=%u wr_p=%u cnt=%u done_pkts = %u done_bytes = %u\n",
+		  tx_ring->rd_p,
+		  tx_ring->wr_p,
+		  tx_ring->cnt,
+		  done_pkts, done_bytes);
+}
+
 /* Receive processing */
 static void *
 nfp_nfdk_napi_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr)
@@ -1486,18 +1566,19 @@ int nfp_nfdk_poll(struct napi_struct *napi, int budget)
 /* Control device data path
  */
 
-bool
-nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
-		     struct sk_buff *skb, bool old)
+static bool
+_nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
+		      struct sk_buff *skb, bool old, bool exp_buf)
 {
+	unsigned int dma_len, type, real_len;
 	u32 cnt, tmp_dlen, dlen_type = 0;
 	struct nfp_net_tx_ring *tx_ring;
 	struct nfp_nfdk_tx_buf *txbuf;
 	struct nfp_nfdk_tx_desc *txd;
-	unsigned int dma_len, type;
 	struct nfp_net_dp *dp;
 	dma_addr_t dma_addr;
 	u64 metadata = 0;
+	bool tx_full;
 	int wr_idx;
 
 	dp = &r_vec->nfp_net->dp;
@@ -1508,8 +1589,13 @@ nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 		goto err_free;
 	}
 
+	if (exp_buf)
+		tx_full = nfp_sgw_tx_full(tx_ring, NFDK_TX_DESC_STOP_CNT);
+	else
+		tx_full = nfp_net_tx_full(tx_ring, NFDK_TX_DESC_STOP_CNT);
+
 	/* Don't bother counting frags, assume the worst */
-	if (unlikely(nfp_net_tx_full(tx_ring, NFDK_TX_DESC_STOP_CNT))) {
+	if (tx_full) {
 		u64_stats_update_begin(&r_vec->tx_sync);
 		r_vec->tx_busy++;
 		u64_stats_update_end(&r_vec->tx_sync);
@@ -1542,6 +1628,8 @@ nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 	txbuf = &tx_ring->ktxbufs[wr_idx];
 
 	dma_len = skb_headlen(skb);
+	real_len = dma_len;
+
 	if (dma_len <= NFDK_TX_MAX_DATA_PER_HEAD)
 		type = NFDK_DESC_TX_TYPE_SIMPLE;
 	else
@@ -1552,9 +1640,12 @@ nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 		goto err_warn_dma;
 
 	txbuf->skb = skb;
+	txbuf->type = NFP_NFDK_TX_BUF_SKB;
 	txbuf++;
 
 	txbuf->dma_addr = dma_addr;
+	txbuf->type = NFP_NFDK_TX_BUF_DMA_L;
+	txbuf->dma_size = dma_len;
 	txbuf++;
 
 	dma_len -= 1;
@@ -1603,6 +1694,11 @@ nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 	tx_ring->wr_ptr_add += cnt;
 	nfp_net_tx_xmit_more_flush(tx_ring);
 
+	u64_stats_update_begin(&r_vec->tx_sync);
+	r_vec->tx_bytes += real_len;
+	r_vec->tx_pkts++;
+	u64_stats_update_end(&r_vec->tx_sync);
+
 	return NETDEV_TX_OK;
 
 err_warn_overflow:
@@ -1612,6 +1708,7 @@ err_warn_overflow:
 	dma_unmap_single(dp->dev, txbuf->dma_addr,
 			 skb_headlen(skb), DMA_TO_DEVICE);
 	txbuf->raw = 0;
+	txbuf->raw2 = 0;
 err_warn_dma:
 	nn_dp_warn(dp, "Failed to map DMA TX buffer\n");
 err_free:
@@ -1622,6 +1719,13 @@ err_free:
 	return NETDEV_TX_OK;
 }
 
+bool
+nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
+		     struct sk_buff *skb, bool old)
+{
+	return _nfp_nfdk_ctrl_tx_one(nn, r_vec, skb, old, false);
+}
+
 static void __nfp_ctrl_tx_queued(struct nfp_net_r_vector *r_vec)
 {
 	struct sk_buff *skb;
@@ -1629,6 +1733,32 @@ static void __nfp_ctrl_tx_queued(struct nfp_net_r_vector *r_vec)
 	while ((skb = __skb_dequeue(&r_vec->queue)))
 		if (nfp_nfdk_ctrl_tx_one(r_vec->nfp_net, r_vec, skb, true))
 			return;
+}
+
+static bool
+nfp_nfdk_sgw_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
+			 struct sk_buff *skb, bool old)
+{
+	return _nfp_nfdk_ctrl_tx_one(nn, r_vec, skb, old, true);
+}
+
+static void
+__nfp_sgw_ctrl_tx_queued(struct nfp_net_r_vector *r_vec)
+{
+	struct sk_buff *skb;
+
+	while ((skb = __skb_dequeue(&r_vec->queue)))
+		if (nfp_nfdk_sgw_ctrl_tx_one(r_vec->nfp_net, r_vec, skb, true))
+			return;
+}
+
+bool
+nfp_nfdk_sgw_ctrl_tx(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
+		     struct sk_buff *skb, bool old)
+{
+	__nfp_sgw_ctrl_tx_queued(r_vec);
+
+	return nfp_nfdk_sgw_ctrl_tx_one(nn, r_vec, skb, old);
 }
 
 static bool
@@ -1736,6 +1866,7 @@ static bool nfp_ctrl_rx(struct nfp_net_r_vector *r_vec)
 
 	return budget;
 }
+
 #endif /* CONFIG_NFP_NET_PF */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
@@ -1780,6 +1911,11 @@ nfp_nfdk_sgw_ctrl_poll(unsigned long arg)
 #else
 	struct nfp_net_r_vector *r_vec = (void *)arg;
 #endif
+
+	spin_lock(&r_vec->lock);
+	nfp_nfdk_sgw_tx_complete(r_vec->tx_ring, 0);
+	__nfp_sgw_ctrl_tx_queued(r_vec);
+	spin_unlock(&r_vec->lock);
 
 	if (nfp_ctrl_rx(r_vec)) {
 		nfp_net_irq_unmask(r_vec->nfp_net, r_vec->irq_entry);
