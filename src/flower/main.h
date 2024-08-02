@@ -572,7 +572,7 @@ int nfp_flower_setup_tc(struct nfp_app *app, struct net_device *netdev,
 int nfp_flower_merge_offloaded_flows(struct nfp_app *app,
 				     struct nfp_fl_payload *sub_flow1,
 				     struct nfp_fl_payload *sub_flow2);
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 void
 nfp_flower_compile_meta(struct nfp_flower_meta_tci *ext,
 			struct nfp_flower_meta_tci *msk, u8 key_type);
@@ -587,7 +587,7 @@ int
 nfp_flower_compile_port(struct nfp_flower_in_port *frame, u32 cmsg_port,
 			bool mask_version, enum nfp_flower_tun_type tun_type,
 			struct netlink_ext_ack *extack);
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 void
 nfp_flower_compile_mac(struct nfp_flower_mac_mpls *ext,
 		       struct nfp_flower_mac_mpls *msk,
@@ -631,7 +631,7 @@ nfp_flower_compile_ipv6_gre_tun(struct nfp_flower_ipv6_gre_tun *ext,
 				struct flow_rule *rule);
 #endif
 int nfp_flower_compile_flow_match(struct nfp_app *app,
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 				  struct flow_rule *rule,
 #else
 				  compat__flow_cls_offload *flow,
@@ -642,7 +642,7 @@ int nfp_flower_compile_flow_match(struct nfp_app *app,
 				  enum nfp_flower_tun_type tun_type,
 				  struct netlink_ext_ack *extack);
 int nfp_flower_compile_action(struct nfp_app *app,
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 			      struct flow_rule *rule,
 #else
 			      compat__flow_cls_offload *flow,
@@ -758,7 +758,7 @@ nfp_flower_allocate_new(struct nfp_fl_key_ls *key_layer);
 int nfp_flower_calculate_key_layers(struct nfp_app *app,
 				    struct net_device *netdev,
 				    struct nfp_fl_key_ls *ret_key_ls,
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 				    struct flow_rule *flow,
 #else
 				    compat__flow_cls_offload *flow,

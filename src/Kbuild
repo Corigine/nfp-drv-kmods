@@ -285,6 +285,9 @@ $(eval $(call add_compat_flag,$(srctree)/include/net/devlink.h,devlink_compat_ph
 # Check for __netdev_tx_sent_queue
 $(eval $(call add_compat_flag,$(srctree)/include/linux/netdevice.h,"__netdev_tx_sent_queue",COMPAT__NETDEV_TX_SENT_QUEUE))
 
+# Check for flow_action_offload
+$(eval $(call add_compat_flag,$(srctree)/include/net/flow_offload.h,"struct flow_rule",COMPAT_FLOW_ACTION_OFFLOAD))
+
 utsrelease_h_path :=$(srctree)/include/generated/utsrelease.h
 # Check for BC Linux
 $(eval $(call add_compat_flag,$(utsrelease_h_path),bclinux,COMPAT_BCLINUX=1))
