@@ -1765,3 +1765,28 @@ void nfp_nfdk_ctrl_poll(unsigned long arg)
 	}
 #endif
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+void
+nfp_nfdk_sgw_ctrl_poll(struct tasklet_struct *t)
+#else
+void
+nfp_nfdk_sgw_ctrl_poll(unsigned long arg)
+#endif
+{
+#ifdef CONFIG_NFP_NET_PF
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+	struct nfp_net_r_vector *r_vec = from_tasklet(r_vec, t, tasklet);
+#else
+	struct nfp_net_r_vector *r_vec = (void *)arg;
+#endif
+
+	if (nfp_ctrl_rx(r_vec)) {
+		nfp_net_irq_unmask(r_vec->nfp_net, r_vec->irq_entry);
+	} else {
+		tasklet_schedule(&r_vec->tasklet);
+		nn_dp_warn(&r_vec->nfp_net->dp,
+			   "control message budget exceeded!\n");
+	}
+#endif
+}

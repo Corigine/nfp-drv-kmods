@@ -143,8 +143,10 @@ nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 		     struct sk_buff *skb, bool old);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 void nfp_nfdk_ctrl_poll(struct tasklet_struct *t);
+void nfp_nfdk_sgw_ctrl_poll(struct tasklet_struct *t);
 #else
 void nfp_nfdk_ctrl_poll(unsigned long arg);
+void nfp_nfdk_sgw_ctrl_poll(unsigned long arg);
 #endif
 void nfp_nfdk_rx_ring_fill_freelist(struct nfp_net_dp *dp,
 				    struct nfp_net_rx_ring *rx_ring);
