@@ -1114,8 +1114,17 @@ static inline struct nfp_net *compat__bpf_prog_get_nn(struct bpf_prog *prog)
 }
 #endif
 
+#if !COMPAT_KYLINUX && (VER_NON_RHEL_LT(5, 1) || VER_RHEL_LT(8, 1)) && \
+    defined(COMPAT__HAVE_METADATA_IP_TUNNEL)
+static inline bool
+netdev_port_same_parent_id(struct net_device *a, struct net_device *b)
+{
+	return switchdev_port_same_parent_id(a, b);
+}
+#endif
+
 #if !COMPAT_KYLINUX
-#if VER_NON_RHEL_LT(5, 1) || VER_RHEL_LT(8, 1)
+#ifndef COMPAT_FLOW_ACTION_OFFLOAD
 #ifdef COMPAT__HAVE_METADATA_IP_TUNNEL
 enum flow_action_id {
 	FLOW_ACTION_ACCEPT,
@@ -1222,13 +1231,8 @@ static inline u32 compat__tca_pedit_offset(const struct tc_action *act, int idx)
 	return tcf_pedit_offset(act, idx);
 }
 
-static inline bool
-netdev_port_same_parent_id(struct net_device *a, struct net_device *b)
-{
-	return switchdev_port_same_parent_id(a, b);
-}
 #endif /* COMPAT__HAVE_METADATA_IP_TUNNEL */
-#else /* !(VER_NON_RHEL_LT(5, 1) || VER_RHEL_LT(8, 1)) */
+#else /* !COMPAT_FLOW_ACTION_OFFLOAD */
 static inline int
 compat__tca_to_flow_act_id(const struct flow_action_entry *act)
 {
@@ -1304,7 +1308,7 @@ compat__tca_pedit_offset(const struct flow_action_entry *act, int idx)
 {
 	return act->mangle.offset;
 }
-#endif /* !(VER_NON_RHEL_LT(5, 1) || VER_RHEL_LT(8, 1)) */
+#endif /* COMPAT_FLOW_ACTION_OFFLOAD */
 #endif /* !COMPAT_KYLINUX */
 
 #if VER_NON_RHEL_LT(5, 1) || VER_RHEL_LT(8, 5)
@@ -1314,7 +1318,7 @@ int compat__nfp_net_flash_device(struct net_device *netdev,
 #define compat__nfp_net_flash_device	NULL
 #endif
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 static inline struct flow_rule *
 compat__flow_cls_offload_flow_rule(compat__flow_cls_offload *flow)
 {
@@ -1676,7 +1680,7 @@ __printf(2, 3) void ethtool_sprintf(u8 **data, const char *fmt, ...);
 #endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0) && \
-     (VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)))
+    defined(COMPAT_FLOW_ACTION_OFFLOAD))
 /**
  * flow_rule_is_supp_control_flags() - check for supported control flags
  * @supp_flags: control flags supported by driver

@@ -165,7 +165,7 @@ nfp_flower_xmit_flow(struct nfp_app *app, struct nfp_fl_payload *nfp_flow,
 	return 0;
 }
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 static bool nfp_flower_check_higher_than_mac(struct flow_rule *rule)
 {
 	return flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_IPV4_ADDRS) ||
@@ -186,7 +186,7 @@ static bool nfp_flower_check_higher_than_mac(compat__flow_cls_offload *f)
 }
 #endif
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 static bool nfp_flower_check_higher_than_l3(struct flow_rule *rule)
 {
 	return flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_PORTS) ||
@@ -289,7 +289,7 @@ int
 nfp_flower_calculate_key_layers(struct nfp_app *app,
 				struct net_device *netdev,
 				struct nfp_fl_key_ls *ret_key_ls,
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 				struct flow_rule *rule,
 #else
 				compat__flow_cls_offload *flow,
@@ -300,7 +300,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 				enum nfp_flower_tun_type *tun_type,
 				struct netlink_ext_ack *extack)
 {
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	struct flow_dissector *dissector = rule->match.dissector;
 	struct flow_match_basic basic = { NULL, NULL};
 #else
@@ -313,7 +313,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 	int key_size;
 	int err;
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (dissector->used_keys & ~NFP_FLOWER_WHITELIST_DISSECTOR) {
 #else
 	if (flow->dissector->used_keys & ~NFP_FLOWER_WHITELIST_DISSECTOR) {
@@ -323,7 +323,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 	}
 
 	/* If any tun dissector is used then the required set must be used. */
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (dissector->used_keys & NFP_FLOWER_WHITELIST_TUN_DISSECTOR &&
 	    (dissector->used_keys & NFP_FLOWER_WHITELIST_TUN_DISSECTOR_V6_R)
 	    != NFP_FLOWER_WHITELIST_TUN_DISSECTOR_V6_R &&
@@ -342,7 +342,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 	key_size = sizeof(struct nfp_flower_meta_tci) +
 		   sizeof(struct nfp_flower_in_port);
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ETH_ADDRS) ||
 	    flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_MPLS)) {
 #else
@@ -353,7 +353,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 		key_size += sizeof(struct nfp_flower_mac_mpls);
 	}
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_VLAN)) {
 		struct flow_match_vlan vlan;
 
@@ -367,7 +367,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 						      flow->mask);
 #endif
 		if (!(priv->flower_ext_feats & NFP_FL_FEATS_VLAN_PCP) &&
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 		    vlan.key->vlan_priority) {
 #else
 		    flow_vlan->vlan_priority) {
@@ -383,7 +383,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 			key_layer_two |= NFP_FLOWER_LAYER2_QINQ;
 		}
 	}
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_CVLAN)) {
 		struct flow_match_vlan cvlan;
 
@@ -414,7 +414,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 		}
 	}
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_CONTROL)) {
 		struct flow_match_enc_opts enc_op = { NULL, NULL };
 		struct flow_match_ipv4_addrs ipv4_addrs;
@@ -599,7 +599,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 #endif
 	}
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_BASIC))
 		flow_rule_match_basic(rule, &basic);
 #else
@@ -614,13 +614,13 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 	}
 #endif
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (basic.mask && basic.mask->n_proto) {
 #else
 	if (mask_basic && mask_basic->n_proto) {
 #endif
 		/* Ethernet type is present in the key. */
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 		switch (basic.key->n_proto) {
 #else
 		switch (key_basic->n_proto) {
@@ -658,7 +658,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 			NL_SET_ERR_MSG_MOD(extack, "unsupported offload: match on given EtherType is not supported");
 			return -EOPNOTSUPP;
 		}
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	} else if (nfp_flower_check_higher_than_mac(rule)) {
 #else
 	} else if (nfp_flower_check_higher_than_mac(flow)) {
@@ -667,12 +667,12 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 		return -EOPNOTSUPP;
 	}
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (basic.mask && basic.mask->ip_proto) {
 #else
 	if (mask_basic && mask_basic->ip_proto) {
 #endif
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 		switch (basic.key->ip_proto) {
 #else
 		switch (key_basic->ip_proto) {
@@ -689,7 +689,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 	}
 
 	if (!(key_layer & NFP_FLOWER_LAYER_TP) &&
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	    nfp_flower_check_higher_than_l3(rule)) {
 #else
 	    nfp_flower_check_higher_than_l3(flow)) {
@@ -698,7 +698,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 		return -EOPNOTSUPP;
 	}
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_TCP)) {
 		struct flow_match_tcp tcp;
 #else
@@ -707,7 +707,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 #endif
 		u32 tcp_flags;
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 		flow_rule_match_tcp(rule, &tcp);
 		tcp_flags = be16_to_cpu(tcp.key->flags);
 #else
@@ -735,7 +735,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 		 * space, thus we need to ensure we include a IPv4/IPv6 key
 		 * layer if we have not done so already.
 		 */
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 		if (!basic.key) {
 #else
 		if (!key_basic) {
@@ -746,7 +746,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 
 		if (!(key_layer & NFP_FLOWER_LAYER_IPV4) &&
 		    !(key_layer & NFP_FLOWER_LAYER_IPV6)) {
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 			switch (basic.key->n_proto) {
 #else
 			switch (key_basic->n_proto) {
@@ -768,7 +768,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 		}
 	}
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_CONTROL)) {
 		struct flow_match_control ctl;
 
@@ -1607,7 +1607,7 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 		       compat__flow_cls_offload *flow)
 #endif
 {
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	struct flow_rule *rule = compat__flow_cls_offload_flow_rule(flow);
 #endif
 	enum nfp_flower_tun_type tun_type = NFP_FL_TUNNEL_NONE;
@@ -1659,12 +1659,14 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 #if VER_NON_RHEL_LT(5, 0)
 	err = nfp_flower_calculate_key_layers(app, netdev, key_layer, flow,
 					      egress, &tun_type, extack);
-#elif VER_NON_RHEL_LT(5, 1) || VER_RHEL_LT(8, 1)
+#else
+#ifndef COMPAT_FLOW_ACTION_OFFLOAD
 	err = nfp_flower_calculate_key_layers(app, netdev, key_layer, flow,
 					      &tun_type, extack);
 #else
 	err = nfp_flower_calculate_key_layers(app, netdev, key_layer, rule,
 					      &tun_type, extack);
+#endif
 #endif
 	if (err)
 		goto err_free_key_ls;
@@ -1683,7 +1685,7 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 	flow_pay->ingress_dev = egress ? NULL : netdev;
 
 #endif
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	err = nfp_flower_compile_flow_match(app, rule, key_layer, netdev,
 					    flow_pay, tun_type, extack);
 #else
@@ -1693,7 +1695,7 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 	if (err)
 		goto err_destroy_flow;
 
-#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 1)
+#ifdef COMPAT_FLOW_ACTION_OFFLOAD
 	err = nfp_flower_compile_action(app, rule, netdev, flow_pay, extack);
 #else
 	err = nfp_flower_compile_action(app, flow, netdev, flow_pay, extack);
