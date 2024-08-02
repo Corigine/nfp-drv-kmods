@@ -218,7 +218,7 @@ nfp_flower_non_repr_priv_put(struct nfp_app *app, struct net_device *netdev)
 	__nfp_flower_non_repr_priv_put(entry);
 }
 
-static enum nfp_repr_type
+enum nfp_repr_type
 nfp_flower_repr_get_type_and_port(struct nfp_app *app, u32 port_id, u8 *port)
 {
 	switch (FIELD_GET(NFP_FLOWER_CMSG_PORT_TYPE, port_id)) {
@@ -303,7 +303,7 @@ nfp_flower_reprs_reify(struct nfp_app *app, enum nfp_repr_type type,
 	return count;
 }
 
-static int
+int
 nfp_flower_wait_repr_reify(struct nfp_app *app, atomic_t *replies, int tot_repl)
 {
 	struct nfp_flower_priv *priv = app->priv;
@@ -719,7 +719,7 @@ err_clear_nn:
 	return err;
 }
 
-static void nfp_flower_wait_host_bit(struct nfp_app *app)
+void nfp_flower_wait_host_bit(struct nfp_app *app)
 {
 	unsigned long err_at;
 	u64 feat;
@@ -947,7 +947,7 @@ static bool nfp_flower_check_ack(struct nfp_flower_priv *app_priv)
 	return ret;
 }
 
-static int
+int
 nfp_flower_repr_change_mtu(struct nfp_app *app, struct net_device *netdev,
 			   int new_mtu)
 {

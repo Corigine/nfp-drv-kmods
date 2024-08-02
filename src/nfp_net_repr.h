@@ -15,6 +15,8 @@ struct nfp_port;
 #include <net/dst_metadata.h>
 #endif
 
+#define NFP_PHY_REPR_INDEX_SHIFT	2    /* Port id shift transformation */
+
 /**
  * struct nfp_reprs - container for representor netdevs
  * @num_reprs:	Number of elements in reprs array

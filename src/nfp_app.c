@@ -28,6 +28,7 @@ static const struct nfp_app_type *apps[] = {
 #endif
 #ifdef COMPAT__HAVE_NFP_APP_FLOWER
 	[NFP_APP_FLOWER_NIC]	= &app_flower,
+	[NFP_APP_SGW_NIC]	= &app_sgw,
 #endif
 #ifdef COMPAT__HAVE_NFP_APP_ABM_NIC
 	[NFP_APP_ACTIVE_BUFFER_MGMT_NIC] = &app_abm,

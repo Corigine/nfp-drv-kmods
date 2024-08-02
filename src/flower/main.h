@@ -731,6 +731,14 @@ void
 nfp_flower_non_repr_priv_put(struct nfp_app *app, struct net_device *netdev);
 u32 nfp_flower_get_port_id_from_netdev(struct nfp_app *app,
 				       struct net_device *netdev);
+void nfp_flower_wait_host_bit(struct nfp_app *app);
+enum nfp_repr_type
+nfp_flower_repr_get_type_and_port(struct nfp_app *app, u32 port_id, u8 *port);
+int nfp_flower_repr_change_mtu(struct nfp_app *app, struct net_device *netdev,
+			       int new_mtu);
+int
+nfp_flower_wait_repr_reify(struct nfp_app *app,
+			   atomic_t *replies, int tot_repl);
 void nfp_tun_link_and_update_nn_entries(struct nfp_app *app,
 					struct nfp_predt_entry *predt);
 void nfp_tun_unlink_and_update_nn_entries(struct nfp_app *app,

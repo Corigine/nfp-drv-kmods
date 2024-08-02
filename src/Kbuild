@@ -401,7 +401,8 @@ ifneq (,$(filter y,$(CONFIG_NFP_NET_PF) $(CONFIG_NFP_NET_VF)))
 		flower/metadata.o \
 		flower/offload.o \
 		flower/main.o \
-		flower/tunnel_conf.o
+		flower/tunnel_conf.o\
+		flower/sgw/main.o
 
           ifneq (,$(filter y,$(call kern_ge,5,2) $(call rhel_ge,8,2)))
 	    nfp-objs += \

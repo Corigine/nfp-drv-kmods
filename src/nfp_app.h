@@ -35,12 +35,14 @@ enum nfp_app_id {
 	NFP_APP_BPF_NIC		= 0x2,
 	NFP_APP_FLOWER_NIC	= 0x3,
 	NFP_APP_ACTIVE_BUFFER_MGMT_NIC = 0x4,
+	NFP_APP_SGW_NIC		= 0x5,
 };
 
 extern const struct nfp_app_type app_nic;
 extern const struct nfp_app_type app_bpf;
 extern const struct nfp_app_type app_flower;
 extern const struct nfp_app_type app_abm;
+extern const struct nfp_app_type app_sgw;
 
 /**
  * struct nfp_app_type - application definition
