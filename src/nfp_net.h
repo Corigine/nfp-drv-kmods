@@ -264,7 +264,16 @@ struct nfp_net_rx_desc {
 
 		struct {
 			__le16 data_len; /* Length of the frame + meta data */
-			u8 reserved;
+					 /* Rxd_type: for future use by
+					  * rx-scatter-gather functionality.
+					  */
+#ifdef __LITTLE_ENDIAN
+			u8 reserved:6;
+			u8 rxd_type:2;
+#else
+			u8 rxd_type:2;
+			u8 reserved:6;
+#endif
 			u8 meta_len_dd;	/* Length of meta data prepended +
 					 * descriptor done flag.
 					 */
