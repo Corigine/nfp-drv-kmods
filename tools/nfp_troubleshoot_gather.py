@@ -1219,43 +1219,45 @@ def main():
         exit(1)
     SCRIPT_LOG = f'{outDir}/script_cmds.log'
 
-    is_root = False
-    if os.getuid() == 0:
-        is_root = True
+    try:
+        is_root = False
+        if os.getuid() == 0:
+            is_root = True
 
-    if is_root is False:
-        print('Warn: It is recommended to run the script with root access. '
-              'Some information will not be logged without root permissions.')
-        with open(SCRIPT_LOG, 'a') as logf:
-            logf.write('Script NOT executed as root\n')
+        if is_root is False:
+            print('Warn: It is recommended to run the script with root '
+                  'access. Some information will not be logged without root '
+                  'permissions.')
+            with open(SCRIPT_LOG, 'a') as logf:
+                logf.write('Script NOT executed as root\n')
 
-    common_data(outDir)
-    if not sos_data(outDir):
-        print("sos is not installed. Suggest install")
-        print("Generate DATA without sos")
-        self_data(outDir)
+        common_data(outDir)
+        if not sos_data(outDir):
+            print("sos is not installed. Suggest install")
+            print("Generate DATA without sos")
+            self_data(outDir)
 
-    # BSP tools require sudo access, only execute if running as superuser
-    if is_root is True:
-        bsp_path = check_bsp_tools_installed()
-        if bsp_path != '' and check_cpp_access(outDir):
-            collect_bsp_data(bsp_path, outDir, args)
+        # BSP tools require sudo access, only execute if running as superuser
+        if is_root is True:
+            bsp_path = check_bsp_tools_installed()
+            if bsp_path != '' and check_cpp_access(outDir):
+                collect_bsp_data(bsp_path, outDir, args)
+    finally:
+        # Tarring up logs
+        # Clear SCRIPT_LOG, since this last step cannot be logged
+        # while --remove-files is used with tar
+        SCRIPT_LOG = ''
+        scmd(f'tar -zcvf {outDir}.tar.gz -C {baseDir} '
+             f'nfp_troubleshoot_gather_{date} --remove-files')
+        print(f'Done: {outDir}.tar.gz')
 
-    # Tarring up logs
-    # Clear SCRIPT_LOG, since this last step cannot be logged
-    # while --remove-files is used with tar
-    SCRIPT_LOG = ''
-    scmd(f'tar -zcvf {outDir}.tar.gz -C {baseDir} '
-         f'nfp_troubleshoot_gather_{date} --remove-files')
-    print(f'Done: {outDir}.tar.gz')
-
-    # If script was run as sudo try and set permissions. Use same permissions
-    # as logdir
-    if is_root is True:
-        stat_info = os.stat(baseDir)
-        uid = stat_info.st_uid
-        gid = stat_info.st_gid
-        os.chown(f'{outDir}.tar.gz', uid, gid)
+        # If script was run as sudo try and set permissions. Use same
+        # permissions as logdir
+        if is_root is True:
+            stat_info = os.stat(baseDir)
+            uid = stat_info.st_uid
+            gid = stat_info.st_gid
+            os.chown(f'{outDir}.tar.gz', uid, gid)
 
 
 if __name__ == "__main__":
