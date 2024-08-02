@@ -86,6 +86,18 @@ struct nfp_nfdk_tx_desc {
 #define NFDK_TX_BUF_INFO(val) ((val) & (sizeof(void *) - 1))
 #define NFDK_TX_BUF_INFO_SOP BIT(0)
 
+/* Buf type to describe the slot of tx ring buffer.
+ * Some slots store pkt skb, others store skb dma address,
+ * including linear mapping or fragment mapping or others.
+ */
+enum nfp_nfdk_tx_buf_type {
+	NFP_NFDK_TX_BUF_NULL	= 0,    /* Slot null type, not used currently */
+	NFP_NFDK_TX_BUF_SKB	= 1,    /* Regular pkt skb ptr type */
+	NFP_NFDK_TX_BUF_DMA_L	= 2,    /* Regular pkt skb dma addr type */
+	NFP_NFDK_TX_BUF_DMA_F	= 3,    /* Fragment pkt skb dma addr type */
+	NFP_NFDK_TX_BUF_GSOLEN	= 4,    /* GSO pkt type */
+};
+
 struct nfp_nfdk_tx_buf {
 	union {
 		/* First slot */
@@ -105,6 +117,13 @@ struct nfp_nfdk_tx_buf {
 		};
 
 		u64 raw;
+	};
+	union {
+		struct {
+			enum nfp_nfdk_tx_buf_type type;
+			u32  dma_size;
+		};
+		u64 raw2;
 	};
 };
 
