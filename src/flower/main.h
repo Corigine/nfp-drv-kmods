@@ -458,7 +458,7 @@ struct nfp_fl_payload {
 	char *unmasked_data;
 	char *mask_data;
 	char *action_data;
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	bool ingress_offload;
 #endif
 	struct list_head linked_flows;
@@ -684,7 +684,7 @@ void nfp_tunnel_request_route_v4(struct nfp_app *app, struct sk_buff *skb);
 void nfp_tunnel_request_route_v6(struct nfp_app *app, struct sk_buff *skb);
 void nfp_tunnel_keep_alive(struct nfp_app *app, struct sk_buff *skb);
 void nfp_tunnel_keep_alive_v6(struct nfp_app *app, struct sk_buff *skb);
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 int nfp_flower_setup_tc_egress_cb(enum tc_setup_type type, void *type_data,
 				  void *cb_priv);
 #endif
@@ -750,7 +750,7 @@ int nfp_flower_xmit_pre_tun_flow(struct nfp_app *app,
 int nfp_flower_xmit_pre_tun_del_flow(struct nfp_app *app,
 				     struct nfp_fl_payload *flow);
 struct nfp_fl_payload *
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 nfp_flower_allocate_new(struct nfp_fl_key_ls *key_layer, bool egress);
 #else
 nfp_flower_allocate_new(struct nfp_fl_key_ls *key_layer);
@@ -763,7 +763,7 @@ int nfp_flower_calculate_key_layers(struct nfp_app *app,
 #else
 				    compat__flow_cls_offload *flow,
 #endif
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 				    bool egress,
 #endif
 				    enum nfp_flower_tun_type *tun_type,

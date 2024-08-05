@@ -9,7 +9,7 @@
 #include <net/switchdev.h>
 #endif
 
-#if VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0)
+#ifndef VERSION__FLOWER_EGRESS
 #include "flower/main.h"
 #endif
 

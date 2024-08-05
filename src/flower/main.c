@@ -345,7 +345,7 @@ nfp_flower_repr_netdev_stop(struct nfp_app *app, struct nfp_repr *repr)
 	return nfp_flower_cmsg_portmod(repr, false, repr->netdev->mtu, false);
 }
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 static int
 nfp_flower_repr_netdev_init(struct nfp_app *app, struct net_device *netdev)
 {
@@ -353,8 +353,8 @@ nfp_flower_repr_netdev_init(struct nfp_app *app, struct net_device *netdev)
 					  nfp_flower_setup_tc_egress_cb,
 					  netdev_priv(netdev));
 }
-
 #endif
+
 static void
 nfp_flower_repr_netdev_clean(struct nfp_app *app, struct net_device *netdev)
 {
@@ -362,7 +362,7 @@ nfp_flower_repr_netdev_clean(struct nfp_app *app, struct net_device *netdev)
 
 	kfree(repr->app_priv);
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	tc_setup_cb_egdev_unregister(netdev, nfp_flower_setup_tc_egress_cb,
 				     netdev_priv(netdev));
 #endif
@@ -1118,7 +1118,7 @@ const struct nfp_app_type app_flower = {
 	.vnic_init	= nfp_flower_vnic_init,
 	.vnic_clean	= nfp_flower_vnic_clean,
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	.repr_init	= nfp_flower_repr_netdev_init,
 #endif
 	.repr_preclean	= nfp_flower_repr_netdev_preclean,
