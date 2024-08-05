@@ -10,6 +10,9 @@
 
 #include <linux/pci.h>
 #include <linux/if_ether.h>
+#ifdef KERNEL_SUPPORT_AUXI
+#include <linux/auxiliary_bus.h>
+#endif
 
 #include "nfpcore/kcompat.h"
 
@@ -29,8 +32,14 @@ struct nfp_net;
 /* The number of roce device related to one pf */
 #define NFP_ROCE_DEVICE_NUMS_IN_PF  2
 
+enum crdma_verbs_version
+{
+	CRDMA_VERBS_VERSION_1,
+	CRDMA_VERBS_VERSION_2,
+};
+
 /**
- * struct nfp_roce_info - NFP RoCE subdriver interface
+ * struct crdma_res_info - CRDMA subdriver interface
  * @pdev:		PCI Device parent of CPP interface
  * @netdev:		Network devices to attach RoCE ports to
  * @bdev:		Pointer to crdma_bond structure
@@ -40,10 +49,13 @@ struct nfp_net;
  * @num_vectors:	Number of MSI-X vectors for RoCE's use
  * @msix:		MSI-X vectors (resized to num_vectors)
  */
-struct nfp_roce_info {
+struct crdma_res_info {
 	struct pci_dev	*pdev;
 	struct net_device *netdev;
-	struct crdma_bond *bdev;
+
+	u8 dev_is_pf;   /* device is related to pf or vf, 1 for pf, 0 for vf */
+	u8 rdma_verbs_version; /* RDMA verbs version */
+	u8 rsv[2];
 
 	/*
 	 * PCI Resources allocated by the NFP core and
@@ -63,15 +75,24 @@ struct nfp_roce_info {
 	struct msix_entry	msix[];
 };
 
-struct crdma_ibdev;
-
-struct nfp_roce {
+struct crdma_device_node {
 	struct list_head list;
-	struct nfp_roce_info *info;
+	struct crdma_res_info *info;
+	struct crdma_ibdev *crdma_dev;
 	struct crdma_bond *bdev;
-	struct crdma_ibdev *ibdev;
 };
 
+struct nfp_roce;
+
+#ifdef KERNEL_SUPPORT_AUXI
+struct crdma_auxiliary_device {
+	struct auxiliary_device adev;
+	struct crdma_res_info *info;
+	int aux_idx;
+};
+int nfp_plug_aux_dev(struct nfp_pf *pf, struct nfp_roce *roce);
+void nfp_unplug_aux_dev(struct nfp_pf *pf, struct nfp_roce *roce);
+#else
 /**
  * struct nfp_roce_drv - NFP RoCE driver interface
  * @abi_version:	Must be NFP_ROCE_ABI_VERSION
@@ -92,27 +113,39 @@ struct nfp_roce {
  */
 struct nfp_roce_drv {
 	u32	abi_version;
-	struct crdma_ibdev *(*add_device)(struct nfp_roce_info *roce_info);
+	struct crdma_ibdev *(*add_device)(struct crdma_res_info *info);
 	void	(*remove_device)(struct crdma_ibdev *ibdev);
 	void	(*event_notifier)(struct crdma_ibdev *ibdev,
 				  int port, u32 state);
-	int 	(*bond_add_ibdev)(struct nfp_roce *roce);
-	void	(*bond_del_ibdev)(struct nfp_roce *roce);
+	int 	(*bond_add_ibdev)(struct crdma_device_node *dev_node);
+	void	(*bond_del_ibdev)(struct crdma_device_node *dev_node);
 };
 
 int nfp_register_roce_driver(struct nfp_roce_drv *drv);
 void nfp_unregister_roce_driver(struct nfp_roce_drv *drv);
-void nfp_register_roce_ibdev(struct nfp_roce *roce);
-void nfp_unregister_roce_ibdev(struct nfp_roce *roce);
-extern struct list_head nfp_roce_list;
+void nfp_register_roce_ibdev(struct crdma_device_node *dev_node);
+void nfp_unregister_roce_ibdev(struct crdma_device_node *dev_node);
+extern struct list_head rdma_device_list;
+int nfp_probe_crdma_device_by_callback(struct nfp_roce *roce);
+int nfp_unprobe_crdma_device_by_callback(struct nfp_roce *roce);
+#endif
+
+struct nfp_roce {
+	struct crdma_res_info *info;
+#ifdef KERNEL_SUPPORT_AUXI
+	struct crdma_auxiliary_device *cadev;
+#else
+	struct crdma_device_node *dev_node;
+#endif
+};
+
 
 #ifdef CONFIG_NFP_ROCE
 extern unsigned int nfp_roce_ints_num;
 extern bool nfp_roce_enabled;
-struct nfp_roce;
 
 int nfp_net_add_roce(struct nfp_pf *pf, struct nfp_net *nn);
-void nfp_net_remove_roce(struct nfp_net *nn);
+void nfp_net_remove_roce(struct nfp_pf *pf, struct nfp_net *nn);
 
 int nfp_roce_irqs_wanted(void);
 void nfp_roce_irqs_assign(struct nfp_net *nn, struct msix_entry *irq_entries,
@@ -128,7 +161,7 @@ int nfp_net_add_roce(struct nfp_pf *pf, struct nfp_net *nn)
 	return 0;
 }
 static inline
-void nfp_net_remove_roce(struct nfp_net *nn)
+void nfp_net_remove_roce(struct nfp_pf *pf, struct nfp_net *nn)
 {
 }
 

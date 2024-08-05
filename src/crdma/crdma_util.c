@@ -13,7 +13,9 @@
 #include <rdma/ib_addr.h>
 #include <rdma/ib_cache.h>
 
+#include "nfpcore/nfp_roce.h"
 #include "crdma_ib.h"
+#include "crdma_hw.h"
 #include "crdma_util.h"
 
 #ifdef COMPAT__HAVE_REGISTER_NETDEVICE_NOTIFIER_RH
@@ -136,9 +138,9 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 		GFP_KERNEL | __GFP_ZERO);
 	if (!buf)
 		return -ENOMEM;
-	sg_dma_address(mem->alloc) = dma_map_single(&dev->nfp_info->pdev->dev,
+	sg_dma_address(mem->alloc) = dma_map_single(&dev->info->pdev->dev,
 			buf, PAGE_SIZE << mem->min_order, DMA_BIDIRECTIONAL);
-	if (dma_mapping_error(&dev->nfp_info->pdev->dev,
+	if (dma_mapping_error(&dev->info->pdev->dev,
 		sg_dma_address(mem->alloc))) {
 		crdma_warn("Failed to map DMA address\n");
 		free_pages_exact(buf, PAGE_SIZE << mem->min_order);
@@ -158,7 +160,7 @@ static int __crdma_alloc_mem_coherent(struct crdma_ibdev *dev,
 	return 0;
 
 alloc_err:
-	dma_unmap_single(&dev->nfp_info->pdev->dev,
+	dma_unmap_single(&dev->info->pdev->dev,
 		sg_dma_address(mem->alloc), mem->tot_len, DMA_BIDIRECTIONAL);
 	free_pages_exact(sg_virt(mem->alloc), mem->tot_len);
 	return -ENOMEM;
@@ -212,10 +214,10 @@ static int __crdma_alloc_mem_pages(struct crdma_ibdev *dev,
 	}
 
 #if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 394, 0, 0))
-	mem->num_sg = dma_map_sg(&dev->nfp_info->pdev->dev, mem->alloc,
+	mem->num_sg = dma_map_sg(&dev->info->pdev->dev, mem->alloc,
 				 mem->num_allocs, DMA_BIDIRECTIONAL);
 #else
-	mem->num_sg = pci_map_sg(dev->nfp_info->pdev, mem->alloc,
+	mem->num_sg = pci_map_sg(dev->info->pdev, mem->alloc,
 				 mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
 #endif
 	mem->num_mtt = mem->tot_len >> (mem->min_order + PAGE_SHIFT);
@@ -277,17 +279,17 @@ void crdma_free_dma_mem(struct crdma_ibdev *dev, struct crdma_mem *mem)
 				mem->base_mtt_ndx, mem->num_mtt);
 
 	if (mem->coherent) {
-		dma_unmap_single(&dev->nfp_info->pdev->dev,
+		dma_unmap_single(&dev->info->pdev->dev,
 			sg_dma_address(mem->alloc),
 			mem->tot_len, DMA_BIDIRECTIONAL);
 		free_pages_exact(sg_virt(mem->alloc), mem->tot_len);
 	} else {
 		if (mem->num_sg)
 #if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 394, 0, 0))
-			dma_unmap_sg(&dev->nfp_info->pdev->dev, mem->alloc,
+			dma_unmap_sg(&dev->info->pdev->dev, mem->alloc,
 				     mem->num_allocs, DMA_BIDIRECTIONAL);
 #else
-			pci_unmap_sg(dev->nfp_info->pdev, mem->alloc,
+			pci_unmap_sg(dev->info->pdev, mem->alloc,
 				     mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
 #endif
 

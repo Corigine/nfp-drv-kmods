@@ -5,9 +5,8 @@
 #define CRDMA_UCIF_H
 
 #include <linux/compiler.h>
-#include "crdma_ib.h"
-#include "crdma_hw.h"
 
+struct crdma_ibdev;
 /*
  * crdma_ucif - Provides the driver/NFP micro-code interface.
  */

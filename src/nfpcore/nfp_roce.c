@@ -17,124 +17,16 @@
 
 #include "nfp6000/nfp6000.h"
 
-LIST_HEAD(nfp_roce_list);
-EXPORT_SYMBOL(nfp_roce_list);
+#ifdef KERNEL_SUPPORT_AUXI
+static DEFINE_XARRAY_ALLOC1(nfp_aux_id);
+#else
+LIST_HEAD(rdma_device_list);
+EXPORT_SYMBOL(rdma_device_list);
 
 static DEFINE_MUTEX(roce_driver_mutex);
 static struct nfp_roce_drv *roce_driver;
+#endif
 
-/**
- * nfp_register_roce_driver() - Register the RoCE driver with NFP core.
- * @drv:		RoCE driver callback function table.
- *
- * This routine is called by the Corigine RoCEv2 kernel driver to
- * notify the NFP NIC/core driver that the RoCE driver has been loaded. If
- * RoCE is not enabled or the ABI version is not supported, the NFP NIC/core
- * should return an error. Otherwise, the NFP NIC/core should invoke the
- * add_device() callback for each NIC instance.
- *
- * Return: 0, or -ERRNO
- */
-int nfp_register_roce_driver(struct nfp_roce_drv *drv)
-{
-	struct nfp_roce *roce;
-
-	if (!drv || drv->abi_version != NFP_ROCE_ABI_VERSION)
-		return -EINVAL;
-
-	mutex_lock(&roce_driver_mutex);
-	if (roce_driver) {
-		mutex_unlock(&roce_driver_mutex);
-		return -EBUSY;
-	}
-	roce_driver = drv;
-
-	list_for_each_entry(roce, &nfp_roce_list, list) {
-		WARN_ON(roce->ibdev);
-		roce->ibdev = roce_driver->add_device(roce->info);
-
-		if (IS_ERR_OR_NULL(roce->ibdev)) {
-			int err = roce->ibdev ? PTR_ERR(roce->ibdev) : -ENODEV;
-
-			dev_warn(&roce->info->pdev->dev,
-				 "RoCE: Can't register device: %d\n", err);
-			roce->ibdev = NULL;
-		}
-
-		if (roce_driver->bond_add_ibdev)
-			roce_driver->bond_add_ibdev(roce);
-	}
-
-	mutex_unlock(&roce_driver_mutex);
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(nfp_register_roce_driver);
-
-/**
- * nfp_unregister_roce_driver() - Unregister the RoCE driver with NFP core.
- * @drv:	The callback function table passed in the associated
- *		nfp_register_roce_driver() call.
- *
- * This routine is called by the Corigine RoCEv2 driver to notify the NFP
- * NIC/core driver that the RoCE driver is unloading. The NFP NIC
- * driver invokes the remove_device routine for each Corigine RoCE device
- * that has been added.
- */
-void nfp_unregister_roce_driver(struct nfp_roce_drv *drv)
-{
-	mutex_lock(&roce_driver_mutex);
-	if (drv == roce_driver) {
-		struct nfp_roce *roce;
-
-		list_for_each_entry(roce, &nfp_roce_list, list) {
-			if (roce->ibdev) {
-				roce_driver->remove_device(roce->ibdev);
-				roce->ibdev = NULL;
-			}
-
-			if (roce_driver->bond_del_ibdev)
-				roce_driver->bond_del_ibdev(roce);
-		}
-		roce_driver = NULL;
-	}
-	mutex_unlock(&roce_driver_mutex);
-}
-EXPORT_SYMBOL_GPL(nfp_unregister_roce_driver);
-
-/**
- * nfp_unregister_roce_ibdev() - Unregister the RoCE device.
- * @roce:       The RoCE info used to unregister a RoCE device.
- *
- * This routine is called by the Corigine RoCEv2 driver to unregister a
- * RoCE device.
- */
-void nfp_unregister_roce_ibdev(struct nfp_roce *roce)
-{
-	mutex_lock(&roce_driver_mutex);
-	if (roce_driver && roce->ibdev) {
-		roce_driver->remove_device(roce->ibdev);
-		roce->ibdev = NULL;
-	}
-	mutex_unlock(&roce_driver_mutex);
-}
-EXPORT_SYMBOL_GPL(nfp_unregister_roce_ibdev);
-
-/**
- * nfp_register_roce_ibdev() - Register the RoCE device.
- * @roce:       The RoCE info used to register a RoCE device.
- *
- * This routine is called by the Corigine RoCEv2 driver to register a
- * RoCE device.
- */
-void nfp_register_roce_ibdev(struct nfp_roce *roce)
-{
-	mutex_lock(&roce_driver_mutex);
-	if (roce_driver && !roce->ibdev)
-		roce->ibdev = roce_driver->add_device(roce->info);
-	mutex_unlock(&roce_driver_mutex);
-}
-EXPORT_SYMBOL_GPL(nfp_register_roce_ibdev);
 
 /**
  * nfp_roce_acquire_configure_resource() - Acquire configure resources for RoCE.
@@ -240,68 +132,15 @@ void nfp_roce_irqs_assign(struct nfp_net *nn, struct msix_entry *irq_entries,
 	}
 }
 
-
-int nfp_net_add_roce(struct nfp_pf *pf, struct nfp_net *nn)
+static void nfp_fill_crdma_resource(struct nfp_pf *pf, struct nfp_net *nn,
+				    struct crdma_res_info *info)
 {
-	struct nfp_roce_info *info;
-	struct nfp_roce *roce;
 	struct device *dev;
-	int err, i;
-
-	if ((nn->cap_w1 & NFP_NET_CFG_CTRL_ROCEV2) == 0)
-		return 0;
-
-	if (!nfp_roce_enabled) {
-		nn->dp.ctrl_w1 &= ~NFP_NET_CFG_CTRL_ROCEV2;
-		return 0;
-	}
-
-	/* First, let's validate that the NFP device is
-	 * a PCI interface.
-	 */
-	if (!pf || !(pf->cpp))
-		return -EINVAL;
-
-	/* configure interface or doorbell is not mapped */
-	if (!(pf->roce_cmdif) || !(pf->db_iomem)) {
-		nfp_warn(pf->cpp,
-			"RoCE resources are not mapped successfully, %p, %p\n",
-			pf->roce_cmdif, pf->db_iomem);
-		return -EINVAL;
-	}
-
-	if (nn->id >= NFP_ROCE_DEVICE_NUMS_IN_PF) {
-		nfp_warn(pf->cpp,
-			"RoCE vnic ID is invalid, current vnic: %d, max vnic: %d\n",
-			nn->id, NFP_ROCE_DEVICE_NUMS_IN_PF - 1);
-		return -EINVAL;
-	}
+	int i;
 
 	dev = nfp_cpp_device(pf->cpp);
-	if (!dev || !dev->parent)
-		return -ENODEV;
-
 	dev = dev->parent;
 
-	if (!dev_is_pci(dev))
-		return -EINVAL;
-
-	if (!nn->dp.netdev)
-		return -EINVAL;
-
-	roce = kzalloc(sizeof(*roce), GFP_KERNEL);
-	if (!roce)
-		return -ENOMEM;
-
-	roce->info = kzalloc(sizeof(struct nfp_roce_info) +
-			     sizeof(struct msix_entry) * nn->num_roce_vecs,
-			     GFP_KERNEL);
-	if (!roce->info) {
-		kfree(roce);
-		return -ENOMEM;
-	}
-
-	info = roce->info;
 	info->pdev = to_pci_dev(dev);
 	info->netdev = nn->dp.netdev;
 	if (pf->multi_pf.en) {
@@ -317,26 +156,280 @@ int nfp_net_add_roce(struct nfp_pf *pf, struct nfp_net *nn)
 	for (i = 0; i < nn->num_roce_vecs; i++)
 		info->msix[i] = nn->roce_irq_entries[i];
 
-	nn->roce = roce;
+	info->dev_is_pf = 1;
+	info->rdma_verbs_version = CRDMA_VERBS_VERSION_1;
+}
+
+#ifdef KERNEL_SUPPORT_AUXI
+/**
+ * nfp_adev_release - function to be mapped to AUX dev's release op
+ * @dev: pointer to device to free
+ */
+static void nfp_adev_release(struct device *dev)
+{
+	struct crdma_auxiliary_device *cadev;
+
+	cadev = container_of(dev, struct crdma_auxiliary_device, adev.dev);
+	kfree(cadev);
+}
+
+int nfp_plug_aux_dev(struct nfp_pf *pf, struct nfp_roce *roce)
+{
+	struct crdma_auxiliary_device *cadev;
+	struct auxiliary_device *adev;
+	int ret;
+
+	cadev = kzalloc(sizeof(*cadev), GFP_KERNEL);
+	if (!cadev)
+		return -ENOMEM;
+
+	ret = xa_alloc(&nfp_aux_id, &cadev->aux_idx, NULL, XA_LIMIT(1, INT_MAX),
+	       GFP_KERNEL);
+	if (ret)
+		goto err_xa_alloc;
+
+	cadev->info = roce->info;
+	adev = &cadev->adev;
+	adev->id = cadev->aux_idx;
+	adev->dev.release = nfp_adev_release;
+	adev->dev.parent = &pf->pdev->dev;
+	adev->name = "roce";
+
+	ret = auxiliary_device_init(adev);
+	if (ret)
+		goto err_device_init;
+
+	ret = auxiliary_device_add(adev);
+	if (ret)
+		goto err_device_add;
+
+	roce->cadev = cadev;
+
+	return 0;
+err_device_add:
+	auxiliary_device_uninit(adev);
+err_device_init:
+	xa_erase(&nfp_aux_id, cadev->aux_idx);
+err_xa_alloc:
+	kfree(cadev);
+	return ret;
+}
+
+void nfp_unplug_aux_dev(struct nfp_pf *pf, struct nfp_roce *roce)
+{
+	struct crdma_auxiliary_device *cadev;
+
+	cadev = roce->cadev;
+	if (!cadev)
+		return;
+
+	auxiliary_device_delete(&cadev->adev);
+	auxiliary_device_uninit(&cadev->adev);
+	xa_erase(&nfp_aux_id, cadev->aux_idx);
+	roce->cadev = NULL;
+}
+#else
+/**
+ * nfp_register_roce_driver() - Register the RoCE driver with NFP core.
+ * @drv:		RoCE driver callback function table.
+ *
+ * This routine is called by the Corigine RoCEv2 kernel driver to
+ * notify the NFP NIC/core driver that the RoCE driver has been loaded. If
+ * RoCE is not enabled or the ABI version is not supported, the NFP NIC/core
+ * should return an error. Otherwise, the NFP NIC/core should invoke the
+ * add_device() callback for each NIC instance.
+ *
+ * Return: 0, or -ERRNO
+ */
+int nfp_register_roce_driver(struct nfp_roce_drv *drv)
+{
+	struct crdma_device_node *dev_node;
+
+	if (!drv || drv->abi_version != NFP_ROCE_ABI_VERSION)
+		return -EINVAL;
 
 	mutex_lock(&roce_driver_mutex);
-	list_add_tail(&roce->list, &nfp_roce_list);
-
 	if (roce_driver) {
-		roce->ibdev = roce_driver->add_device(info);
-		if (IS_ERR_OR_NULL(roce->ibdev)) {
-			err = roce->ibdev ? PTR_ERR(roce->ibdev) : -ENODEV;
-			nfp_warn(pf->cpp,
-				"RoCE: Can't create interface: %d\n", err);
-			roce->ibdev = NULL;
+		mutex_unlock(&roce_driver_mutex);
+		return -EBUSY;
+	}
+	roce_driver = drv;
+
+	list_for_each_entry(dev_node, &rdma_device_list, list) {
+		WARN_ON(dev_node->crdma_dev);
+		dev_node->crdma_dev = roce_driver->add_device(dev_node->info);
+
+		if (IS_ERR_OR_NULL(dev_node->crdma_dev)) {
+			int err = dev_node->crdma_dev ?
+				PTR_ERR(dev_node->crdma_dev) : -ENODEV;
+			dev_warn(&dev_node->info->pdev->dev,
+				 "RoCE: Can't register device: %d\n", err);
+			dev_node->crdma_dev = NULL;
 		}
 
 		if (roce_driver->bond_add_ibdev)
-			roce_driver->bond_add_ibdev(roce);
+			roce_driver->bond_add_ibdev(dev_node);
 	}
 
 	mutex_unlock(&roce_driver_mutex);
 
+	return 0;
+}
+EXPORT_SYMBOL_GPL(nfp_register_roce_driver);
+
+/**
+ * nfp_unregister_roce_driver() - Unregister the RoCE driver with NFP core.
+ * @drv:	The callback function table passed in the associated
+ *		nfp_register_roce_driver() call.
+ *
+ * This routine is called by the Corigine RoCEv2 driver to notify the NFP
+ * NIC/core driver that the RoCE driver is unloading. The NFP NIC
+ * driver invokes the remove_device routine for each Corigine RoCE device
+ * that has been added.
+ */
+void nfp_unregister_roce_driver(struct nfp_roce_drv *drv)
+{
+	mutex_lock(&roce_driver_mutex);
+	if (drv == roce_driver) {
+		struct crdma_device_node *dev_node;
+
+		list_for_each_entry(dev_node, &rdma_device_list, list) {
+			if (dev_node->crdma_dev) {
+				roce_driver->remove_device(dev_node->crdma_dev);
+				dev_node->crdma_dev = NULL;
+			}
+
+			if (roce_driver->bond_del_ibdev)
+				roce_driver->bond_del_ibdev(dev_node);
+		}
+		roce_driver = NULL;
+	}
+	mutex_unlock(&roce_driver_mutex);
+}
+EXPORT_SYMBOL_GPL(nfp_unregister_roce_driver);
+
+/**
+ * nfp_unregister_roce_ibdev() - Unregister the RoCE device.
+ * @roce:       The RoCE info used to unregister a RoCE device.
+ *
+ * This routine is called by the Corigine RoCEv2 driver to unregister a
+ * RoCE device.
+ */
+void nfp_unregister_roce_ibdev(struct crdma_device_node *dev_node)
+{
+	mutex_lock(&roce_driver_mutex);
+	if (roce_driver && dev_node->crdma_dev) {
+		roce_driver->remove_device(dev_node->crdma_dev);
+		dev_node->crdma_dev = NULL;
+	}
+	mutex_unlock(&roce_driver_mutex);
+}
+EXPORT_SYMBOL_GPL(nfp_unregister_roce_ibdev);
+
+/**
+ * nfp_register_roce_ibdev() - Register the RoCE device.
+ * @roce:       The RoCE info used to register a RoCE device.
+ *
+ * This routine is called by the Corigine RoCEv2 driver to register a
+ * RoCE device.
+ */
+void nfp_register_roce_ibdev(struct crdma_device_node *dev_node)
+{
+	mutex_lock(&roce_driver_mutex);
+	if (roce_driver && !dev_node->crdma_dev)
+		dev_node->crdma_dev = roce_driver->add_device(dev_node->info);
+	mutex_unlock(&roce_driver_mutex);
+}
+EXPORT_SYMBOL_GPL(nfp_register_roce_ibdev);
+
+int nfp_probe_crdma_device_by_callback(struct nfp_roce *roce)
+{
+	struct crdma_device_node *dev_node;
+
+	dev_node = kzalloc(sizeof(*dev_node), GFP_KERNEL);
+	if (!dev_node)
+		return -ENOMEM;
+
+	mutex_lock(&roce_driver_mutex);
+	if (roce_driver) {
+		dev_node->crdma_dev = roce_driver->add_device(roce->info);
+		if ((!dev_node->crdma_dev)) {
+			kfree(dev_node);
+			mutex_unlock(&roce_driver_mutex);
+			return -ENOMEM;
+		}
+
+		if (roce_driver->bond_add_ibdev)
+			roce_driver->bond_add_ibdev(dev_node);
+	}
+	dev_node->info = roce->info;
+	list_add_tail(&dev_node->list, &rdma_device_list);
+	mutex_unlock(&roce_driver_mutex);
+
+	roce->dev_node = dev_node;
+	return 0;
+}
+
+int nfp_unprobe_crdma_device_by_callback(struct nfp_roce *roce)
+{
+	struct crdma_device_node *dev_node = roce->dev_node;
+
+	if (!dev_node)
+		return 0;
+
+	mutex_lock(&roce_driver_mutex);
+	if (dev_node->crdma_dev) {
+		roce_driver->remove_device(dev_node->crdma_dev);
+		if (roce_driver->bond_del_ibdev)
+			roce_driver->bond_del_ibdev(dev_node);
+	}
+	list_del(&dev_node->list);
+	mutex_unlock(&roce_driver_mutex);
+	kfree(dev_node);
+
+	return 0;
+}
+#endif
+
+int nfp_net_add_roce(struct nfp_pf *pf, struct nfp_net *nn)
+{
+	struct nfp_roce *roce;
+	int ret;
+
+	if ((nn->cap_w1 & NFP_NET_CFG_CTRL_ROCEV2) == 0)
+		return 0;
+
+	if (!nfp_roce_enabled) {
+		nn->dp.ctrl_w1 &= ~NFP_NET_CFG_CTRL_ROCEV2;
+		return 0;
+	}
+
+	roce = kzalloc(sizeof(*roce), GFP_KERNEL);
+	if (!roce)
+		return -ENOMEM;
+
+	roce->info = kzalloc(sizeof(struct crdma_res_info) +
+			     sizeof(struct msix_entry) * nn->num_roce_vecs,
+			     GFP_KERNEL);
+	if (!roce->info) {
+		kfree(roce);
+		return -ENOMEM;
+	}
+
+	nfp_fill_crdma_resource(pf, nn, roce->info);
+
+#ifdef KERNEL_SUPPORT_AUXI
+	ret = nfp_plug_aux_dev(pf, roce);
+#else
+	ret = nfp_probe_crdma_device_by_callback(roce);
+#endif
+	if (ret) {
+		kfree(roce->info);
+		kfree(roce);
+		return ret;
+	}
+
+	nn->roce = roce;
 	nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_ROCEV2;
 
 	return 0;
@@ -348,23 +441,19 @@ int nfp_net_add_roce(struct nfp_pf *pf, struct nfp_net *nn)
  *
  * This routine detachs a RoCE interface and releases resource related.
  */
-void nfp_net_remove_roce(struct nfp_net *nn)
+void nfp_net_remove_roce(struct nfp_pf *pf, struct nfp_net *nn)
 {
 	if (IS_ERR_OR_NULL(nn->roce))
 		return;
 
-	mutex_lock(&roce_driver_mutex);
-	list_del(&nn->roce->list);
-
-	if (nn->roce->ibdev) {
-		roce_driver->remove_device(nn->roce->ibdev);
-		if (roce_driver->bond_del_ibdev)
-			roce_driver->bond_del_ibdev(nn->roce);
-	}
+#ifdef KERNEL_SUPPORT_AUXI
+	nfp_unplug_aux_dev(pf, nn->roce);
+#else
+	nfp_unprobe_crdma_device_by_callback(nn->roce);
+#endif
 
 	kfree(nn->roce->info);
 	kfree(nn->roce);
 	nn->roce = NULL;
-	mutex_unlock(&roce_driver_mutex);
 }
 

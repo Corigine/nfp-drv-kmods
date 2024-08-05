@@ -255,7 +255,7 @@ static int crdma_polled_cmd(struct crdma_ibdev *dev, struct crdma_cmd *cmd)
 			goto done;
 		}
 		cond_resched();
-		if (pci_channel_offline(dev->nfp_info->pdev)) {
+		if (pci_channel_offline(dev->info->pdev)) {
 			ret = -EIO;
 			goto done;
 		}
@@ -395,7 +395,7 @@ static int crdma_cmd(struct crdma_ibdev *dev, struct crdma_cmd *cmd)
 	 * Verify device is on-line then issue command based
 	 * on current command mode.
 	 */
-	if (pci_channel_offline(dev->nfp_info->pdev))
+	if (pci_channel_offline(dev->info->pdev))
 		return -EIO;
 
 #ifdef CRDMA_EVENT_CMDS
@@ -2151,7 +2151,7 @@ int crdma_init_cmdif(struct crdma_ibdev *dev)
 	dev->use_event_cmds = false;
 	dev->max_cmds_out = CRDMA_CMDIF_DRIVER_MAX_CMDS;
 
-	dev->mbox_pool = dma_pool_create("crdma_cmd", &dev->nfp_info->pdev->dev,
+	dev->mbox_pool = dma_pool_create("crdma_cmd", &dev->info->pdev->dev,
 			CRDMA_CMDIF_MBOX_SIZE, CRDMA_CMDIF_MBOX_SIZE, 0);
 	if (!dev->mbox_pool)
 		return -ENOMEM;

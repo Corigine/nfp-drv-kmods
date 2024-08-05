@@ -8,6 +8,10 @@
 #include <linux/pci.h>
 #include <net/addrconf.h>
 
+#ifdef KERNEL_SUPPORT_AUXI
+#include <linux/auxiliary_bus.h>
+#endif
+
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_user_verbs.h>
 
@@ -29,6 +33,11 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION(DRV_VERSION);
 
 static DEFINE_IDR(crdma_dev_id);
+
+#ifdef KERNEL_SUPPORT_AUXI
+LIST_HEAD(rdma_device_list);
+static DEFINE_MUTEX(rdma_device_list_mutex);
+#endif
 
 /*
  * Prior to having working/integrated EQ interrupts use the following
@@ -207,7 +216,7 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	 * firmware for multi PF card, so reduce the uar pages to
 	 * compatibility the single PF for multi PF card.
 	 */
-	if (dev->nfp_info->pdev->multifunction)
+	if (dev->info->pdev->multifunction)
 		dev->cap.max_uar_pages = 1 << (cap->max_uar_pages_log2 - 1);
 	else
 		dev->cap.max_uar_pages = 1 << cap->max_uar_pages_log2;
@@ -258,10 +267,10 @@ static int crdma_load_hca_attr(struct crdma_ibdev *dev)
 	dev->cap.ib.hw_ver = 0;
 
 	addrconf_addr_eui48((u8 *)&dev->cap.ib.sys_image_guid,
-				dev->nfp_info->netdev->dev_addr);
+				dev->info->netdev->dev_addr);
 	dev->cap.ib.max_mr_size = 1ull << cap->max_mr_size_log2;
-	dev->cap.ib.vendor_id = dev->nfp_info->pdev->vendor;
-	dev->cap.ib.vendor_part_id = dev->nfp_info->pdev->device;
+	dev->cap.ib.vendor_id = dev->info->pdev->vendor;
+	dev->cap.ib.vendor_part_id = dev->info->pdev->device;
 	dev->cap.ib.page_size_cap = 0x0ffff000ull; /* 4K to 16M */
 
 	/*
@@ -390,7 +399,7 @@ static int crdma_create_eqs(struct crdma_ibdev *dev)
 	 *   2. Number of on-line CPUs.
 	 *   3. The maximum number supported by microcode load.
 	 */
-	num_eq =  min_t(u32, dev->nfp_info->num_vectors, num_online_cpus());
+	num_eq =  min_t(u32, dev->info->num_vectors, num_online_cpus());
 	num_eq = min_t(u32, num_eq, dev->cap.max_eq);
 
 	dev->eq_table.eq = kcalloc(num_eq, sizeof(struct crdma_eq),
@@ -405,8 +414,8 @@ static int crdma_create_eqs(struct crdma_ibdev *dev)
 
 		/* Pass device interrupt and OS vector */
 		err = crdma_init_eq(dev, i, CRDMA_EQ_ENTRIES_LOG2,
-				dev->nfp_info->msix[i].entry,
-				dev->nfp_info->msix[i].vector,
+				dev->info->msix[i].entry,
+				dev->info->msix[i].vector,
 				events);
 		if (err)
 			goto free_eq;
@@ -430,7 +439,7 @@ static ssize_t hca_type_show(struct device *device,
 	struct crdma_ibdev *dev = dev_get_drvdata(device);
 #endif
 	return scnprintf(buf, PAGE_SIZE, "0x%08X\n",
-		dev->nfp_info->pdev->device);
+		dev->info->pdev->device);
 }
 
 static ssize_t hw_rev_show(struct device *device,
@@ -444,7 +453,7 @@ static ssize_t hw_rev_show(struct device *device,
 	struct crdma_ibdev *dev = dev_get_drvdata(device);
 #endif
 	return scnprintf(buf, PAGE_SIZE, "0x%x\n",
-		dev->nfp_info->pdev->vendor);
+		dev->info->pdev->vendor);
 }
 
 static ssize_t board_id_show(struct device *device,
@@ -773,7 +782,7 @@ static int crdma_init_port(struct crdma_ibdev *dev)
 {
 	struct crdma_port *port = &dev->port;
 
-	port->netdev = dev->nfp_info->netdev;
+	port->netdev = dev->info->netdev;
 	if (!port->netdev) {
 		crdma_dev_warn(dev, "net_device not set\n");
 		return -EINVAL;
@@ -816,7 +825,6 @@ static int crdma_init_hca(struct crdma_ibdev *dev)
 
 	INIT_LIST_HEAD(&dev->ctxt_list);
 	spin_lock_init(&dev->ctxt_lock);
-	dev->numa_node = dev_to_node(&dev->nfp_info->pdev->dev);
 
 	ret = crdma_acquire_pci_resources(dev);
 	if (ret)
@@ -915,15 +923,11 @@ static void crdma_cleanup_hca(struct crdma_ibdev *dev)
  *
  * Returns the new crdma RoCE IB device, or NULL on error.
  */
-static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
+struct crdma_ibdev *crdma_add_dev(struct crdma_res_info *info)
 {
 	struct crdma_ibdev *dev;
-	int size;
 	int i;
 	int j;
-
-	size = sizeof(*info) + info->num_vectors *
-				sizeof(struct msix_entry);
 
 	/*
 	 * The following test is for initial bring-up only, then remove.
@@ -944,20 +948,16 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 		crdma_err("IB device allocation failed\n");
 		return NULL;
 	}
-	dev->nfp_info = kzalloc(size, GFP_KERNEL);
-	if (!dev->nfp_info)
-		goto err_free_dev;
 
-	memcpy(dev->nfp_info, info, size);
-
+	dev->info = info;
 	crdma_dev_info(dev, "Number of Vectors       %d\n",
-		dev->nfp_info->num_vectors);
+		dev->info->num_vectors);
 	crdma_dev_info(dev, "DMA Mask                0x%016llx\n",
-		dev->nfp_info->pdev->dma_mask);
+		dev->info->pdev->dma_mask);
 	crdma_dev_info(dev, "Configure IOMEM address %p\n",
-		dev->nfp_info->cmdif);
+		dev->info->cmdif);
 	crdma_dev_info(dev, "Doorbell DMA address    0x%016llX\n",
-		dev->nfp_info->db_base);
+		dev->info->db_base);
 
 	dev->have_interrupts = have_interrupts;
 
@@ -965,7 +965,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 
 	dev->id = idr_alloc(&crdma_dev_id, NULL, 0, 0, GFP_KERNEL);
 	if (dev->id < 0)
-		goto err_free_info;
+		goto err_free_dev;
 
 	if (crdma_init_hca(dev))
 		goto err_free_idr;
@@ -975,7 +975,7 @@ static struct crdma_ibdev *crdma_add_dev(struct nfp_roce_info *info)
 	dev->ibdev.phys_port_cnt = dev->cap.n_ports;
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 1) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
-	if (ib_device_set_netdev(&dev->ibdev, dev->nfp_info->netdev, 1))
+	if (ib_device_set_netdev(&dev->ibdev, dev->info->netdev, 1))
 		goto err_cleanup_net_notifiers;
 #endif
 
@@ -1007,18 +1007,17 @@ err_cleanup_hca:
 	crdma_cleanup_hca(dev);
 err_free_idr:
 	idr_remove(&crdma_dev_id, dev->id);
-err_free_info:
-	kfree(dev->nfp_info);
 err_free_dev:
 	ib_dealloc_device(&dev->ibdev);
 	return NULL;
 }
 
-static void crdma_remove_dev(struct crdma_ibdev *dev)
+void crdma_remove_dev(struct crdma_ibdev *dev)
 {
 	int i;
 
-	crdma_dev_info(dev, "netdev(%p) is removing.\n", dev->nfp_info->netdev);
+	crdma_dev_info(dev, "netdev(%p) is removing.\n",
+		dev->info->netdev);
 
 	for (i = 0; i < ARRAY_SIZE(crdma_class_attrs); i++)
 		device_remove_file(&dev->ibdev.dev, crdma_class_attrs[i]);
@@ -1027,10 +1026,158 @@ static void crdma_remove_dev(struct crdma_ibdev *dev)
 	crdma_unregister_verbs(dev);
 	crdma_cleanup_hca(dev);
 	idr_remove(&crdma_dev_id, dev->id);
-	kfree(dev->nfp_info);
 	ib_dealloc_device(&dev->ibdev);
 }
 
+static u32 crdma_gen_dev_pci(const struct crdma_res_info *info)
+{
+	struct pci_dev *pdev;
+
+	pdev = info->pdev;
+	return (u32)((pci_domain_nr(pdev->bus) << 16) |
+		     (pdev->bus->number << 8) |
+		     PCI_SLOT(pdev->devfn));
+}
+
+struct crdma_bond *crdma_bond_fetch_bdev(struct crdma_device_node *node)
+{
+	struct crdma_device_node *tmp_node;
+
+	list_for_each_entry(tmp_node, &rdma_device_list, list) {
+		if ((tmp_node == node) ||
+		    (crdma_gen_dev_pci(tmp_node->info) !=
+		    crdma_gen_dev_pci(node->info)) ||
+		    !tmp_node->bdev)
+			continue;
+
+		return tmp_node->bdev;
+	}
+
+	return NULL;
+}
+
+#ifdef KERNEL_SUPPORT_AUXI
+static const struct auxiliary_device_id crdma_auxiliary_id_table[] = {
+	{.name = "nfp.roce", },
+	{.name = "corigine.roce", },
+	{},
+};
+
+static int crdma_probe(struct auxiliary_device *aux_dev,
+		       const struct auxiliary_device_id *id)
+{
+	struct crdma_auxiliary_device *cadev;
+	struct crdma_device_node *dev_node;
+	struct crdma_ibdev *crdma_dev;
+	struct crdma_res_info *info;
+	int size;
+	int ret;
+
+	cadev = container_of(aux_dev, struct crdma_auxiliary_device, adev);
+	if (!cadev->info) {
+		pr_err("cadev->info is NULL");
+		return -ENOMEM;
+	}
+
+	pr_info("crdma_probe is adding, %p\n", cadev->info->netdev);
+
+	size = sizeof(*info) + cadev->info->num_vectors *
+				sizeof(struct msix_entry);
+	info = kzalloc(size, GFP_KERNEL);
+	if (!info)
+		return -ENOMEM;
+
+	memcpy(info, cadev->info, size);
+
+	dev_node = kzalloc(sizeof(*dev_node), GFP_KERNEL);
+	if (!dev_node) {
+		kfree(info);
+		return -ENOMEM;
+	}
+	dev_node->info = info;
+
+	crdma_dev = crdma_add_dev(info);
+	if (!crdma_dev) {
+		kfree(info);
+		kfree(dev_node);
+		return -ENOMEM;
+	}
+	dev_node->crdma_dev = crdma_dev;
+	crdma_dev->dev_node = dev_node;
+
+	ret = crdma_bond_add_ibdev(dev_node);
+	if (ret) {
+		crdma_remove_dev(dev_node->crdma_dev);
+		kfree(info);
+		kfree(dev_node);
+		return -ENOMEM;
+	}
+
+	mutex_lock(&rdma_device_list_mutex);
+	list_add_tail(&dev_node->list, &rdma_device_list);
+	mutex_unlock(&rdma_device_list_mutex);
+
+	dev_set_drvdata(&aux_dev->dev, dev_node);
+
+	return 0;
+}
+
+#ifdef COMPAT__AUXI_INT_REMOVE
+static int crdma_remove(struct auxiliary_device *aux_dev)
+#else
+static void crdma_remove(struct auxiliary_device *aux_dev)
+#endif
+{
+	struct crdma_device_node *dev_node;
+
+	dev_node = dev_get_drvdata(&aux_dev->dev);
+
+	pr_info("crdma_remove is removing, %p,%p\n",
+		dev_node, dev_node->info->netdev);
+
+	crdma_remove_dev(dev_node->crdma_dev);
+	crdma_bond_del_ibdev(dev_node);
+	mutex_lock(&rdma_device_list_mutex);
+	list_del(&dev_node->list);
+	mutex_unlock(&rdma_device_list_mutex);
+	kfree(dev_node->info);
+	kfree(dev_node);
+
+#ifdef COMPAT__AUXI_INT_REMOVE
+	return 0;
+#endif
+}
+
+MODULE_DEVICE_TABLE(auxiliary, crdma_auxiliary_id_table);
+
+static struct auxiliary_driver crdma_auxiliary_drv = {
+	.id_table = crdma_auxiliary_id_table,
+	.probe = crdma_probe,
+	.remove = crdma_remove,
+};
+
+static int crdma_auxi_client_init_module(void)
+{
+	int ret;
+
+	WARN_ON(!list_empty(&rdma_device_list));
+
+	ret = auxiliary_driver_register(&crdma_auxiliary_drv);
+	if (ret) {
+		pr_err("Failed auxiliary_driver_register() ret=%d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static void crdma_auxi_client_exit_module(void)
+{
+	auxiliary_driver_unregister(&crdma_auxiliary_drv);
+	WARN_ON(!list_empty(&rdma_device_list));
+}
+
+#else
 /**
  * NFP Notifier callback event handler.
  *
@@ -1053,17 +1200,27 @@ static struct nfp_roce_drv crdma_drv = {
 	.bond_add_ibdev	= crdma_bond_add_ibdev,
 	.bond_del_ibdev	= crdma_bond_del_ibdev,
 };
+#endif
 
 static int __init crdma_init(void)
 {
-	crdma_info("calling nfp_register_roce_driver\n");
-	return nfp_register_roce_driver(&crdma_drv);
+#ifdef KERNEL_SUPPORT_AUXI
+	crdma_auxi_client_init_module();
+#else
+	/* Use callback way */
+	nfp_register_roce_driver(&crdma_drv);
+#endif
+	return 0;
 }
 
 static void __exit crdma_cleanup(void)
 {
-	crdma_info("calling nfp_unregister_roce_driver\n");
+#ifdef KERNEL_SUPPORT_AUXI
+	crdma_auxi_client_exit_module();
+#else
+	/* Use callback way */
 	nfp_unregister_roce_driver(&crdma_drv);
+#endif
 }
 
 module_init(crdma_init);

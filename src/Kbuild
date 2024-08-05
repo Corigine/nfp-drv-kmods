@@ -327,6 +327,13 @@ ifneq (, $(wildcard $(srctree)/include/generated/uapi/linux/suse_version.h))
   ccflags-y += -DSLEL_LOCALVER_Y=$(shell echo $(local_version) | cut -d '.' -f 2)
   COMPAT_SUSE := y
 endif
+# Check for auxiliary bus
+ifneq (, $(wildcard $(srctree)/include/linux/auxiliary_bus.h))
+  ifeq ($(CONFIG_AUXILIARY_BUS), y)
+    ccflags-y += -DKERNEL_SUPPORT_AUXI
+    $(eval $(call add_compat_flag,$(srctree)/include/linux/auxiliary_bus.h, "int (\*remove)(struct auxiliary_device \*auxdev)",COMPAT__AUXI_INT_REMOVE))
+  endif
+endif
 
 VER_IS_NON_RHEL_OR_KYL := \
 	$(shell [ $(RHEL_MAJOR) -eq 0 ] && [ -z $(COMPAT_KYLINUX) ] && echo y)

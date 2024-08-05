@@ -8,40 +8,62 @@
 #include "crdma_ucif.h"
 #include "crdma_bond.h"
 
-static void crdma_bond_unregister_slave_ibdev(struct nfp_roce **roce)
+static void crdma_bond_unregister_slave_ibdev(struct crdma_device_node **node)
 {
 	int i;
 
 	for (i = 0; i < CRDMA_BOND_MAX_PORT; i++) {
-		if (!roce[i])
+		if (!node[i])
 			continue;
 
-		nfp_unregister_roce_ibdev(roce[i]);
+		if (node[i]->crdma_dev) {
+			crdma_remove_dev(node[i]->crdma_dev);
+			node[i]->crdma_dev = NULL;
+		}
 	}
 }
 
-static void crdma_bond_register_slave_ibdev(struct nfp_roce **roce)
+static void crdma_bond_register_slave_ibdev(struct crdma_device_node **node)
 {
+	struct crdma_ibdev *crdma_dev;
 	int i;
 
 	for (i = 0; i < CRDMA_BOND_MAX_PORT; i++) {
-		if (!roce[i])
+		if (!node[i])
 			continue;
 
-		nfp_register_roce_ibdev(roce[i]);
+		crdma_dev = crdma_add_dev(node[i]->info);
+		if (!crdma_dev)
+			return;
+
+		node[i]->crdma_dev = crdma_dev;
+		crdma_dev->dev_node = node[i];
 	}
 }
 
-static void crdma_bond_register_bond_ibdev(struct nfp_roce **roce)
+static void crdma_bond_register_bond_ibdev(struct crdma_device_node **node)
 {
 	/* ibdevice for bond use the 1st pf's resources */
-	nfp_register_roce_ibdev(roce[0]);
+	struct crdma_ibdev *crdma_dev;
+
+	crdma_dev = crdma_add_dev(node[0]->info);
+	if (!crdma_dev)
+		return;
+
+	node[0]->crdma_dev = crdma_dev;
+	crdma_dev->dev_node = node[0];
 }
 
-static void crdma_bond_unregister_bond_ibdev(struct nfp_roce **roce)
+static void crdma_bond_unregister_bond_ibdev(struct crdma_device_node **node)
 {
 	/* ibdevice for bond use the 1st pf's resources */
-	nfp_unregister_roce_ibdev(roce[0]);
+	if (!node[0])
+		return;
+
+	if (node[0]->crdma_dev) {
+		crdma_remove_dev(node[0]->crdma_dev);
+		node[0]->crdma_dev = NULL;
+	}
 }
 
 static void crdma_bond_tx_mapping(struct bond_group *group,
@@ -56,12 +78,12 @@ static void crdma_bond_tx_mapping(struct bond_group *group,
 		*tx_bm |= 1<<1;
 }
 
-static void crdma_bond_create_bond(struct nfp_roce **roce,
+static void crdma_bond_create_bond(struct crdma_device_node **node,
 				   struct bond_group *group)
 {
 	int err;
 	u64 tx_bm = 0;
-	struct crdma_ibdev *dev = roce[0]->ibdev;
+	struct crdma_ibdev *dev = node[0]->crdma_dev;
 
 	if (!dev)
 		return;
@@ -73,12 +95,12 @@ static void crdma_bond_create_bond(struct nfp_roce **roce,
 		crdma_err("Failed to create LAG (%d)\n", err);
 }
 
-static void crdma_bond_mod_bond(struct nfp_roce **roce,
+static void crdma_bond_mod_bond(struct crdma_device_node **node,
 				struct bond_group *group)
 {
 	int err;
 	u64 tx_bm = 0;
-	struct crdma_ibdev *dev = roce[0]->ibdev;
+	struct crdma_ibdev *dev = node[0]->crdma_dev;
 
 	if (!dev)
 		return;
@@ -90,10 +112,10 @@ static void crdma_bond_mod_bond(struct nfp_roce **roce,
 		crdma_err("Failed to modify LAG (%d)\n", err);
 }
 
-static void crdma_bond_destroy_bond(struct nfp_roce **roce)
+static void crdma_bond_destroy_bond(struct crdma_device_node **node)
 {
 	int err;
-	struct crdma_ibdev *dev = roce[0]->ibdev;
+	struct crdma_ibdev *dev = node[0]->crdma_dev;
 
 	if (!dev)
 		return;
@@ -108,38 +130,38 @@ static void crdma_do_bond(struct crdma_bond *bdev)
 	bool do_bond;
 	int active;
 	struct bond_group group = {0};
-	struct nfp_roce *roce[CRDMA_BOND_MAX_PORT] = {0};
+	struct crdma_device_node *node_list[CRDMA_BOND_MAX_PORT] = {0};
 
 	mutex_lock(&bdev->lock);
-	memcpy(roce, bdev->roce,
-	       sizeof(struct nfp_roce *) * CRDMA_BOND_MAX_PORT);
+	memcpy(node_list, bdev->node_list,
+	       sizeof(struct crdma_device_node *) * CRDMA_BOND_MAX_PORT);
 	active = bdev->active;
 	group = bdev->group;
 	mutex_unlock(&bdev->lock);
 
 	do_bond = group.is_bonded;
 	if (do_bond && !active) {
-		crdma_bond_unregister_slave_ibdev(roce);
+		crdma_bond_unregister_slave_ibdev(node_list);
 
 		mutex_lock(&bdev->lock);
 		bdev->active = 1;
 		mutex_unlock(&bdev->lock);
 
 		msleep(2000);
-		crdma_bond_register_bond_ibdev(roce);
-		crdma_bond_create_bond(roce, &group);
+		crdma_bond_register_bond_ibdev(node_list);
+		crdma_bond_create_bond(node_list, &group);
 	} else if (do_bond && active) {
-		crdma_bond_mod_bond(roce, &group);
+		crdma_bond_mod_bond(node_list, &group);
 	} else if (!do_bond && active) {
-		crdma_bond_destroy_bond(roce);
-		crdma_bond_unregister_bond_ibdev(roce);
+		crdma_bond_destroy_bond(node_list);
+		crdma_bond_unregister_bond_ibdev(node_list);
 
 		mutex_lock(&bdev->lock);
 		bdev->active = 0;
 		mutex_unlock(&bdev->lock);
 
 		msleep(5000);
-		crdma_bond_register_slave_ibdev(roce);
+		crdma_bond_register_slave_ibdev(node_list);
 	}
 }
 
@@ -157,9 +179,13 @@ static int crdma_bond_dev_get_netdev_idx(struct crdma_bond *bdev,
 {
 	int i;
 
-	for (i = 0; i < CRDMA_BOND_MAX_PORT; i++)
-		if (bdev->roce[i]->info->netdev == ndev)
+	for (i = 0; i < CRDMA_BOND_MAX_PORT; i++) {
+		if (!bdev->node_list[i])
+			continue;
+
+		if (bdev->node_list[i]->info->netdev == ndev)
 			return i;
+	}
 
 	return -ENOENT;
 }
@@ -398,61 +424,29 @@ static void crdma_bdev_get(struct crdma_bond *bdev)
 	kref_get(&bdev->ref);
 }
 
-static u32 crdma_gen_dev_pci(const struct nfp_roce *roce)
-{
-	struct pci_dev *pdev;
-
-	pdev = roce->info->pdev;
-	return (u32)((pci_domain_nr(pdev->bus) << 16) |
-		     (pdev->bus->number << 8) |
-		     PCI_SLOT(pdev->devfn));
-}
-
-static struct crdma_bond *crdma_bond_fetch_bdev(struct nfp_roce *roce)
-{
-	struct nfp_roce *tmp_roce;
-
-	list_for_each_entry(tmp_roce, &nfp_roce_list, list) {
-		if ((tmp_roce == roce) ||
-		    (crdma_gen_dev_pci(tmp_roce) != crdma_gen_dev_pci(roce)) ||
-		    !tmp_roce->bdev)
-			continue;
-
-		return tmp_roce->bdev;
-	}
-
-	return NULL;
-}
-
 static void crdma_bdev_add_ibdev(struct crdma_bond *bdev,
-				 struct nfp_roce *roce)
+				 struct crdma_device_node *node)
 {
-	unsigned int fn = PCI_FUNC(roce->info->pdev->devfn);
+	unsigned int fn = PCI_FUNC(node->info->pdev->devfn);
 
-	bdev->roce[fn] = roce;
-	roce->info->bdev = roce->bdev = bdev;
+	bdev->node_list[fn] = node;
+	node->bdev = bdev;
 }
 
 static void crdma_bdev_del_ibdev(struct crdma_bond *bdev,
-				 struct nfp_roce *roce)
+				 struct crdma_device_node *node)
 {
-	unsigned int fn = PCI_FUNC(roce->info->pdev->devfn);
+	unsigned int fn = PCI_FUNC(node->info->pdev->devfn);
 
-	bdev->roce[fn] = NULL;
-	roce->bdev = NULL;
-
-	if (roce->ibdev && roce->ibdev->nfp_info)
-		roce->ibdev->nfp_info->bdev = NULL;
-
-	if (roce->info)
-		roce->info->bdev = NULL;
+	bdev->node_list[fn] = NULL;
+	node->bdev = NULL;
 }
 
-int crdma_bond_add_ibdev(struct nfp_roce *roce)
+int crdma_bond_add_ibdev(struct crdma_device_node *node)
 {
-	struct crdma_bond *bdev = NULL;
+	struct crdma_bond *bdev;
 
-	bdev = crdma_bond_fetch_bdev(roce);
+	bdev = crdma_bond_fetch_bdev(node);
 	if (!bdev) {
 		bdev = crdma_bond_dev_alloc();
 		if (!bdev) {
@@ -465,22 +459,22 @@ int crdma_bond_add_ibdev(struct nfp_roce *roce)
 	}
 
 	mutex_lock(&bdev->lock);
-	crdma_bdev_add_ibdev(bdev, roce);
+	crdma_bdev_add_ibdev(bdev, node);
 	mutex_unlock(&bdev->lock);
 
 	return 0;
 }
 
-void crdma_bond_del_ibdev(struct nfp_roce *roce)
+void crdma_bond_del_ibdev(struct crdma_device_node *node)
 {
-	struct crdma_bond *bdev = NULL;
+	struct crdma_bond *bdev;
 
-	bdev = roce->bdev;
+	bdev = node->bdev;
 	if (!bdev)
 		return;
 
 	mutex_lock(&bdev->lock);
-	crdma_bdev_del_ibdev(bdev, roce);
+	crdma_bdev_del_ibdev(bdev, node);
 	mutex_unlock(&bdev->lock);
 
 	crdma_bdev_put(bdev);
@@ -488,12 +482,15 @@ void crdma_bond_del_ibdev(struct nfp_roce *roce)
 
 int crdma_bond_is_active(struct crdma_ibdev *crdma_dev)
 {
-	int active = 0;
-	struct crdma_bond *bdev = NULL;
+	int active;
+	struct crdma_bond *bdev;
 
-	bdev = crdma_dev->nfp_info->bdev;
+	if (!crdma_dev->dev_node)
+		return 0;
+
+	bdev = crdma_dev->dev_node->bdev;
 	if (!bdev)
-		return active;
+		return 0;
 
 	mutex_lock(&bdev->lock);
 	active = bdev->active;
@@ -505,11 +502,13 @@ int crdma_bond_is_active(struct crdma_ibdev *crdma_dev)
 struct net_device *crdma_bond_get_netdev(struct crdma_ibdev *crdma_dev)
 {
 	int i;
-	struct crdma_bond *bdev = NULL;
+	struct crdma_bond *bdev;
 	struct net_device *ndev = NULL;
 
-	bdev = crdma_dev->nfp_info->bdev;
+	if (!crdma_dev->dev_node)
+		goto out;
 
+	bdev = crdma_dev->dev_node->bdev;
 	if (!bdev)
 		goto out;
 
@@ -520,11 +519,11 @@ struct net_device *crdma_bond_get_netdev(struct crdma_ibdev *crdma_dev)
 	if (bdev->group.tx_type == NETDEV_LAG_TX_TYPE_ACTIVEBACKUP) {
 		for (i = 0; i < CRDMA_BOND_MAX_PORT; i++)
 			if (bdev->group.slave_state[i].tx_enabled)
-				ndev = bdev->roce[i]->info->netdev;
+				ndev = bdev->node_list[i]->info->netdev;
 		if (!ndev)
-			ndev = bdev->roce[0]->info->netdev;
+			ndev = bdev->node_list[0]->info->netdev;
 	} else {
-		ndev = bdev->roce[0]->info->netdev;
+		ndev = bdev->node_list[0]->info->netdev;
 	}
 
 	if (ndev)
