@@ -203,6 +203,10 @@
 #endif
 #endif
 
+#if !(VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0))
+#define VERSION__FLOWER_EGRESS
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 #define NAPI_POLL_WEIGHT	64
 #define NETIF_F_GSO_GRE		0
@@ -1502,7 +1506,7 @@ compat__flow_stats_update(struct flow_stats *flow_stats,
 struct flow_block_cb {};
 #endif
 
-#if VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0)
+#ifndef VERSION__FLOWER_EGRESS
 
 #if VER_NON_RHEL_GE(5, 9) || VER_RHEL_GE(8, 4)
 #define compat__nfp_flower_indr_setup_tc_cb nfp_flower_indr_setup_tc_cb
@@ -1549,7 +1553,7 @@ compat__flow_indr_block_cb_alloc(flow_setup_cb_t *cb, void *cb_ident,
 }
 #endif
 
-#endif /* VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0) */
+#endif /* !VERSION__FLOWER_EGRESS */
 
 #if (VER_NON_RHEL_OR_SLEL_GE(5, 3) && VER_NON_RHEL_OR_SLEL_LT(5, 8)) || \
     (VER_RHEL_GE(8, 2) && (VER_NON_BCL_LT(8, 4) || VER_BCL_LT(8, 3) || \

@@ -294,7 +294,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 #else
 				compat__flow_cls_offload *flow,
 #endif
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 				bool egress,
 #endif
 				enum nfp_flower_tun_type *tun_type,
@@ -504,7 +504,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 			if (err)
 				return err;
 
-#if VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0)
+#ifndef VERSION__FLOWER_EGRESS
 			/* Ensure the ingress netdev matches the expected
 			 * tun type.
 			 */
@@ -529,7 +529,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 			skb_flow_dissector_target(flow->dissector,
 						  FLOW_DISSECTOR_KEY_ENC_CONTROL,
 						  flow->key);
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 		if (!egress) {
 			NL_SET_ERR_MSG_MOD(extack, "unsupported offload: cannot offload tunnels without egress support");
 			return -EOPNOTSUPP;
@@ -584,7 +584,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 		if (err)
 			return err;
 
-#if VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0)
+#ifndef VERSION__FLOWER_EGRESS
 		/* Ensure the ingress netdev matches the expected tun type. */
 		if (!nfp_fl_netdev_is_tunnel_type(netdev, *tun_type)) {
 			NL_SET_ERR_MSG_MOD(extack, "unsupported offload: ingress netdev does not match the expected tunnel type");
@@ -800,7 +800,7 @@ nfp_flower_calculate_key_layers(struct nfp_app *app,
 }
 
 struct nfp_fl_payload *
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 nfp_flower_allocate_new(struct nfp_fl_key_ls *key_layer, bool egress)
 #else
 nfp_flower_allocate_new(struct nfp_fl_key_ls *key_layer)
@@ -829,7 +829,7 @@ nfp_flower_allocate_new(struct nfp_fl_key_ls *key_layer)
 	flow_pay->nfp_tun_ipv4_addr = 0;
 	flow_pay->nfp_tun_ipv6 = NULL;
 	flow_pay->meta.flags = 0;
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	flow_pay->ingress_offload = !egress;
 #endif
 	INIT_LIST_HEAD(&flow_pay->linked_flows);
@@ -1295,7 +1295,7 @@ int nfp_flower_merge_offloaded_flows(struct nfp_app *app,
 
 	merge_key_ls.key_size = sub_flow1->meta.key_len;
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	merge_flow = nfp_flower_allocate_new(&merge_key_ls, false);
 #else
 	merge_flow = nfp_flower_allocate_new(&merge_key_ls);
@@ -1597,7 +1597,7 @@ static bool offload_pre_check(struct flow_cls_offload *flow)
  *
  * Return: negative value on error, 0 if configured successfully.
  */
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 static int
 nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 		       compat__flow_cls_offload *flow, bool egress)
@@ -1616,7 +1616,7 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 	struct nfp_fl_payload *flow_pay;
 	struct nfp_fl_key_ls *key_layer;
 	struct nfp_port *port = NULL;
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	struct net_device *ingr_dev;
 #endif
 	int err;
@@ -1638,7 +1638,7 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 		return -EOPNOTSUPP;
 #endif
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	ingr_dev = egress ? NULL : netdev;
 	flow_pay = nfp_flower_search_fl_table(app, flow->cookie, ingr_dev);
 	if (flow_pay) {
@@ -1656,7 +1656,7 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 	if (!key_layer)
 		return -ENOMEM;
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	err = nfp_flower_calculate_key_layers(app, netdev, key_layer, flow,
 					      egress, &tun_type, extack);
 #else
@@ -1671,7 +1671,7 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 	if (err)
 		goto err_free_key_ls;
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	flow_pay = nfp_flower_allocate_new(key_layer, egress);
 #else
 	flow_pay = nfp_flower_allocate_new(key_layer);
@@ -1681,7 +1681,7 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 		goto err_free_key_ls;
 	}
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	flow_pay->ingress_dev = egress ? NULL : netdev;
 
 #endif
@@ -1709,7 +1709,7 @@ nfp_flower_add_offload(struct nfp_app *app, struct net_device *netdev,
 			goto err_destroy_flow;
 	}
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	err = nfp_compile_flow_metadata(app, flow->cookie, flow_pay,
 					flow_pay->ingress_dev, extack);
 #else
@@ -1878,7 +1878,7 @@ nfp_flower_del_linked_merge_flows(struct nfp_app *app,
  *
  * Return: negative value on error, 0 if removed successfully.
  */
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 static int
 nfp_flower_del_offload(struct nfp_app *app, struct net_device *netdev,
 		       struct tc_cls_flower_offload *flow, bool egress)
@@ -1895,7 +1895,7 @@ nfp_flower_del_offload(struct nfp_app *app, struct net_device *netdev,
 	struct netlink_ext_ack *extack = NULL;
 	struct nfp_fl_payload *nfp_flow;
 	struct nfp_port *port = NULL;
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	struct net_device *ingr_dev;
 #endif
 	int err;
@@ -1916,14 +1916,14 @@ nfp_flower_del_offload(struct nfp_app *app, struct net_device *netdev,
 	}
 #endif
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	ingr_dev = egress ? NULL : netdev;
 	nfp_flow = nfp_flower_search_fl_table(app, flow->cookie, ingr_dev);
 #else
 	nfp_flow = nfp_flower_search_fl_table(app, flow->cookie, netdev);
 #endif
 	if (!nfp_flow) {
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 		if (egress)
 			return 0;
 #endif
@@ -2040,7 +2040,7 @@ nfp_flower_update_merge_stats(struct nfp_app *app,
  *
  * Return: negative value on error, 0 if stats populated successfully.
  */
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 static int
 nfp_flower_get_stats(struct nfp_app *app, struct net_device *netdev,
 		     struct tc_cls_flower_offload *flow, bool egress)
@@ -2056,7 +2056,7 @@ nfp_flower_get_stats(struct nfp_app *app, struct net_device *netdev,
 #endif
 	struct netlink_ext_ack *extack = NULL;
 	struct nfp_fl_payload *nfp_flow;
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	struct net_device *ingr_dev;
 #endif
 	u32 ctx_id;
@@ -2072,7 +2072,7 @@ nfp_flower_get_stats(struct nfp_app *app, struct net_device *netdev,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 16, 0)
 	extack = flow->common.extack;
 #endif
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	ingr_dev = egress ? NULL : netdev;
 	nfp_flow = nfp_flower_search_fl_table(app, flow->cookie, ingr_dev);
 #else
@@ -2083,7 +2083,7 @@ nfp_flower_get_stats(struct nfp_app *app, struct net_device *netdev,
 		return -EINVAL;
 	}
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 	if (nfp_flow->ingress_offload && egress)
 		return 0;
 
@@ -2113,7 +2113,7 @@ nfp_flower_get_stats(struct nfp_app *app, struct net_device *netdev,
 	return 0;
 }
 
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 static int
 nfp_flower_repr_offload(struct nfp_app *app, struct net_device *netdev,
 			struct tc_cls_flower_offload *flower, bool egress)
@@ -2133,21 +2133,21 @@ nfp_flower_repr_offload(struct nfp_app *app, struct net_device *netdev,
 	mutex_lock(&priv->nfp_fl_lock);
 	switch (flower->command) {
 	case FLOW_CLS_REPLACE:
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 		ret = nfp_flower_add_offload(app, netdev, flower, egress);
 #else
 		ret = nfp_flower_add_offload(app, netdev, flower);
 #endif
 		break;
 	case FLOW_CLS_DESTROY:
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 		ret = nfp_flower_del_offload(app, netdev, flower, egress);
 #else
 		ret = nfp_flower_del_offload(app, netdev, flower);
 #endif
 		break;
 	case FLOW_CLS_STATS:
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 		ret = nfp_flower_get_stats(app, netdev, flower, egress);
 #else
 		ret = nfp_flower_get_stats(app, netdev, flower);
@@ -2163,7 +2163,7 @@ nfp_flower_repr_offload(struct nfp_app *app, struct net_device *netdev,
 }
 
 #if VER_NON_SLEL_GE(4, 15) || SLEL_LOCALVER_GE(4, 12, 14, 120, 0)
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 int nfp_flower_setup_tc_egress_cb(enum tc_setup_type type, void *type_data,
 				  void *cb_priv)
 {
@@ -2181,7 +2181,7 @@ int nfp_flower_setup_tc_egress_cb(enum tc_setup_type type, void *type_data,
 	}
 }
 
-#endif /* VER_NON_RHEL_LT(5, 0) */
+#endif /* VERSION__FLOWER_EGRESS */
 static int nfp_flower_setup_tc_block_cb(enum tc_setup_type type,
 					void *type_data, void *cb_priv)
 {
@@ -2199,7 +2199,7 @@ static int nfp_flower_setup_tc_block_cb(enum tc_setup_type type,
 
 	switch (type) {
 	case TC_SETUP_CLSFLOWER:
-#if VER_NON_RHEL_LT(5, 0)
+#ifdef VERSION__FLOWER_EGRESS
 		return nfp_flower_repr_offload(repr->app, repr->netdev,
 					       type_data, false);
 #else
@@ -2214,7 +2214,7 @@ static int nfp_flower_setup_tc_block_cb(enum tc_setup_type type,
 	}
 }
 
-#if VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0)
+#ifndef VERSION__FLOWER_EGRESS
 static LIST_HEAD(nfp_block_cb_list);
 #endif
 
@@ -2324,7 +2324,7 @@ int nfp_flower_setup_tc(struct nfp_app *app, struct net_device *netdev,
 }
 #endif
 
-#if VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0)
+#ifndef VERSION__FLOWER_EGRESS
 struct nfp_flower_indr_block_cb_priv {
 	struct net_device *netdev;
 	struct nfp_app *app;
@@ -2540,4 +2540,4 @@ int nfp_flower_reg_indir_block_handler(struct nfp_app *app,
 	return NOTIFY_OK;
 }
 #endif /* VER_NON_RHEL_LT(5, 8) || (VER_RHEL_GE(8, 1) && VER_RHEL_LT(8, 3)) */
-#endif /* VER_NON_RHEL_GE(5, 0) || VER_RHEL_GE(8, 0) */
+#endif /* !VERSION__FLOWER_EGRESS */
