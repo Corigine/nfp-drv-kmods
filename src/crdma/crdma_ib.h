@@ -16,10 +16,12 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_umem.h>
 
-#include "nfpcore/nfp_roce.h"
 #include "crdma_abi.h"
 #include "crdma_ucif.h"
 #include "crdma_util.h"
+
+struct crdma_ibdev;
+struct crdma_device_node;
 
 #define CRDMA_IB_HCA_DRV_NAME		"crdma"
 #define CRDMA_IB_NODE_DESC		"Corigine NFP RoCEv2 HCA"
@@ -337,7 +339,8 @@ struct crdma_ibdev {
 	struct crdma_cq		**cq_table;
 
 	/* NFP allocated resources and microcode capabilities/attributes */
-	struct nfp_roce_info	*nfp_info;
+	struct crdma_res_info	*info;
+	struct crdma_device_node *dev_node;
 	struct crdma_hca_cap	cap;
 
 	/*
@@ -385,8 +388,6 @@ struct crdma_ibdev {
 	struct crdma_uar	priv_eq_uar;	/* Kernel EQ doorbells */
 	struct crdma_uar	priv_uar;	/* Kernel SQ/CQ UAR */
 	spinlock_t		priv_uar_lock;	/* For CQ on 32-bit systems */
-
-	int			numa_node;
 
 	/* Linkage back to net_device notification chain */
 	struct notifier_block	nb_netdev;
@@ -508,15 +509,15 @@ static inline struct crdma_ah *to_crdma_ah(struct ib_ah *ib_ah)
 	pr_debug("%s:%d:(pid %d): " format,			\
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 
-#define crdma_dev_err(crdma_dev, format, ...)				\
-	dev_err(&(crdma_dev)->nfp_info->pdev->dev, "%s:%d:(pid %d): " format, \
+#define crdma_dev_err(crdma_dev, format, ...)					\
+	dev_err(&(crdma_dev)->info->pdev->dev, "%s:%d:(pid %d): " format,	\
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 
-#define crdma_dev_warn(crdma_dev, format, ...)				\
-	dev_warn(&(crdma_dev)->nfp_info->pdev->dev, "%s:%d:(pid %d): " format, \
+#define crdma_dev_warn(crdma_dev, format, ...)					\
+	dev_warn(&(crdma_dev)->info->pdev->dev, "%s:%d:(pid %d): " format,	\
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 
-#define crdma_dev_info(crdma_dev, format, ...)				\
-	dev_info(&(crdma_dev)->nfp_info->pdev->dev, "%s:%d:(pid %d): " format, \
+#define crdma_dev_info(crdma_dev, format, ...)					\
+	dev_info(&(crdma_dev)->info->pdev->dev, "%s:%d:(pid %d): " format,	\
 		__func__, __LINE__, current->pid, ##__VA_ARGS__)
 #endif /* CRDMA_IB_H */

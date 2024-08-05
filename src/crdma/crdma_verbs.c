@@ -16,7 +16,10 @@
 #include <rdma/ib_cache.h>
 #include <rdma/uverbs_ioctl.h>
 
+#include "nfpcore/nfp_roce.h"
+
 #include "crdma_ib.h"
+#include "crdma_hw.h"
 #include "crdma_abi.h"
 #include "crdma_verbs.h"
 #include "crdma_bond.h"
@@ -498,7 +501,7 @@ static int crdma_query_port(struct ib_device *ibdev, u8 port_num,
 		return -EINVAL;
 	}
 
-	netdev = dev->nfp_info->netdev;
+	netdev = dev->info->netdev;
 	dev_hold(netdev);
 
 	if (crdma_bond_is_active(dev)) {
@@ -579,7 +582,7 @@ struct net_device *crdma_get_netdev(struct ib_device *ibdev, u8 port_num)
 		goto out;
 
 	rcu_read_lock();
-	netdev = crdma_dev->nfp_info->netdev;
+	netdev = crdma_dev->info->netdev;
 	if (netdev)
 		dev_hold(netdev);
 
@@ -2933,9 +2936,9 @@ static int crdma_create_cq(struct ib_cq *cq,
 		err = -ENOMEM;
 		goto free_queue_mem;
 	}
-	ccq->ci_mbox_paddr = dma_map_single(&dev->nfp_info->pdev->dev,
+	ccq->ci_mbox_paddr = dma_map_single(&dev->info->pdev->dev,
 			     ccq->ci_mbox, PAGE_SIZE, DMA_BIDIRECTIONAL);
-	if (dma_mapping_error(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr)) {
+	if (dma_mapping_error(&dev->info->pdev->dev, ccq->ci_mbox_paddr)) {
 		crdma_warn("Failed to map DMA address\n");
 		err = -ENOMEM;
 		goto free_ci_mbox;
@@ -3010,7 +3013,7 @@ cq_destroy:
 	crdma_cq_destroy_cmd(dev, ccq);
 cmd_fail:
 	dev->cq_table[ccq->cqn] = NULL;
-	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+	dma_unmap_single(&dev->info->pdev->dev, ccq->ci_mbox_paddr,
 			PAGE_SIZE, DMA_BIDIRECTIONAL);
 free_ci_mbox:
 	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
@@ -3093,9 +3096,9 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev,
 		err = -ENOMEM;
 		goto free_queue_mem;
 	}
-	ccq->ci_mbox_paddr = dma_map_single(&dev->nfp_info->pdev->dev,
+	ccq->ci_mbox_paddr = dma_map_single(&dev->info->pdev->dev,
 		ccq->ci_mbox, PAGE_SIZE, DMA_TO_DEVICE);
-	if (dma_mapping_error(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr)) {
+	if (dma_mapping_error(&dev->info->pdev->dev, ccq->ci_mbox_paddr)) {
 		crdma_warn("Failed to map DMA address\n");
 		err = -ENOMEM;
 		goto free_ci_mbox;
@@ -3169,7 +3172,7 @@ cq_destroy:
 	crdma_cq_destroy_cmd(dev, ccq);
 cmd_fail:
 	dev->cq_table[ccq->cqn] = NULL;
-	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+	dma_unmap_single(&dev->info->pdev->dev, ccq->ci_mbox_paddr,
 			PAGE_SIZE, DMA_BIDIRECTIONAL);
 free_ci_mbox:
 	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
@@ -3254,9 +3257,9 @@ static struct ib_cq *crdma_create_cq(struct ib_device *ibdev,
 		err = -ENOMEM;
 		goto free_queue_mem;
 	}
-	ccq->ci_mbox_paddr = dma_map_single(&dev->nfp_info->pdev->dev,
+	ccq->ci_mbox_paddr = dma_map_single(&dev->info->pdev->dev,
 			     ccq->ci_mbox, PAGE_SIZE, DMA_BIDIRECTIONAL);
-	if (dma_mapping_error(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr)) {
+	if (dma_mapping_error(&dev->info->pdev->dev, ccq->ci_mbox_paddr)) {
 		crdma_warn("Failed to map DMA address\n");
 		err = -ENOMEM;
 		goto free_ci_mbox;
@@ -3330,7 +3333,7 @@ cq_destroy:
 	crdma_cq_destroy_cmd(dev, ccq);
 cmd_fail:
 	dev->cq_table[ccq->cqn] = NULL;
-	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+	dma_unmap_single(&dev->info->pdev->dev, ccq->ci_mbox_paddr,
 			PAGE_SIZE, DMA_BIDIRECTIONAL);
 free_ci_mbox:
 	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
@@ -3386,7 +3389,7 @@ static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
 		complete(&ccq->free);
 	wait_for_completion(&ccq->free);
 
-	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+	dma_unmap_single(&dev->info->pdev->dev, ccq->ci_mbox_paddr,
 			PAGE_SIZE, DMA_BIDIRECTIONAL);
 	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
 	crdma_free_hw_queue(dev, ccq->mem);
@@ -3421,7 +3424,7 @@ static void crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
 		complete(&ccq->free);
 	wait_for_completion(&ccq->free);
 
-	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+	dma_unmap_single(&dev->info->pdev->dev, ccq->ci_mbox_paddr,
 			PAGE_SIZE, DMA_BIDIRECTIONAL);
 	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
 	crdma_free_hw_queue(dev, ccq->mem);
@@ -3455,7 +3458,7 @@ static int crdma_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
 		complete(&ccq->free);
 	wait_for_completion(&ccq->free);
 
-	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+	dma_unmap_single(&dev->info->pdev->dev, ccq->ci_mbox_paddr,
 			PAGE_SIZE, DMA_BIDIRECTIONAL);
 	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
 	crdma_free_hw_queue(dev, ccq->mem);
@@ -3493,7 +3496,7 @@ static int crdma_destroy_cq(struct ib_cq *cq)
 		complete(&ccq->free);
 	wait_for_completion(&ccq->free);
 
-	dma_unmap_single(&dev->nfp_info->pdev->dev, ccq->ci_mbox_paddr,
+	dma_unmap_single(&dev->info->pdev->dev, ccq->ci_mbox_paddr,
 			PAGE_SIZE, DMA_BIDIRECTIONAL);
 	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
 	crdma_free_hw_queue(dev, ccq->mem);
@@ -3552,7 +3555,7 @@ static int crdma_resize_cq(struct ib_cq *ibcq, int num_cqe,
 	ret = crdma_cq_resize_cmd(dev, ccq);
 	if (ret) {
 		crdma_warn("Microcode resize CQ command failed\n");
-		dma_unmap_single(&dev->nfp_info->pdev->dev,
+		dma_unmap_single(&dev->info->pdev->dev,
 				ccq->ci_mbox_paddr,
 				PAGE_SIZE, DMA_BIDIRECTIONAL);
 		free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
@@ -4104,7 +4107,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	memcpy(dev->ibdev.node_desc, CRDMA_IB_NODE_DESC,
 			sizeof(CRDMA_IB_NODE_DESC));
 	addrconf_addr_eui48((u8 *)&dev->ibdev.node_guid,
-				dev->nfp_info->netdev->dev_addr);
+				dev->info->netdev->dev_addr);
 	dev->ibdev.phys_port_cnt = dev->cap.n_ports;
 
 	/* If more than one EQ, then EQ 0 is reserved for async events */
@@ -4146,7 +4149,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 		(1ull << IB_USER_VERBS_CMD_DESTROY_AH)		|
 		(1ull << IB_USER_VERBS_CMD_DESTROY_SRQ);
 #endif
-	dev->ibdev.dev.parent			= &dev->nfp_info->pdev->dev;
+	dev->ibdev.dev.parent			= &dev->info->pdev->dev;
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 0) || VER_RHEL_GE(8, 1) || VER_KYL_GE(10, 3))
 	ib_set_device_ops(&dev->ibdev, &crdma_dev_ops);
@@ -4213,7 +4216,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 10) || VER_RHEL_GE(8, 5) || VER_KYL_GE(10, 4))
 	ret = ib_register_device(&dev->ibdev, name,
-		&dev->nfp_info->pdev->dev);
+		&dev->info->pdev->dev);
 #elif (VER_NON_RHEL_OR_KYL_GE(5, 1) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
 	ret = ib_register_device(&dev->ibdev, name);
 #elif (VER_NON_KYL_GE(4, 20) || (VER_RHEL_GE(7, 7) && !(VER_RHEL_EQ(8, 0))) || COMPAT_KYLINUX_V10SP2)

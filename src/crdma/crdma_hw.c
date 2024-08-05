@@ -10,6 +10,8 @@
 #include "crdma_ib.h"
 #include "crdma_hw.h"
 
+struct crdma_ibdev;
+
 int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 		u64 output_param, u32 input_mod, u8 opcode, u8 opcode_mod,
 		u16 token, bool event)
@@ -21,7 +23,7 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 	if (!reg)
 		return -EIO;
 
-	if (pci_channel_offline(dev->nfp_info->pdev))
+	if (pci_channel_offline(dev->info->pdev))
 		return -EIO;
 
 	/*
@@ -33,7 +35,7 @@ int __crdma_write_cmdif(struct crdma_ibdev *dev, u64 input_param,
 	while (crdma_cmdif_busy(dev)) {
 		cond_resched();
 
-		if (pci_channel_offline(dev->nfp_info->pdev))
+		if (pci_channel_offline(dev->info->pdev))
 			return -EIO;
 
 		if (time_after_eq(jiffies, end_time)) {
@@ -82,7 +84,7 @@ bool crdma_cmdif_busy(struct crdma_ibdev *dev)
 	struct cmdif_reg __iomem *reg = dev->cmdif;
 	u32 status;
 
-	if (!reg || pci_channel_offline(dev->nfp_info->pdev))
+	if (!reg || pci_channel_offline(dev->info->pdev))
 		return -EIO;
 
 	status = le32_to_cpu(__raw_readl(&reg->cmd_status));
@@ -95,7 +97,7 @@ int crdma_read_toggle(struct crdma_ibdev *dev)
 	struct cmdif_reg __iomem *reg = dev->cmdif;
 	u32 status;
 
-	if (!reg || pci_channel_offline(dev->nfp_info->pdev))
+	if (!reg || pci_channel_offline(dev->info->pdev))
 		return -EIO;
 
 	status = le32_to_cpu(__raw_readl(&reg->cmd_status));
@@ -113,7 +115,7 @@ int __crdma_read_cmdif_results(struct crdma_ibdev *dev,
 	if (!reg)
 		return -EIO;
 
-	if (pci_channel_offline(dev->nfp_info->pdev))
+	if (pci_channel_offline(dev->info->pdev))
 		return -EIO;
 
 	if (output_param) {
@@ -131,8 +133,8 @@ int __crdma_read_cmdif_results(struct crdma_ibdev *dev,
 
 int crdma_acquire_pci_resources(struct crdma_ibdev *dev)
 {
-	dev->cmdif = dev->nfp_info->cmdif;
-	dev->db_paddr = dev->nfp_info->db_base;
+	dev->cmdif = dev->info->cmdif;
+	dev->db_paddr = dev->info->db_base;
 	return 0;
 }
 

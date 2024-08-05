@@ -24,17 +24,15 @@ struct bond_group {
 	unsigned int has_inactive:1;
 };
 
-struct nfp_roce;
-
 /**
  * struct crdma_bond - crdma data for link aggregation
  * Each NIC maintains one of this data.
- * @netdev_nb: Work queue for do configs to roce bond
+ * @netdev_nb: Work queue for do configs to crdma bond
  * @active: Indicate whether bond is activated
- * @roce: RoCE devices belongs to this crdma_bond
+ * @node_list: crdma devices node list belongs to this crdma_bond
  * @group: Track bond group's slaves state
- * @bond_work: Delay Work for do configs to roce bond
- * @wq: Work queue for do configs to roce bond
+ * @bond_work: Delay Work for do configs to crdma bond
+ * @wq: Work queue for do configs to crdma bond
  * @ref: Ref cnt of this struct
  * @lock: Lock to protect crdma_bond
  */
@@ -42,7 +40,7 @@ struct crdma_bond {
 	struct notifier_block netdev_nb;
 
 	int active;
-	struct nfp_roce *roce[CRDMA_BOND_MAX_PORT];
+	struct crdma_device_node *node_list[CRDMA_BOND_MAX_PORT];
 	struct bond_group group;
 
 	struct delayed_work bond_work;
@@ -51,9 +49,11 @@ struct crdma_bond {
 	struct mutex lock;
 };
 
-int crdma_bond_add_ibdev(struct nfp_roce *roce);
-void crdma_bond_del_ibdev(struct nfp_roce *roce);
+int crdma_bond_add_ibdev(struct crdma_device_node *node);
+void crdma_bond_del_ibdev(struct crdma_device_node *node);
 int crdma_bond_is_active(struct crdma_ibdev *crdma_dev);
 struct net_device *crdma_bond_get_netdev(struct crdma_ibdev *crdma_dev);
+
+struct crdma_bond *crdma_bond_fetch_bdev(struct crdma_device_node *node);
 
 #endif /* CRDMA_BOND_H */

@@ -985,7 +985,7 @@ void nfp_net_pci_remove(struct nfp_pf *pf)
 	list_for_each_entry_safe(nn, next, &pf->vnics, vnic_list) {
 		if (!nfp_net_is_data_vnic(nn))
 			continue;
-		nfp_net_remove_roce(nn);
+		nfp_net_remove_roce(pf, nn);
 		nfp_net_pf_clean_vnic(pf, nn);
 		nfp_net_pf_free_vnic(pf, nn);
 	}

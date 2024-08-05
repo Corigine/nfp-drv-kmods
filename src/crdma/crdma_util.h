@@ -6,6 +6,8 @@
 
 #include <linux/compiler.h>
 
+struct crdma_res_info;
+
 /*
  * crdma_util.h - General utility functions used throughout the driver.
  */
@@ -111,8 +113,6 @@ struct crdma_mem {
 	int			num_sg;		/* Valid scatterlist entries */
 	struct scatterlist	alloc[CRDMA_MEM_MAX_ALLOCS];
 };
-
-struct crdma_ibdev;
 
 /**
  * Allocate DMA cache non-coherent host memory for the HCA.
@@ -260,5 +260,9 @@ bool crdma_check_loopback_mode(struct crdma_ibdev *dev,
 int crdma_set_loopback_mode(struct crdma_ibdev *dev,
 			    struct crdma_qp *qp,
 			    struct rdma_ah_attr *ah_attr);
+
+void crdma_remove_dev(struct crdma_ibdev *dev);
+
+struct crdma_ibdev *crdma_add_dev(struct crdma_res_info *info);
 
 #endif /* CRDMA_UTIL_H */
