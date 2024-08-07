@@ -1968,10 +1968,10 @@ int crdma_create_srq(struct ib_srq *ib_srq, struct ib_srq_init_attr *attrs,
 		goto failed;
 	}
 
-	if (attrs->attr.max_wr > dev->cap.ib.max_srq) {
+	if (attrs->attr.max_wr > dev->cap.ib.max_srq_wr) {
 		err = -E2BIG;
 		crdma_warn("Required number of WR %d exceeds max SRQ %d\n",
-			attrs->attr.max_wr, dev->cap.ib.max_srq);
+			attrs->attr.max_wr, dev->cap.ib.max_srq_wr);
 		goto failed;
 	}
 
@@ -2085,10 +2085,10 @@ struct ib_srq *crdma_create_srq(struct ib_pd *pd,
 		goto failed;
 	}
 
-	if (attrs->attr.max_wr > dev->cap.ib.max_srq) {
+	if (attrs->attr.max_wr > dev->cap.ib.max_srq_wr) {
 		err = -E2BIG;
 		crdma_warn("Required number of WR %d exceeds max SRQ %d\n",
-			attrs->attr.max_wr, dev->cap.ib.max_srq);
+			attrs->attr.max_wr, dev->cap.ib.max_srq_wr);
 		goto failed;
 	}
 
