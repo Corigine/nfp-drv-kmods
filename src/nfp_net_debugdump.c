@@ -44,6 +44,8 @@ struct nfp_dump_tl {
 	);
 	char data[];
 };
+static_assert(offsetof(struct nfp_dump_tl, data) == sizeof(struct nfp_dump_tl_hdr),
+	     "struct member likely outside of struct_group_tagged()");
 #else
 	__be32 type;
 	__be32 length;	/* chunk length to follow, aligned to 8 bytes */
