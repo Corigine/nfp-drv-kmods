@@ -461,6 +461,13 @@ static int crdma_query_device(struct ib_device *ibdev,
 	if (dev_attr->max_srq_wr)
 		dev_attr->max_srq_wr -= CRDMA_WQ_WQE_SPARES;
 
+	/*
+	 * According to the design, one space is reserved.
+	 * Please refer to crdma_create_cq for details on usage.
+	 */
+	if (dev_attr->max_cqe)
+		dev_attr->max_cqe--;
+
 	return 0;
 }
 
