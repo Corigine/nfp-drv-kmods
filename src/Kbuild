@@ -282,6 +282,9 @@ $(eval $(call add_compat_flag,$(srctree)/include/linux/ethtool.h, "struct kernel
 # Check for devlink_compat_phys_port_name_get
 $(eval $(call add_compat_flag,$(srctree)/include/net/devlink.h,devlink_compat_phys_port_name_get,COMPAT__HAVE_DEVLINK_PHYS_PORT_NAME))
 
+# Check for __netdev_tx_sent_queue
+$(eval $(call add_compat_flag,$(srctree)/include/linux/netdevice.h,"__netdev_tx_sent_queue",COMPAT__NETDEV_TX_SENT_QUEUE))
+
 utsrelease_h_path :=$(srctree)/include/generated/utsrelease.h
 # Check for BC Linux
 $(eval $(call add_compat_flag,$(utsrelease_h_path),bclinux,COMPAT_BCLINUX=1))
