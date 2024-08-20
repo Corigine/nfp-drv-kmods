@@ -423,9 +423,9 @@ def scmd(command, fail=True):
     ret = process.returncode
     msg = f'CMD: {command}\n'
     msg += f'RET: {ret}\n'
+    msg += f'STDERR:\n{stderrdata.decode()}\n'
     if ret != 0 and fail is True:
         msg += f'STDOUT:\n{stdoutdata.decode()}\n'
-        msg += f'STDERR:\n{stderrdata.decode()}\n'
         if CONFIG_DEBUG_SCMD:
             print(msg)
         exit(1)
