@@ -538,6 +538,29 @@ static void nfp_sriov_attr_remove(struct device *dev)
 #endif /* CONFIG_PCI_IOV */
 #endif /* Linux kernel version */
 
+static ssize_t show_vpd(struct device *dev, struct device_attribute *attr,
+			char *buf)
+{
+	struct nfp_pf *pf = pci_get_drvdata(to_pci_dev(dev));
+
+	return sprintf(buf, "PN: %s\nSN: %s%s%s\n",
+		       nfp_hwinfo_lookup(pf->hwinfo, "pn"),
+		       nfp_hwinfo_lookup(pf->hwinfo, "assembly.vendor"),
+		       nfp_hwinfo_lookup(pf->hwinfo, "assembly.partno"),
+		       nfp_hwinfo_lookup(pf->hwinfo, "assembly.serial"));
+}
+
+static DEVICE_ATTR(vpd, S_IRUGO, show_vpd, NULL);
+static int nfp_vpd_attr_add(struct device *dev)
+{
+	return device_create_file(dev, &dev_attr_vpd);
+}
+
+static void nfp_vpd_attr_remove(struct device *dev)
+{
+	device_remove_file(dev, &dev_attr_vpd);
+}
+
 int nfp_flash_update_common(struct nfp_pf *pf,
 #if VER_NON_RHEL_GE(5, 11) || VER_RHEL_GE(8, 5)
 			    const struct firmware *fw,
@@ -1267,10 +1290,14 @@ static int nfp_pci_probe(struct pci_dev *pdev,
 	if (err && nfp_pf_netdev)
 		goto err_hwinfo_free;
 
+	err = nfp_vpd_attr_add(&pdev->dev);
+	if (err < 0)
+		goto err_hwinfo_free;
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)) && defined(CONFIG_PCI_IOV)
 	err = nfp_sriov_attr_add(&pdev->dev);
 	if (err < 0)
-		goto err_hwinfo_free;
+		goto err_vpd_remove;
 #endif
 	err = nfp_nsp_init(pdev, pf);
 	if (err)
@@ -1354,7 +1381,9 @@ err_fw_unload:
 err_sriov_remove:
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)) && defined(CONFIG_PCI_IOV)
 	nfp_sriov_attr_remove(&pdev->dev);
+err_vpd_remove:
 #endif
+	nfp_vpd_attr_remove(&pdev->dev);
 err_hwinfo_free:
 	kfree(pf->hwinfo);
 err_cpp_free:
@@ -1394,6 +1423,8 @@ static void __nfp_pci_shutdown(struct pci_dev *pdev, bool unload_fw)
 #endif
 	nfp_pcie_sriov_disable(pdev);
 	compat_pci_sriov_reset_totalvfs(pf->pdev);
+
+	nfp_vpd_attr_remove(&pdev->dev);
 
 	if (nfp_pf_netdev && pf->app)
 		nfp_net_pci_remove(pf);
