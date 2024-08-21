@@ -4539,8 +4539,16 @@ void *nfp_bpf_relo_for_vnic(struct nfp_prog *nfp_prog, struct nfp_bpf_vnic *bv)
 	u64 *prog;
 	int err;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
 	prog = kmemdup(nfp_prog->prog, nfp_prog->prog_len * sizeof(u64),
 		       GFP_KERNEL);
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+	prog = kmemdup_array(nfp_prog->prog, sizeof(u64), nfp_prog->prog_len,
+			     GFP_KERNEL);
+#else
+	prog = kmemdup_array(nfp_prog->prog, nfp_prog->prog_len, sizeof(u64),
+			     GFP_KERNEL);
+#endif
 	if (!prog)
 		return ERR_PTR(-ENOMEM);
 
