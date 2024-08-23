@@ -132,6 +132,12 @@ static void crdma_do_bond(struct crdma_bond *bdev)
 	struct bond_group group = {0};
 	struct crdma_device_node *node_list[CRDMA_BOND_MAX_PORT] = {0};
 
+	/* crdma_do_bond will sleep and be scheduled out, it is not allowed to
+	 * rmmod crdma module when crdma_do_bond is not commpleted, we use mutex
+	 * to avoid this race.
+	 */
+	mutex_lock(&crdma_global_mutex);
+
 	mutex_lock(&bdev->lock);
 	memcpy(node_list, bdev->node_list,
 	       sizeof(struct crdma_device_node *) * CRDMA_BOND_MAX_PORT);
@@ -163,6 +169,8 @@ static void crdma_do_bond(struct crdma_bond *bdev)
 		msleep(5000);
 		crdma_bond_register_slave_ibdev(node_list);
 	}
+
+	mutex_unlock(&crdma_global_mutex);
 }
 
 static void crdma_do_bond_work(struct work_struct *work)

@@ -34,6 +34,8 @@ MODULE_VERSION(DRV_VERSION);
 
 static DEFINE_IDR(crdma_dev_id);
 
+DEFINE_MUTEX(crdma_global_mutex);
+
 #ifdef KERNEL_SUPPORT_AUXI
 LIST_HEAD(rdma_device_list);
 static DEFINE_MUTEX(rdma_device_list_mutex);
@@ -1215,12 +1217,14 @@ static int __init crdma_init(void)
 
 static void __exit crdma_cleanup(void)
 {
+	mutex_lock(&crdma_global_mutex);
 #ifdef KERNEL_SUPPORT_AUXI
 	crdma_auxi_client_exit_module();
 #else
 	/* Use callback way */
 	nfp_unregister_roce_driver(&crdma_drv);
 #endif
+	mutex_unlock(&crdma_global_mutex);
 }
 
 module_init(crdma_init);

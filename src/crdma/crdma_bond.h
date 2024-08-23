@@ -11,6 +11,8 @@
 
 #include "crdma_ib.h"
 
+extern struct mutex crdma_global_mutex;
+
 #define CRDMA_BOND_MAX_PORT	2
 
 /*
