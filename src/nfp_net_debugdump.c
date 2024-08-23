@@ -42,12 +42,14 @@ struct nfp_dump_tl {
 		__be32 type;
 		__be32 length;	/* chunk length to follow, aligned to 8 bytes */
 	);
+	char data[];
+};
 #else
 	__be32 type;
 	__be32 length;	/* chunk length to follow, aligned to 8 bytes */
-#endif
 	char data[];
 };
+#endif
 
 /* NFP CPP parameters */
 struct nfp_dumpspec_cpp_isl_id {
