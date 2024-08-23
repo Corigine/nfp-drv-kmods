@@ -82,6 +82,13 @@ bool high_perf_read_enable = false;
 module_param(high_perf_read_enable, bool, 0444);
 MODULE_PARM_DESC(high_perf_read_enable, "During bring-up, allows high performance of bidirectional READ(default: false)");
 
+/*
+ * Counter for RoCEv2.
+ */
+bool counter_enable = true;
+module_param(counter_enable, bool, 0444);
+MODULE_PARM_DESC(counter_enable, "During bring-up, allows selective use of setting counter enable (default: true)");
+
 /**
  * Load device capabilities/attributes.
  *
@@ -587,6 +594,17 @@ static int crdma_init_high_perf_read(struct crdma_ibdev *dev)
 	return crdma_high_perf_read_enable_cmd(dev, high_perf_read_enable);
 }
 
+static ssize_t counter_enable_show(struct device *device,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "0x%x\n", counter_enable);
+}
+
+static int crdma_init_counter(struct crdma_ibdev *dev)
+{
+	return crdma_counter_enable_cmd(dev, counter_enable);
+}
+
 /**
  * Debug helper to initiate commands through sysfs
  *
@@ -676,6 +694,7 @@ static DEVICE_ATTR_RO(dcqcn_enable);
 static DEVICE_ATTR_RO(retrans_ooo_enable);
 static DEVICE_ATTR_RO(retrans_timeout_enable);
 static DEVICE_ATTR_RO(high_perf_read_enable);
+static DEVICE_ATTR_RO(counter_enable);
 
 static struct device_attribute *crdma_class_attrs[] = {
 	&dev_attr_hw_rev,
@@ -688,6 +707,7 @@ static struct device_attribute *crdma_class_attrs[] = {
 	&dev_attr_retrans_ooo_enable,
 	&dev_attr_retrans_timeout_enable,
 	&dev_attr_high_perf_read_enable,
+	&dev_attr_counter_enable,
 };
 
 static int crdma_init_maps(struct crdma_ibdev *dev)
@@ -739,6 +759,10 @@ static int crdma_init_maps(struct crdma_ibdev *dev)
 		crdma_dev_warn(dev, "Unable to allocate SRQ map\n");
 		goto cleanup_qp_mem;
 	}
+
+#if (VER_NON_RHEL_OR_KYL_GE(5, 3) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
+	xa_init_flags(&dev->cntr_xa, XA_FLAGS_ALLOC);
+#endif
 
 	INIT_RADIX_TREE(&dev->qp_tree, GFP_ATOMIC);
 
@@ -991,6 +1015,9 @@ struct crdma_ibdev *crdma_add_dev(struct crdma_res_info *info)
 		goto err_unregister_verbs;
 
 	if (crdma_init_high_perf_read(dev))
+		goto err_unregister_verbs;
+
+	if (crdma_init_counter(dev))
 		goto err_unregister_verbs;
 
 	for (i = 0; i < ARRAY_SIZE(crdma_class_attrs); i++)

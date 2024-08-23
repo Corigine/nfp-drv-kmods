@@ -32,6 +32,27 @@ struct nfp_net;
 /* The number of roce device related to one pf */
 #define NFP_ROCE_DEVICE_NUMS_IN_PF  2
 
+/* The number of roce device */
+#define NFP_ROCE_DEVICE_NUMS        2
+/* RoCE statistics count num */
+#define NFP_ROCE_STATISTICS_CNT_NUM 64
+/* RoCE statistics per count size */
+#define NFP_ROCE_STATISTICS_PER_CNT_SZ  8
+/* Space for RoCE device port statistics */
+#define NFP_ROCE_STATISTICS_DEV_PORT_SZ (NFP_ROCE_STATISTICS_CNT_NUM * \
+					 NFP_ROCE_STATISTICS_PER_CNT_SZ)
+#define NFP_ROCE_STATISTICS_PORT_SZ     (NFP_ROCE_STATISTICS_DEV_PORT_SZ * \
+					 NFP_ROCE_DEVICE_NUMS)
+
+/* RoCE statistics qp counters num */
+#define NFP_ROCE_STATISTICS_DEV_QP_NUM  1024
+/* Space for RoCE device qp statistics */
+#define NFP_ROCE_STATISTICS_DEV_QP_SZ   (NFP_ROCE_STATISTICS_CNT_NUM * \
+					 NFP_ROCE_STATISTICS_PER_CNT_SZ * \
+					 NFP_ROCE_STATISTICS_DEV_QP_NUM)
+#define NFP_ROCE_STATISTICS_QP_SZ       (NFP_ROCE_STATISTICS_DEV_QP_SZ * \
+					 NFP_ROCE_DEVICE_NUMS)
+
 enum crdma_verbs_version
 {
 	CRDMA_VERBS_VERSION_1,
@@ -62,10 +83,13 @@ struct crdma_res_info {
 	 * acquired/released by the RoCE driver:
 	 * 1) Driver/ME command interface
 	 * 2) DB area (first page is for EQs, the remainder for SQ/CQ)
+	 * 3) Port and qp statistics
 	 */
 	void __iomem *cmdif;
 	phys_addr_t  db_base;
 	u32 db_length;		/* The length of the physical doorbell area */
+	void __iomem *port_cnts;
+	void __iomem *qp_cnts;
 
 	/*
 	 * Pool of interrupt vectors that RoCE driver can use for

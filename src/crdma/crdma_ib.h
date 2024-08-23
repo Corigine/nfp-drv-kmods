@@ -38,7 +38,8 @@ enum {
 	CRDMA_IB_MAX_PKEY_TABLE_SIZE	= 1,
 	CRDMA_IB_MAX_GID_TABLE_SIZE	= 16,
 	CRDMA_IB_MAX_MAC_TABLE_SIZE	= 8,
-	CRDMA_IB_MAX_FAST_REG_PAGES	= 64
+	CRDMA_IB_MAX_FAST_REG_PAGES	= 64,
+	CRDMA_IB_MAX_CNTR_NUM		= 1024
 };
 
 /*
@@ -330,6 +331,10 @@ struct crdma_ibdev {
 	spinlock_t		qp_lock;
 	struct radix_tree_root	qp_tree;
 
+#if (VER_NON_RHEL_OR_KYL_GE(5, 3) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
+	struct xarray cntr_xa; /* Used for counter allocated */
+#endif
+
 	/*
 	 * CQ allocation bitmap and table. For now we are being wasteful
 	 * and allocating a table for CQN to CQ map; we will change this
@@ -349,6 +354,9 @@ struct crdma_ibdev {
 	 */
 	struct mutex		cmdif_mutex;	/* Interface register access */
 	void __iomem		*cmdif;
+
+	void __iomem		*port_cnts;
+	void __iomem		*qp_cnts;
 
 	struct dma_pool		*mbox_pool;	/* Input/output DMA buffers */
 	struct semaphore	poll_sem;	/* One poller at a time */

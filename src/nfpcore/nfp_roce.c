@@ -79,6 +79,24 @@ int nfp_roce_acquire_configure_resource(struct nfp_pf *pf)
 
 	pf->roce_cmdif = nfp_cpp_area_iomem(pf->roce_command_area);
 
+	pf->roce_port_cnts_mem = nfp_rtsym_map(pf->rtbl, "rtlm_port_counters",
+				"roce-port-cnts", NFP_ROCE_STATISTICS_PORT_SZ,
+				&pf->roce_port_cnts_area);
+	if (IS_ERR(pf->roce_port_cnts_mem) || !pf->roce_port_cnts_mem) {
+		pf->roce_port_cnts_mem = NULL;
+		pf->roce_port_cnts_area = NULL;
+		nfp_warn(pf->cpp, "RoCE: aqcuire roce port counters cpp failed.\n");
+	}
+
+	pf->roce_qp_cnts_mem = nfp_rtsym_map(pf->rtbl, "rtlm_qp_counters",
+				"roce-qp-cnts", NFP_ROCE_STATISTICS_QP_SZ,
+				&pf->roce_qp_cnts_area);
+	if (IS_ERR(pf->roce_qp_cnts_mem) || !pf->roce_qp_cnts_mem) {
+		pf->roce_qp_cnts_mem = NULL;
+		pf->roce_qp_cnts_area = NULL;
+		nfp_warn(pf->cpp, "RoCE: aqcuire roce qp counters cpp failed.\n");
+	}
+
 	return 0;
 }
 
@@ -88,6 +106,18 @@ void nfp_roce_free_configure_resource(struct nfp_pf *pf)
 		nfp_cpp_area_release_free(pf->roce_command_area);
 		pf->roce_command_area = NULL;
 		pf->roce_cmdif = NULL;
+	}
+
+	if (pf->roce_port_cnts_area) {
+		nfp_cpp_area_release_free(pf->roce_port_cnts_area);
+		pf->roce_port_cnts_area = NULL;
+		pf->roce_port_cnts_mem = NULL;
+	}
+
+	if (pf->roce_qp_cnts_area) {
+		nfp_cpp_area_release_free(pf->roce_qp_cnts_area);
+		pf->roce_qp_cnts_area = NULL;
+		pf->roce_qp_cnts_mem = NULL;
 	}
 }
 
@@ -155,6 +185,13 @@ static void nfp_fill_crdma_resource(struct nfp_pf *pf, struct nfp_net *nn,
 	info->num_vectors = nn->num_roce_vecs;
 	for (i = 0; i < nn->num_roce_vecs; i++)
 		info->msix[i] = nn->roce_irq_entries[i];
+
+	if (pf->roce_port_cnts_mem)
+		info->port_cnts = pf->roce_port_cnts_mem + nn->id *
+				NFP_ROCE_STATISTICS_DEV_PORT_SZ;
+	if (pf->roce_qp_cnts_mem)
+		info->qp_cnts = pf->roce_qp_cnts_mem + nn->id *
+				NFP_ROCE_STATISTICS_DEV_QP_SZ;
 
 	info->dev_is_pf = 1;
 	info->rdma_verbs_version = CRDMA_VERBS_VERSION_1;
