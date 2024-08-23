@@ -503,7 +503,8 @@ ifeq ($(BUILD_CRDMA),y)
 		   crdma/crdma_ucif.o \
 		   crdma/crdma_util.o \
 		   crdma/crdma_verbs.o \
-		   crdma/crdma_bond.o
+		   crdma/crdma_bond.o \
+		   crdma/crdma_counters.o
 endif
 
 ####################

@@ -67,7 +67,9 @@ enum {
 	CRDMA_CMD_DCQCN_ENABLE		= 50,
 	CRDMA_CMD_RETRANS_ENABLE	= 51,
 	CRDMA_CMD_BOND_CONFIG		= 52,
-	CRDMA_CMD_HIGH_PERF_READ_ENABLE	= 53
+	CRDMA_CMD_HIGH_PERF_READ_ENABLE	= 53,
+	CRDMA_CMD_CNTR_CONFIG		= 54,
+	CRDMA_CMD_COUNTER_ENABLE	= 55
 };
 
 /* Microcode QP Modify opcode modifiers */
@@ -89,6 +91,12 @@ enum {
 	CRDMA_BOND_MOD_CREATE	= 0,
 	CRDMA_BOND_MOD_UPDATE,
 	CRDMA_BOND_MOD_DESTROY
+};
+
+enum {
+	CRDMA_CNTR_MOD_CREATE	= 0,
+	CRDMA_CNTR_MOD_BIND,
+	CRDMA_BOND_MOD_UNBIND
 };
 
 /* Microcode command interface status values returned by microcode */
@@ -1074,6 +1082,15 @@ int crdma_retrans_enable_cmd(struct crdma_ibdev *dev, u8 enabled);
 int crdma_high_perf_read_enable_cmd(struct crdma_ibdev *dev, u8 enabled);
 
 /**
+ * Enable or Disable counter to microcode.
+ *
+ * @dev: RoCE IB device.
+ * @enabled: TRUE: to enable, FALSE: to disable
+ * Returns 0 on success, otherwise an error.
+ */
+int crdma_counter_enable_cmd(struct crdma_ibdev *dev, u8 enabled);
+
+/**
  * Issue microcode MPT create command.
  *
  * @dev: The IB RoCE device.
@@ -1244,6 +1261,19 @@ int crdma_write_smac_table(struct crdma_ibdev *dev,
  */
 int crdma_bond_config_cmd(struct crdma_ibdev *dev,
 			u8 mod, u64 tx_bm);
+
+/**
+ * Config RoCE counter.
+ *
+ * @dev: The IB RoCE device.
+ * @mod: Action for the RoCE counter configure.
+ * @qp_index: QP num to bind or unbind with a counter obj of cntr_id.
+ * @cntr_id: Counter id.
+ *
+ * Returns 0 on success; otherwise an error.
+ */
+int crdma_counter_config_cmd(struct crdma_ibdev *dev, u8 mod,
+			u32 qp_index, u32 cntr_id);
 
 /**
  * Simple development test to force microcode to generate EQE and

@@ -196,7 +196,11 @@ struct nfp_pf {
 #endif
 #ifdef CONFIG_NFP_ROCE
 	struct nfp_cpp_area *roce_command_area;
+	struct nfp_cpp_area *roce_port_cnts_area;
+	struct nfp_cpp_area *roce_qp_cnts_area;
 	void __iomem *roce_cmdif;
+	void __iomem *roce_port_cnts_mem;
+	void __iomem *roce_qp_cnts_mem;
 #endif
 };
 

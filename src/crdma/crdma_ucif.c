@@ -138,7 +138,9 @@ const char * const crdma_opcode_to_str(u8 opcode)
 		[CRDMA_CMD_DCQCN_ENABLE]	= "DCQCN_ENABLE",
 		[CRDMA_CMD_RETRANS_ENABLE]	= "RETRANS_ENABLE",
 		[CRDMA_CMD_BOND_CONFIG]		= "BOND_CONFIG",
-		[CRDMA_CMD_HIGH_PERF_READ_ENABLE]	= "HIGH_PERF_READ_ENABLE"
+		[CRDMA_CMD_HIGH_PERF_READ_ENABLE]	= "HIGH_PERF_READ_ENABLE",
+		[CRDMA_CMD_CNTR_CONFIG]		= "COUNTER_CONFIG",
+		[CRDMA_CMD_COUNTER_ENABLE]	= "COUNTER_ENABLE"
 	};
 
 	if (opcode < ARRAY_SIZE(cmd_to_str))
@@ -1740,6 +1742,12 @@ int crdma_high_perf_read_enable_cmd(struct crdma_ibdev *dev, u8 enabled)
 			CRDMA_CMDIF_GEN_TIMEOUT_MS);
 }
 
+int crdma_counter_enable_cmd(struct crdma_ibdev *dev, u8 enabled)
+{
+	return __crdma_no_param_cmd(dev, CRDMA_CMD_COUNTER_ENABLE, 0,
+			enabled, CRDMA_CMDIF_GEN_TIMEOUT_MS);
+}
+
 int crdma_set_port_mtu_cmd(struct crdma_ibdev *dev, u8 port, u32 mtu)
 {
 	struct crdma_cmd cmd;
@@ -1774,6 +1782,33 @@ int crdma_bond_config_cmd(struct crdma_ibdev *dev, u8 mod, u64 tx_bm)
 	cmd.opcode_mod = mod;
 	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
 	cmd.input_param = tx_bm;
+	status = crdma_cmd(dev, &cmd);
+
+	return status;
+}
+
+/**
+ * Config RoCE counter.
+ *
+ * @dev: The IB RoCE device.
+ * @mod: Action for the RoCE counter configure.
+ * @qp_index: QP num to bind or unbind with a counter obj of cntr_id.
+ * @cntr_id: Counter id.
+ *
+ * Returns 0 on success; otherwise an error.
+ */
+int crdma_counter_config_cmd(struct crdma_ibdev *dev, u8 mod,
+				u32 qp_index, u32 cntr_id)
+{
+	struct crdma_cmd cmd;
+	int status;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opcode = CRDMA_CMD_CNTR_CONFIG;
+	cmd.opcode_mod = mod;
+	cmd.timeout = CRDMA_CMDIF_GEN_TIMEOUT_MS;
+	cmd.input_param = qp_index;
+	cmd.input_mod = cntr_id;
 	status = crdma_cmd(dev, &cmd);
 
 	return status;

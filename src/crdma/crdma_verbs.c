@@ -23,6 +23,7 @@
 #include "crdma_abi.h"
 #include "crdma_verbs.h"
 #include "crdma_bond.h"
+#include "crdma_counters.h"
 
 static bool mad_cq_event_wa;
 module_param(mad_cq_event_wa, bool, 0444);
@@ -1922,6 +1923,19 @@ static int crdma_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 		crdma_err("Microcode QP_MODIFY error, %d\n", ret);
 		ret = -EINVAL;
 	}
+
+#if (VER_NON_RHEL_OR_KYL_GE(5, 3) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
+	/* In counter bind auto mode, when a qp is created, the qp is binded
+	 * to a counter auto, but as the callback verbs api 'counter_bind_qp'
+	 * is called before this verbs, the qp hasn't been created finished
+	 * in NIC, so we should call bind counter here again.
+	 */
+	if ((qp_attr_mask & IB_QP_STATE) &&
+		qp_attr->qp_state == IB_QPS_INIT &&
+		qp->counter && qp->counter->id)
+		crdma_counter_config_cmd(dev, CRDMA_CNTR_MOD_BIND,
+			qp->qp_num, qp->counter->id);
+#endif
 
 out:
 	mutex_unlock(&cqp->mutex);
@@ -4214,6 +4228,7 @@ int crdma_register_verbs(struct crdma_ibdev *dev)
 	dev->ibdev.process_mad		= crdma_process_mad;
 	dev->ibdev.drain_rq		= crdma_drain_rq;
 #endif
+	crdma_ib_counters_init(&dev->ibdev);
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 10) || VER_RHEL_GE(8, 5) || VER_KYL_GE(10, 4))
 	ret = ib_register_device(&dev->ibdev, name,

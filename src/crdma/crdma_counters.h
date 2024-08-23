@@ -1,0 +1,56 @@
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
+/* Copyright (C) 2023 Corigine, Inc. */
+
+#ifndef CRDMA_COUNTERS_H
+#define CRDMA_COUNTERS_H
+
+/* RoCE statistics count num */
+#define ROCE_STATISTICS_CNT_NUM  64
+/* RoCE statistics per count size */
+#define ROCE_STATISTICS_PER_CNT_SZ  8
+
+/*
+ * when adding counters to enum also add
+ * them to crdma_counter_name[] vector.
+ */
+enum crdma_counters {
+	// WQE
+	CRDMA_CNT_RDMA_SEND,
+	CRDMA_CNT_RDMA_RECV,
+	CRDMA_CNT_RDMA_WRITE,
+	CRDMA_CNT_RDMA_READ,
+	CRDMA_CNT_RDMA_ATOM,
+	// Stream
+	CRDMA_CNT_TX_PKTS,
+	CRDMA_CNT_TX_BYTES,
+	CRDMA_CNT_RX_PKTS,
+	CRDMA_CNT_RX_BYTES,
+	// Packet
+	CRDMA_CNT_TX_SEND_PKTS,
+	CRDMA_CNT_TX_WRITE_PKTS,
+	CRDMA_CNT_TX_READ_REQ_PKTS,
+	CRDMA_CNT_TX_READ_RSP_PKTS,
+	CRDMA_CNT_TX_ATOM_PKTS,
+	CRDMA_CNT_TX_ACK_PKTS,
+	CRDMA_CNT_TX_NAK_PKTS,
+	CRDMA_CNT_RX_SEND_PKTS,
+	CRDMA_CNT_RX_WRITE_PKTS,
+	CRDMA_CNT_RX_READ_REQ_PKTS,
+	CRDMA_CNT_RX_READ_RSP_PKTS,
+	CRDMA_CNT_RX_ATOM_PKTS,
+	CRDMA_CNT_RX_ACK_PKTS,
+	CRDMA_CNT_RX_NAK_PKTS,
+	// CC
+	CRDMA_CNT_CNP_TX_PKTS,
+	CRDMA_CNT_CNP_RX_PKTS,
+	CRDMA_CNT_ECN_MARKED_PKTS,
+	// Error
+	CRDMA_CNT_DUP_REQ,
+	CRDMA_CNT_OUT_OF_SEQ_REQ,
+	CRDMA_CNT_PKT_ERR,
+	CRDMA_NUM_OF_COUNTERS
+};
+
+void crdma_ib_counters_init(struct ib_device *ibdev);
+
+#endif /* CRDMA_COUNTERS_H */

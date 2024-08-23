@@ -135,6 +135,8 @@ int crdma_acquire_pci_resources(struct crdma_ibdev *dev)
 {
 	dev->cmdif = dev->info->cmdif;
 	dev->db_paddr = dev->info->db_base;
+	dev->port_cnts = dev->info->port_cnts;
+	dev->qp_cnts = dev->info->qp_cnts;
 	return 0;
 }
 
