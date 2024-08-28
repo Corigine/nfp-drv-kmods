@@ -2372,8 +2372,8 @@ nfp_net_get_phys_port_name(struct net_device *netdev, char *name, size_t len)
 }
 #endif
 
-#if COMPAT__HAVE_VXLAN_OFFLOAD && (VER_NON_RHEL_OR_SLEL_LT(5, 9) || \
-    VER_RHEL_LT(8, 4) || SLEL_LOCALVER_LT(5, 3, 18, 57, 0))
+#if COMPAT__HAVE_VXLAN_OFFLOAD && ((!COMPAT_SLELINUX && VER_NON_RHEL_OR_KYL_LT(5, 9))|| \
+    VER_RHEL_LT(8, 4) || SLEL_LOCALVER_LT(5, 3, 18, 57, 0) || VER_KYL_LT(10, 4))
 /**
  * nfp_net_set_vxlan_port() - set vxlan port in SW and reconfigure HW
  * @nn:   NFP Net device to reconfigure
