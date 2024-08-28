@@ -3805,7 +3805,8 @@ static int crdma_dereg_mr(struct ib_mr *mr)
 }
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 9) || VER_NON_RHEL_OR_KYL_LT(5, 2) || \
-     VER_RHEL_GE(8, 4) || VER_RHEL_LT(8, 2) || COMPAT_KYLINUX_V10SP2)
+     VER_RHEL_GE(8, 4) || VER_RHEL_LT(8, 2) || COMPAT_KYLINUX_V10SP2 || \
+     VER_KYL_GE(10, 4))
 static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 			enum ib_mr_type type, u32 max_num_sg)
 {
