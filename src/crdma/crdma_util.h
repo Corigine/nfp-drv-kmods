@@ -68,10 +68,13 @@ void crdma_free_bitmap_index(struct crdma_bitmap *bitmap, u32 index);
  *
  * @bitmap: Pointer to the bitmap used for allocation.
  * @count: The number of contiguous bits to allocate.
+ * @first_allocated_index: Pointer to the memory which first index is stored.
  *
- * Returns the bitmap index of the first bit, or -1 on error.
+ * Returns 0 on success, otherwise -ENOMEM.
  */
-u32 crdma_alloc_bitmap_area(struct crdma_bitmap *bitmap, u32 count);
+int crdma_alloc_bitmap_area(struct crdma_bitmap *bitmap,
+			    u32 count,
+			    u32 *first_allocated_index);
 
 /**
  *Free a contiguous block of previously allocated indices in a bitmap.

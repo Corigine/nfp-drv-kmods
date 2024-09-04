@@ -1891,9 +1891,9 @@ int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr,
 
 	if (umem) {
 		cmr->num_mtt = comp_pages;
-		cmr->base_mtt = crdma_alloc_bitmap_area(&dev->mtt_map,
-						cmr->num_mtt);
-		if (cmr->base_mtt < 0)
+		if (crdma_alloc_bitmap_area(&dev->mtt_map,
+					    cmr->num_mtt,
+					    &cmr->base_mtt))
 			return -ENOMEM;
 
 #if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 365, 0, 0))
