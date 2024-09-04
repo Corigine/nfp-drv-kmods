@@ -3845,12 +3845,11 @@ static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd,
 
 	cmr->num_mtt = max_num_sg;
 	if (cmr->num_mtt) {
-		cmr->base_mtt = crdma_alloc_bitmap_area(&cdev->mtt_map,
-						cmr->num_mtt);
-		if (cmr->base_mtt < 0) {
-			err = -ENOMEM;
+		err = crdma_alloc_bitmap_area(&cdev->mtt_map,
+					      cmr->num_mtt,
+					      &cmr->base_mtt);
+		if (err)
 			goto free_mem;
-		}
 	}
 
 	if (crdma_alloc_bitmap_index(&cdev->mpt_map, &cmr->mpt_index)) {
@@ -3905,12 +3904,11 @@ static struct ib_mr *crdma_alloc_mr(struct ib_pd *pd, enum ib_mr_type type,
 
 	cmr->num_mtt = max_num_sg;
 	if (cmr->num_mtt) {
-		cmr->base_mtt = crdma_alloc_bitmap_area(&cdev->mtt_map,
-						cmr->num_mtt);
-		if (cmr->base_mtt < 0) {
-			err = -ENOMEM;
+		err = crdma_alloc_bitmap_area(&cdev->mtt_map,
+					      cmr->num_mtt,
+					      &cmr->base_mtt);
+		if (err)
 			goto free_mem;
-		}
 	}
 
 	if (crdma_alloc_bitmap_index(&cdev->mpt_map, &cmr->mpt_index)) {

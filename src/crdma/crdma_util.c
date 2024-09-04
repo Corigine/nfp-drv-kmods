@@ -86,7 +86,7 @@ void crdma_free_bitmap_index(struct crdma_bitmap *bitmap, u32 index)
 	spin_unlock(&bitmap->lock);
 }
 
-u32 crdma_alloc_bitmap_area(struct crdma_bitmap *bitmap, u32 count)
+int crdma_alloc_bitmap_area(struct crdma_bitmap *bitmap, u32 count, u32 *first_allocated_index)
 {
 	u32 index;
 	u32 range;
@@ -107,10 +107,11 @@ u32 crdma_alloc_bitmap_area(struct crdma_bitmap *bitmap, u32 count)
 	index += bitmap->min_index;
 
 	spin_unlock(&bitmap->lock);
-	return index;
+	*first_allocated_index = index;
+	return 0;
 full:
 	spin_unlock(&bitmap->lock);
-	return -EAGAIN;
+	return -ENOMEM;
 }
 
 void crdma_free_bitmap_area(struct crdma_bitmap *bitmap, u32 index, u32 count)
@@ -221,9 +222,9 @@ static int __crdma_alloc_mem_pages(struct crdma_ibdev *dev,
 				 mem->num_allocs, PCI_DMA_BIDIRECTIONAL);
 #endif
 	mem->num_mtt = mem->tot_len >> (mem->min_order + PAGE_SHIFT);
-	mem->base_mtt_ndx = crdma_alloc_bitmap_area(&dev->mtt_map,
-					mem->num_mtt);
-	if (mem->base_mtt_ndx < 0)
+	if (crdma_alloc_bitmap_area(&dev->mtt_map,
+				    mem->num_mtt,
+				    &mem->base_mtt_ndx))
 		goto alloc_err;
 
 	return 0;
