@@ -161,6 +161,8 @@ void nfp_net_tx_ring_init(struct nfp_net_tx_ring *tx_ring,
 			  struct nfp_net_dp *dp,
 			  struct nfp_net_r_vector *r_vec, unsigned int idx,
 			  bool is_xdp);
+void nfp_net_clear_tx_ring_hw_cfg(struct nfp_net *nn, u16 idx);
+void nfp_net_clear_rx_ring_hw_cfg(struct nfp_net *nn, u16 idx);
 
 enum nfp_nfd_version {
 	NFP_NFD_VER_NFD3,

@@ -446,6 +446,22 @@ void nfp_net_vec_clear_ring_data(struct nfp_net *nn, unsigned int idx)
 	nn_writeb(nn, NFP_NET_CFG_TXR_VEC(idx), 0);
 }
 
+void
+nfp_net_clear_rx_ring_hw_cfg(struct nfp_net *nn, u16 idx)
+{
+	nn_writeq(nn, NFP_NET_CFG_RXR_ADDR(idx), 0);
+	nn_writeb(nn, NFP_NET_CFG_RXR_SZ(idx), 0);
+	nn_writeb(nn, NFP_NET_CFG_RXR_VEC(idx), 0);
+}
+
+void
+nfp_net_clear_tx_ring_hw_cfg(struct nfp_net *nn, u16 idx)
+{
+	nn_writeq(nn, NFP_NET_CFG_TXR_ADDR(idx), 0);
+	nn_writeq(nn, NFP_NET_CFG_TXR_WB_ADDR(idx), 0);
+	nn_writeb(nn, NFP_NET_CFG_TXR_SZ(idx), 0);
+}
+
 netdev_tx_t nfp_net_tx(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
