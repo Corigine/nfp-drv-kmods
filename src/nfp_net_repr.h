@@ -102,11 +102,13 @@ enum nfp_repr_type {
 #define NFP_REPR_TYPE_MAX (__NFP_REPR_TYPE_MAX - 1)
 
 extern const struct net_device_ops nfp_repr_netdev_ops;
+extern const struct net_device_ops nfp_sgw_repr_netdev_ops;
 
 #ifdef COMPAT__HAVE_METADATA_IP_TUNNEL
 static inline bool nfp_netdev_is_nfp_repr(struct net_device *netdev)
 {
-	return netdev->netdev_ops == &nfp_repr_netdev_ops;
+	return netdev->netdev_ops == &nfp_repr_netdev_ops ||
+	       netdev->netdev_ops == &nfp_sgw_repr_netdev_ops;
 }
 
 static inline int nfp_repr_get_port_id(struct net_device *netdev)

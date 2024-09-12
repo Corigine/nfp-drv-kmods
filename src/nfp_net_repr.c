@@ -583,7 +583,7 @@ static netdev_tx_t nfp_repr_xmit(struct sk_buff *skb, struct net_device *netdev)
 	return NETDEV_TX_OK;
 }
 
-netdev_tx_t
+static netdev_tx_t
 nfp_sgw_repr_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct nfp_repr *repr = netdev_priv(netdev);
@@ -746,7 +746,7 @@ static int nfp_repr_stop(struct net_device *netdev)
 	return 0;
 }
 
-int
+static int
 nfp_sgw_repr_stop(struct net_device *netdev)
 {
 	struct nfp_repr *repr = netdev_priv(netdev);
@@ -850,7 +850,7 @@ err_port_disable:
 	return err;
 }
 
-int
+static int
 nfp_sgw_repr_open(struct net_device *netdev)
 {
 	struct nfp_repr *repr = netdev_priv(netdev);
@@ -1000,7 +1000,7 @@ nfp_repr_fix_features(struct net_device *netdev, netdev_features_t features)
 	return features;
 }
 
-netdev_features_t
+static netdev_features_t
 nfp_sgw_repr_fix_features(struct net_device *netdev, netdev_features_t features)
 {
 	struct nfp_repr *repr = netdev_priv(netdev);
@@ -1029,7 +1029,7 @@ nfp_sgw_repr_fix_features(struct net_device *netdev, netdev_features_t features)
 }
 
 #if COMPAT__HAVE_NDO_FEATURES_CHECK
-netdev_features_t
+static netdev_features_t
 nfp_repr_features_check(struct sk_buff *skb, struct net_device *dev,
 			netdev_features_t features)
 {
@@ -1081,7 +1081,7 @@ nfp_repr_features_check(struct sk_buff *skb, struct net_device *dev,
 
 #ifndef COMPAT_SLELINUX
 #if VER_NON_RHEL_LT(5, 6) || VER_RHEL_LT(8, 3)
-void
+static void
 nfp_repr_tx_timeout(struct net_device *netdev)
 {
 	struct nfp_repr *repr = netdev_priv(netdev);
@@ -1099,7 +1099,7 @@ nfp_repr_tx_timeout(struct net_device *netdev)
 	}
 }
 #else
-void
+static void
 nfp_repr_tx_timeout(struct net_device *netdev, unsigned int txqueue)
 {
 	struct nfp_repr *repr = netdev_priv(netdev);
@@ -1146,6 +1146,31 @@ const struct net_device_ops nfp_repr_netdev_ops = {
 };
 
 const struct net_device_ops nfp_sgw_repr_netdev_ops = {
+	.ndo_init		= nfp_app_ndo_init,
+	.ndo_uninit		= nfp_app_ndo_uninit,
+	.ndo_open		= nfp_sgw_repr_open,
+	.ndo_stop		= nfp_sgw_repr_stop,
+	.ndo_start_xmit		= nfp_sgw_repr_xmit,
+	.ndo_change_mtu		= nfp_repr_change_mtu,
+	.ndo_get_stats64	= nfp_repr_get_stats64,
+	.ndo_get_phys_port_name	= nfp_port_get_phys_port_name,
+	.ndo_fix_features	= nfp_sgw_repr_fix_features,
+	.ndo_set_features	= nfp_port_set_features,
+	.ndo_set_mac_address    = eth_mac_addr,
+#if VER_NON_RHEL_GE(5, 1) || VER_RHEL_GE(8, 2)
+	.ndo_get_port_parent_id	= nfp_port_get_port_parent_id,
+#if VER_NON_RHEL_LT(5, 2) || VER_RHEL_LT(8, 2)
+	.ndo_get_devlink	= nfp_devlink_get_devlink,
+#elif VER_NON_RHEL_LT(6, 2)
+	.ndo_get_devlink_port	= nfp_devlink_get_devlink_port,
+#endif
+#endif
+#if COMPAT__HAVE_NDO_FEATURES_CHECK
+	.ndo_features_check	= nfp_repr_features_check,
+#endif
+#ifndef COMPAT_SLELINUX
+	.ndo_tx_timeout		= nfp_repr_tx_timeout,
+#endif
 };
 
 void
