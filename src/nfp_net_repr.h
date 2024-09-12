@@ -57,6 +57,7 @@ struct nfp_repr_pcpu_stats {
  * @tx_rings:		Repr tx rings
  * @vnic_rx_ring_map:	Repr rx rings map pf vnic rx rings
  * @vnic_tx_ring_map:	Repr tx rings map pf vnic tx rings
+ * @reta:		Repr redirection table
  * @app_priv:	Pointer for APP data
  */
 struct nfp_repr {
@@ -73,6 +74,9 @@ struct nfp_repr {
 	void *tx_rings[NFP_REPR_RING_NUM_MAX];
 	u8 vnic_rx_ring_map[NFP_REPR_RING_NUM_MAX];
 	u8 vnic_tx_ring_map[NFP_REPR_RING_NUM_MAX];
+	/* rss reta */
+	u8 reta[NFP_NET_CFG_RSS_ITBL_SZ];
+
 	void *app_priv;
 };
 

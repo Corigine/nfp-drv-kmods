@@ -90,6 +90,7 @@
 #define NFP_NET_MIN_VNIC_IRQS		(NFP_NET_NON_Q_VECTORS + 1)
 
 /* Queue/Ring definitions */
+#define NFP_NET_TOTAL_QUEUE_NUM	128
 #define NFP_NET_MAX_TX_RINGS	64	/* Max. # of Tx rings per device */
 #define NFP_NET_MAX_RX_RINGS	64	/* Max. # of Rx rings per device */
 #define NFP_NET_MAX_R_VECS	(NFP_NET_MAX_TX_RINGS > NFP_NET_MAX_RX_RINGS ? \

@@ -10,6 +10,7 @@
 
 #include "nfpcore/nfp_cpp.h"
 #include "nfpcore/nfp_nsp.h"
+#include "nfpcore/nfp_nffw.h"
 #include "flower/main.h"
 #include "nfp_app.h"
 #include "nfp_main.h"
@@ -193,6 +194,104 @@ nfp_repr_tx_ring_free(struct nfp_net *nn, u8 ridx)
 	nfp_vnic_ring_idx_free(nn, false, ridx);
 }
 
+static int
+nfp_repr_queue_to_port_set(struct nfp_repr *repr)
+{
+	const struct nfp_rtsym *queue_to_port_mem;
+	struct nfp_flower_priv *app_priv;
+	struct nfp_app *app = repr->app;
+	struct nfp_net_tx_ring *tx_ring;
+	u32 offset, i, j, phy_port;
+	struct nfp_net *nn;
+
+	const char *qp_island[3] = {
+		"i32.QUEUE_TO_PORT_TABLE",
+		"i33.QUEUE_TO_PORT_TABLE",
+		"i34.QUEUE_TO_PORT_TABLE"
+	};
+
+	app_priv = (struct nfp_flower_priv *)repr->app->priv;
+	nn = app_priv->nn;
+
+	phy_port = nfp_flower_cmsg_phys_port(repr->port->eth_id);
+
+	for (i = 0; i < ARRAY_SIZE(qp_island); i++) {
+		queue_to_port_mem = nfp_rtsym_lookup(app->pf->rtbl,
+						     qp_island[i]);
+		if (!queue_to_port_mem) {
+			nn_err(nn, "can't found %s\n", qp_island[i]);
+			return -ENOENT;
+		}
+		for (j = 0; j < repr->nb_tx_rings; j++) {
+			tx_ring = repr->tx_rings[j];
+			offset = tx_ring->idx << 2;
+			nfp_rtsym_write(app->pf->cpp, queue_to_port_mem,
+					offset, &phy_port, sizeof(phy_port));
+		}
+	}
+
+	return 0;
+}
+
+static int
+nfp_repr_rss_itbl_hw_update(struct nfp_repr *repr,
+			    u8 *rss_data, u32 size)
+{
+	const struct nfp_rtsym *rss_sym_mem;
+	struct nfp_app *app = repr->app;
+	struct nfp_rtsym sym_mem_temp;
+	u32 i, j, port_idx;
+	u32 *data, temp;
+
+	const char *island[3] = {
+		"i32.rss_indir_local",
+		"i33.rss_indir_local",
+		"i34.rss_indir_local"
+	};
+
+	if (size != NFP_NET_CFG_RSS_ITBL_SZ)
+		return -EINVAL;
+
+	port_idx = repr->port->eth_id;
+
+	for (j = 0; j < ARRAY_SIZE(island); j++) {
+		rss_sym_mem = nfp_rtsym_lookup(app->pf->rtbl, island[j]);
+		if (!rss_sym_mem)
+			return -ENOENT;
+
+		data = (u32 *)rss_data;
+		memcpy(&sym_mem_temp, rss_sym_mem, sizeof(struct nfp_rtsym));
+		sym_mem_temp.addr += (port_idx * NFP_NET_CFG_RSS_ITBL_SZ);
+		for (i = 0; i < (size >> 2); i++) {
+			temp = cpu_to_be32(data[i]);
+			nfp_rtsym_write(app->pf->cpp, &sym_mem_temp,
+					(i << 2), &temp, sizeof(temp));
+		}
+	}
+
+	return 0;
+}
+
+static int
+nfp_repr_rss_idtl_update(struct nfp_repr *repr)
+{
+	u8 rss_reta[NFP_NET_CFG_RSS_ITBL_SZ];
+	u32 base;
+	u8 i, j;
+
+	base = NFP_NET_TOTAL_QUEUE_NUM - NFP_NET_MAX_RX_RINGS;
+
+	for (i = 0, j = 0; i < sizeof(rss_reta); i++) {
+		rss_reta[i] = repr->vnic_rx_ring_map[j] + base;
+		repr->reta[i] = j;
+		j++;
+		if (j == repr->nb_rx_rings)
+			j = 0;
+	}
+
+	return nfp_repr_rss_itbl_hw_update(repr, rss_reta, sizeof(rss_reta));
+}
+
 static void
 nfp_repr_rx_ring_enable(struct nfp_net *nn,
 			struct nfp_repr *repr)
@@ -236,14 +335,14 @@ nfp_net_repr_set_config_and_enable(struct nfp_net *nn,
 		rx_ring = repr->rx_rings[ridx];
 		nfp_net_rx_ring_hw_cfg_write(nn, rx_ring, rx_ring->idx);
 	}
-
+	nfp_repr_rss_idtl_update(repr);
 	nfp_repr_rx_ring_enable(nn, repr);
 
 	for (ridx = 0; ridx < repr->nb_tx_rings; ridx++) {
 		tx_ring = repr->tx_rings[ridx];
 		nfp_net_tx_ring_hw_cfg_write(nn, tx_ring, tx_ring->idx);
 	}
-
+	nfp_repr_queue_to_port_set(repr);
 	nfp_repr_tx_ring_enable(nn, repr);
 }
 
