@@ -583,6 +583,38 @@ static netdev_tx_t nfp_repr_xmit(struct sk_buff *skb, struct net_device *netdev)
 	return NETDEV_TX_OK;
 }
 
+netdev_tx_t
+nfp_sgw_repr_xmit(struct sk_buff *skb, struct net_device *netdev)
+{
+	struct nfp_repr *repr = netdev_priv(netdev);
+	struct nfp_flower_priv *app_priv;
+	struct net_device *pf_netdev;
+	unsigned int len = skb->len;
+	u16 repr_ridx, vnic_ridx;
+	struct nfp_net *nn;
+	int ret;
+
+	app_priv = (struct nfp_flower_priv *)repr->app->priv;
+	nn = app_priv->nn;
+
+	skb_dst_drop(skb);
+	dst_hold((struct dst_entry *)repr->dst);
+	skb_dst_set(skb, (struct dst_entry *)repr->dst);
+	pf_netdev = repr->dst->u.port_info.lower_dev;
+
+	repr_ridx = skb_get_queue_mapping(skb);
+	vnic_ridx = repr->vnic_tx_ring_map[repr_ridx];
+	skb_set_queue_mapping(skb, vnic_ridx);
+
+	spin_lock(&repr->xmit_lock[repr_ridx]);
+	ret = nn->dp.ops->xmit(skb, pf_netdev);
+	spin_unlock(&repr->xmit_lock[repr_ridx]);
+
+	nfp_repr_inc_tx_stats(netdev, len, ret);
+
+	return NETDEV_TX_OK;
+}
+
 static void
 nfp_repr_close_stack(struct nfp_repr *repr)
 {
@@ -1052,7 +1084,7 @@ int nfp_repr_init(struct nfp_app *app, struct net_device *netdev,
 	struct nfp_repr *repr = netdev_priv(netdev);
 	struct nfp_net *nn = netdev_priv(pf_netdev);
 	u32 repr_cap = nn->tlv_caps.repr_cap;
-	int err;
+	int err, i;
 
 	nfp_repr_set_lockdep_class(netdev);
 
@@ -1064,6 +1096,9 @@ int nfp_repr_init(struct nfp_app *app, struct net_device *netdev,
 	repr->dst->u.port_info.lower_dev = pf_netdev;
 
 	if (nfp_app_is_sgw(app)) {
+		for (i = 0; i < NFP_REPR_RING_NUM_MAX; i++)
+			spin_lock_init(&repr->xmit_lock[i]);
+
 		netdev->netdev_ops = &nfp_sgw_repr_netdev_ops;
 	} else {
 		netdev->netdev_ops = &nfp_repr_netdev_ops;

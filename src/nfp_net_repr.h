@@ -48,17 +48,20 @@ struct nfp_repr_pcpu_stats {
 
 /**
  * struct nfp_repr - priv data for representor netdevs
- * @netdev:	Back pointer to netdev
- * @dst:	Destination for packet TX
- * @port:	Port of representor
- * @app:	APP handle
- * @stats:	Statistic of packets hitting CPU
+ * @netdev:		Back pointer to netdev
+ * @dst:		Destination for packet TX
+ * @port:		Port of representor
+ * @app:		APP handle
+ * @stats:		Statistic of packets hitting CPU
+ * @nb_rx_rings:	Repr rx ring number
+ * @nb_tx_rings:	Repr tx ring number
  * @rx_rings:		Repr rx rings
  * @tx_rings:		Repr tx rings
  * @vnic_rx_ring_map:	Repr rx rings map pf vnic rx rings
  * @vnic_tx_ring_map:	Repr tx rings map pf vnic tx rings
  * @reta:		Repr redirection table
  * @app_priv:	Pointer for APP data
+ * @xmit_lock:		Lock for repr tx
  */
 struct nfp_repr {
 	struct net_device *netdev;
@@ -78,6 +81,8 @@ struct nfp_repr {
 	u8 reta[NFP_NET_CFG_RSS_ITBL_SZ];
 
 	void *app_priv;
+	/* lock for repr xmit */
+	spinlock_t xmit_lock[NFP_REPR_RING_NUM_MAX];
 };
 
 /**
