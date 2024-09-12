@@ -876,7 +876,7 @@ nfp_net_vector_assign_rings(struct nfp_net_dp *dp,
 #endif
 }
 
-static int
+int
 nfp_net_prepare_vector(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 		       int idx)
 {
@@ -910,7 +910,7 @@ nfp_net_prepare_vector(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 	return 0;
 }
 
-static void
+void
 nfp_net_cleanup_vector(struct nfp_net *nn, struct nfp_net_r_vector *r_vec)
 {
 	irq_set_affinity_hint(r_vec->irq_vector, NULL);
@@ -1275,7 +1275,7 @@ static const struct dim_cq_moder tx_profile[] = {
 	{.usec = 128, .pkts = 128},
 };
 
-static void nfp_net_rx_dim_work(struct work_struct *work)
+void nfp_net_rx_dim_work(struct work_struct *work)
 {
 	struct nfp_net_r_vector *r_vec;
 	unsigned int factor, value;
@@ -1305,7 +1305,7 @@ static void nfp_net_rx_dim_work(struct work_struct *work)
 	dim->state = DIM_START_MEASURE;
 }
 
-static void nfp_net_tx_dim_work(struct work_struct *work)
+void nfp_net_tx_dim_work(struct work_struct *work)
 {
 	struct nfp_net_r_vector *r_vec;
 	unsigned int factor, value;

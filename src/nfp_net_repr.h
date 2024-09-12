@@ -53,6 +53,10 @@ struct nfp_repr_pcpu_stats {
  * @port:	Port of representor
  * @app:	APP handle
  * @stats:	Statistic of packets hitting CPU
+ * @rx_rings:		Repr rx rings
+ * @tx_rings:		Repr tx rings
+ * @vnic_rx_ring_map:	Repr rx rings map pf vnic rx rings
+ * @vnic_tx_ring_map:	Repr tx rings map pf vnic tx rings
  * @app_priv:	Pointer for APP data
  */
 struct nfp_repr {
@@ -65,6 +69,10 @@ struct nfp_repr {
 	/* phy repr support rx/tx ring config */
 	u16 nb_rx_rings;
 	u16 nb_tx_rings;
+	void *rx_rings[NFP_REPR_RING_NUM_MAX];
+	void *tx_rings[NFP_REPR_RING_NUM_MAX];
+	u8 vnic_rx_ring_map[NFP_REPR_RING_NUM_MAX];
+	u8 vnic_tx_ring_map[NFP_REPR_RING_NUM_MAX];
 	void *app_priv;
 };
 

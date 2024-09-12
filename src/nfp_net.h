@@ -167,6 +167,7 @@ struct nfp_roce;
  * @r_vec:      Back pointer to ring vector structure
  * @netdev:     Back pointer to netdev
  * @idx:        Ring index from Linux's perspective
+ * @repr_ridx:  Repr tx ring idx from repr perspective
  * @data_pending: number of bytes added to current block (NFDK only)
  * @qcp_q:      Pointer to base of the QCP TX queue
  * @txrwb:	TX pointer write back area
@@ -191,6 +192,7 @@ struct nfp_net_tx_ring {
 	struct net_device *netdev;
 
 	u16 idx;
+	u16 repr_ridx;
 	u16 data_pending;
 	u8 __iomem *qcp_q;
 	u64 *txrwb;
@@ -343,6 +345,7 @@ struct nfp_net_xsk_rx_buf {
  * @wr_p:       FL/RX ring write pointer (free running)
  * @rd_p:       FL/RX ring read pointer (free running)
  * @idx:        Ring index from Linux's perspective
+ * @repr_ridx:  Repr rx ring idx from repr perspective
  * @fl_qcidx:   Queue Controller Peripheral (QCP) queue index for the freelist
  * @qcp_fl:     Pointer to base of the QCP freelist queue
  * @rxbufs:     Array of transmitted FL/RX buffers
@@ -361,6 +364,7 @@ struct nfp_net_rx_ring {
 	u32 rd_p;
 
 	u32 idx;
+	u32 repr_ridx;
 
 	int fl_qcidx;
 	u8 __iomem *qcp_fl;
@@ -1090,6 +1094,12 @@ int nfp_net_fs_add_hw(struct nfp_net *nn, struct nfp_fs_entry *entry);
 int nfp_net_fs_del_hw(struct nfp_net *nn, struct nfp_fs_entry *entry);
 
 int nfp_net_recover(struct nfp_net *nn, bool resume);
+int nfp_net_prepare_vector(struct nfp_net *nn,
+			   struct nfp_net_r_vector *r_vec, int idx);
+void nfp_net_cleanup_vector(struct nfp_net *nn,
+			    struct nfp_net_r_vector *r_vec);
+void nfp_net_rx_dim_work(struct work_struct *work);
+void nfp_net_tx_dim_work(struct work_struct *work);
 
 #ifdef CONFIG_NFP_DEBUG
 void nfp_net_debugfs_create(void);

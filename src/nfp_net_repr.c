@@ -10,6 +10,7 @@
 
 #include "nfpcore/nfp_cpp.h"
 #include "nfpcore/nfp_nsp.h"
+#include "flower/main.h"
 #include "nfp_app.h"
 #include "nfp_main.h"
 #include "nfp_net.h"
@@ -75,7 +76,7 @@ nfp_vnic_ring_idx_free(struct nfp_net *nn,
 		ring_hdl->tx_ring_used[idx] = 0;
 }
 
-int
+static int
 nfp_repr_rx_ring_alloc(struct nfp_net *nn,
 		       struct nfp_net_rx_ring **r, u8 *ridx,
 		       struct net_device *netdev)
@@ -116,7 +117,7 @@ out:
 	return ret;
 }
 
-void
+static void
 nfp_repr_rx_ring_free(struct nfp_net *nn, u8 ridx)
 {
 	struct nfp_net_rx_ring *rx_ring;
@@ -131,7 +132,7 @@ nfp_repr_rx_ring_free(struct nfp_net *nn, u8 ridx)
 	nfp_vnic_ring_idx_free(nn, true, ridx);
 }
 
-int
+static int
 nfp_repr_tx_ring_alloc(struct nfp_net *nn,
 		       struct nfp_net_tx_ring **r, u8 *ridx,
 		       struct net_device *netdev)
@@ -177,7 +178,7 @@ out:
 	return ret;
 }
 
-void
+static void
 nfp_repr_tx_ring_free(struct nfp_net *nn, u8 ridx)
 {
 	struct nfp_net_tx_ring *tx_ring;
@@ -190,6 +191,73 @@ nfp_repr_tx_ring_free(struct nfp_net *nn, u8 ridx)
 	nfp_net_tx_ring_free(&nn->dp, tx_ring);
 
 	nfp_vnic_ring_idx_free(nn, false, ridx);
+}
+
+static void
+nfp_repr_rx_ring_enable(struct nfp_net *nn,
+			struct nfp_repr *repr)
+{
+	struct nfp_net_rx_ring *rx_ring;
+	u64 enable_rings = 0;
+	u8 ridx;
+
+	enable_rings = nn_readq(nn, NFP_NET_CFG_RXRS_ENABLE);
+	for (ridx = 0; ridx < repr->nb_rx_rings; ridx++) {
+		rx_ring = repr->rx_rings[ridx];
+		enable_rings |= (1ULL << rx_ring->idx);
+	}
+	nn_writeq(nn, NFP_NET_CFG_RXRS_ENABLE, enable_rings);
+}
+static void
+nfp_repr_tx_ring_enable(struct nfp_net *nn,
+			struct nfp_repr *repr)
+{
+	struct nfp_net_tx_ring *tx_ring;
+	u64 enable_rings = 0;
+	u8 ridx;
+
+	enable_rings = nn_readq(nn, NFP_NET_CFG_TXRS_ENABLE);
+	for (ridx = 0; ridx < repr->nb_tx_rings; ridx++) {
+		tx_ring = repr->tx_rings[ridx];
+		enable_rings |= (1ULL << tx_ring->idx);
+	}
+	nn_writeq(nn, NFP_NET_CFG_TXRS_ENABLE, enable_rings);
+}
+
+static void
+nfp_net_repr_set_config_and_enable(struct nfp_net *nn,
+				   struct nfp_repr *repr)
+{
+	struct nfp_net_rx_ring *rx_ring;
+	struct nfp_net_tx_ring *tx_ring;
+	u8 ridx;
+
+	for (ridx = 0; ridx < repr->nb_rx_rings; ridx++) {
+		rx_ring = repr->rx_rings[ridx];
+		nfp_net_rx_ring_hw_cfg_write(nn, rx_ring, rx_ring->idx);
+	}
+
+	nfp_repr_rx_ring_enable(nn, repr);
+
+	for (ridx = 0; ridx < repr->nb_tx_rings; ridx++) {
+		tx_ring = repr->tx_rings[ridx];
+		nfp_net_tx_ring_hw_cfg_write(nn, tx_ring, tx_ring->idx);
+	}
+
+	nfp_repr_tx_ring_enable(nn, repr);
+}
+
+static void
+nfp_net_repr_rx_rings_fill_freelist(struct nfp_net *nn,
+				    struct nfp_repr *repr)
+{
+	struct nfp_net_rx_ring *rx_ring;
+	u8 ridx;
+
+	for (ridx = 0; ridx < repr->nb_rx_rings; ridx++) {
+		rx_ring = repr->rx_rings[ridx];
+		nfp_net_rx_ring_fill_freelist(&nn->dp, rx_ring);
+	}
 }
 
 struct net_device *
@@ -383,6 +451,39 @@ static netdev_tx_t nfp_repr_xmit(struct sk_buff *skb, struct net_device *netdev)
 	return NETDEV_TX_OK;
 }
 
+/**
+ * nfp_net_repr_reconfig() - Write control BAR and enable NFP
+ * @nn:      NFP Net device to reconfigure
+ */
+static int
+nfp_net_repr_reconfig(struct nfp_net *nn)
+{
+	u32 new_ctrl, update = 0;
+	int err;
+
+	new_ctrl = nn->dp.ctrl;
+
+	/* Enable device */
+	update |= NFP_NET_CFG_UPDATE_GEN;
+	update |= NFP_NET_CFG_UPDATE_MSIX;
+	update |= NFP_NET_CFG_UPDATE_RING;
+	if (nn->cap & NFP_NET_CFG_CTRL_RINGCFG)
+		new_ctrl |= NFP_NET_CFG_CTRL_RINGCFG;
+
+	nn_writel(nn, NFP_NET_CFG_CTRL, new_ctrl);
+	nn_writel(nn, NFP_NET_CFG_CTRL_WORD1, nn->dp.ctrl_w1);
+	err = nfp_net_reconfig(nn, update);
+	if (err) {
+		nn_err(nn, "Failed to call nfp_net_reconfig, new_ctrl 0x%x update 0x%x (err=%d).\n",
+		       new_ctrl, update, err);
+		return err;
+	}
+
+	nn->dp.ctrl = new_ctrl;
+
+	return 0;
+}
+
 static int nfp_repr_stop(struct net_device *netdev)
 {
 	struct nfp_repr *repr = netdev_priv(netdev);
@@ -394,6 +495,54 @@ static int nfp_repr_stop(struct net_device *netdev)
 
 	nfp_port_configure(netdev, false);
 	return 0;
+}
+
+static void
+nfp_repr_open_stack(struct nfp_repr *repr)
+{
+	struct nfp_net_rx_ring *rx_ring;
+	struct nfp_net_tx_ring *tx_ring;
+	struct nfp_net_r_vector *r_vec;
+	u8 i;
+
+	for (i = 0; i < repr->nb_rx_rings; i++) {
+		rx_ring = repr->rx_rings[i];
+		r_vec = rx_ring->r_vec;
+#ifdef COMPAT_HAVE_DIM
+		if (r_vec->rx_ring) {
+			INIT_WORK(&r_vec->rx_dim.work, nfp_net_rx_dim_work);
+			r_vec->rx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
+		}
+#endif
+		napi_enable(&r_vec->napi);
+		enable_irq(r_vec->irq_vector);
+	}
+	for (i = 0; i < repr->nb_tx_rings; i++) {
+		tx_ring = repr->tx_rings[i];
+		r_vec = tx_ring->r_vec;
+#ifdef COMPAT_HAVE_DIM
+		if (r_vec->tx_ring) {
+			INIT_WORK(&r_vec->tx_dim.work, nfp_net_tx_dim_work);
+			r_vec->tx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
+		}
+#endif
+	}
+	netif_tx_wake_all_queues(repr->netdev);
+}
+
+static void
+nfp_repr_vector_assign_rx_ring(struct nfp_net_dp *dp,
+			       struct nfp_net_r_vector *r_vec, int idx)
+{
+	r_vec->rx_ring = idx < dp->num_rx_rings ? &dp->rx_rings[idx] : NULL;
+}
+
+static void
+nfp_repr_vector_assign_tx_ring(struct nfp_net_dp *dp,
+			       struct nfp_net_r_vector *r_vec, int idx)
+{
+	r_vec->tx_ring =
+		idx < dp->num_stack_tx_rings ? &dp->tx_rings[idx] : NULL;
 }
 
 static int nfp_repr_open(struct net_device *netdev)
@@ -413,6 +562,133 @@ static int nfp_repr_open(struct net_device *netdev)
 
 err_port_disable:
 	nfp_port_configure(netdev, false);
+	return err;
+}
+
+int
+nfp_sgw_repr_open(struct net_device *netdev)
+{
+	struct nfp_repr *repr = netdev_priv(netdev);
+	u8 i, j, k, v, ridx = NFP_NET_MAX_RX_RINGS;
+	struct nfp_flower_priv *app_priv;
+	struct nfp_net_rx_ring *rx_ring;
+	struct nfp_net_tx_ring *tx_ring;
+	struct nfp_net *nn;
+	int err;
+
+	if (repr->port->type != NFP_PORT_PHYS_PORT)
+		return 0;
+
+	app_priv = (struct nfp_flower_priv *)repr->app->priv;
+	nn = app_priv->nn;
+
+	/* Step 1: Allocate resources for rings and the like
+	 * - Request interrupts
+	 * - Allocate RX and TX ring resources
+	 * - Setup initial RSS table
+	 */
+	for (j = 0; j < repr->nb_tx_rings; j++) {
+		err = nfp_repr_tx_ring_alloc(nn, &tx_ring, &ridx, netdev);
+		if (err)
+			goto err_tx_ring_alloc;
+
+		tx_ring->repr_ridx = j;
+		repr->tx_rings[j] = tx_ring;
+		repr->vnic_tx_ring_map[j] = ridx;
+	}
+
+	for (i = 0; i < repr->nb_rx_rings; i++) {
+		err = nfp_repr_rx_ring_alloc(nn, &rx_ring, &ridx, netdev);
+		if (err)
+			goto err_rx_ring_alloc;
+
+		rx_ring->repr_ridx = i;
+		repr->rx_rings[i] = rx_ring;
+		repr->vnic_rx_ring_map[i] = ridx;
+	}
+
+	for (v = 0; v < repr->nb_rx_rings; v++) {
+		ridx = repr->vnic_rx_ring_map[v];
+		err = nfp_net_prepare_vector(nn, &nn->r_vecs[ridx], ridx);
+		if (err)
+			goto err_vector_prepare;
+	}
+
+	for (k = 0; k < repr->nb_rx_rings; k++) {
+		ridx = repr->vnic_rx_ring_map[k];
+		nfp_repr_vector_assign_rx_ring(&nn->dp,
+					       &nn->r_vecs[ridx], ridx);
+	}
+
+	for (k = 0; k < repr->nb_tx_rings; k++) {
+		ridx = repr->vnic_tx_ring_map[k];
+		nfp_repr_vector_assign_tx_ring(&nn->dp,
+					       &nn->r_vecs[ridx], ridx);
+	}
+
+	err = netif_set_real_num_tx_queues(netdev, repr->nb_tx_rings);
+	if (err)
+		goto err_vector_prepare;
+
+	err = netif_set_real_num_rx_queues(netdev, repr->nb_rx_rings);
+	if (err)
+		goto err_vector_prepare;
+
+	/* Step 2: Configure the NFP
+	 * - Ifup the physical interface if it exists
+	 * - Enable rings from 0 to tx_rings/rx_rings - 1.
+	 * - Write MAC address (in case it changed)
+	 * - Set the MTU
+	 * - Set the Freelist buffer size
+	 * - Enable the FW
+	 */
+	err = nfp_port_configure(netdev, true);
+	if (err)
+		return err;
+
+	err = nfp_app_repr_open(repr->app, repr);
+	if (err)
+		goto err_port_disable;
+
+	nfp_net_repr_set_config_and_enable(nn, repr);
+
+	nfp_net_repr_reconfig(nn);
+
+	nfp_net_repr_rx_rings_fill_freelist(nn, repr);
+
+	/* Step 3: Enable for kernel
+	 * - put some freelist descriptors on each RX ring
+	 * - enable NAPI on each ring
+	 * - enable all TX queues
+	 * - set link state
+	 */
+	nfp_repr_open_stack(repr);
+	nn_dbg(nn, "phy repr %s up", netdev->name);
+
+	return 0;
+
+err_port_disable:
+	nfp_port_configure(netdev, false);
+err_vector_prepare:
+	for (k = 0; k < v; k++) {
+		ridx = repr->vnic_rx_ring_map[k];
+		nfp_net_cleanup_vector(nn, &nn->r_vecs[ridx]);
+	}
+err_rx_ring_alloc:
+	for (k = 0; k < i; k++) {
+		ridx = repr->vnic_rx_ring_map[k];
+		nfp_repr_rx_ring_free(nn, ridx);
+		repr->rx_rings[k] = NULL;
+		repr->vnic_rx_ring_map[k] = NFP_NET_MAX_RX_RINGS;
+	}
+err_tx_ring_alloc:
+	for (k = 0; k < j; k++) {
+		ridx = repr->vnic_tx_ring_map[k];
+		nfp_repr_tx_ring_free(nn, ridx);
+		repr->tx_rings[k] = NULL;
+		repr->vnic_tx_ring_map[k] = NFP_NET_MAX_TX_RINGS;
+	}
+
 	return err;
 }
 
