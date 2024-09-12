@@ -148,6 +148,19 @@ void nfp_net_tx_rings_free(struct nfp_net_dp *dp);
 void nfp_net_rx_ring_reset(struct nfp_net_rx_ring *rx_ring);
 bool nfp_net_vlan_strip(struct sk_buff *skb, const struct nfp_net_rx_desc *rxd,
 			const struct nfp_meta_parsed *meta);
+int nfp_net_rx_ring_alloc(struct nfp_net_dp *dp,
+			  struct nfp_net_rx_ring *rx_ring);
+int nfp_net_rx_ring_bufs_alloc(struct nfp_net_dp *dp,
+			       struct nfp_net_rx_ring *rx_ring);
+void nfp_net_rx_ring_bufs_free(struct nfp_net_dp *dp,
+			       struct nfp_net_rx_ring *rx_ring);
+void nfp_net_rx_ring_free(struct nfp_net_rx_ring *rx_ring);
+void nfp_net_rx_ring_init(struct nfp_net_rx_ring *rx_ring,
+			  struct nfp_net_r_vector *r_vec, unsigned int idx);
+void nfp_net_tx_ring_init(struct nfp_net_tx_ring *tx_ring,
+			  struct nfp_net_dp *dp,
+			  struct nfp_net_r_vector *r_vec, unsigned int idx,
+			  bool is_xdp);
 
 enum nfp_nfd_version {
 	NFP_NFD_VER_NFD3,

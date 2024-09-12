@@ -17,6 +17,180 @@
 #include "nfp_net_repr.h"
 #include "nfp_net_sriov.h"
 #include "nfp_port.h"
+#include "nfp_net_dp.h"
+
+static bool
+nfp_vnic_ring_idx_check(struct nfp_net *nn,
+			u8 ridx, bool is_rx_ring)
+{
+	if (is_rx_ring && ridx < nn->dp.num_rx_rings)
+		return true;
+
+	if (!is_rx_ring && ridx < nn->dp.num_tx_rings)
+		return true;
+
+	return false;
+}
+
+static u8
+nfp_vnic_ring_idx_alloc(struct nfp_net *nn, bool is_rx_ring)
+{
+	struct nfp_vnic_ring_hdl *ring_hdl;
+	struct nfp_net_dp *dp = &nn->dp;
+	u8 idx;
+
+	ring_hdl = &dp->ring_rsc_hdl;
+
+	if (is_rx_ring) {
+		for (idx = 0; idx < nn->dp.num_rx_rings; idx++) {
+			if (ring_hdl->rx_ring_used[idx] == 0) {
+				ring_hdl->rx_ring_used[idx] = 1;
+				return idx;
+			}
+		}
+		return NFP_NET_MAX_RX_RINGS;
+	} else {
+		for (idx = 0; idx < nn->dp.num_tx_rings; idx++) {
+			if (ring_hdl->tx_ring_used[idx] == 0) {
+				ring_hdl->tx_ring_used[idx] = 1;
+				return idx;
+			}
+		}
+		return NFP_NET_MAX_TX_RINGS;
+	}
+}
+
+static void
+nfp_vnic_ring_idx_free(struct nfp_net *nn,
+		       bool is_rx_ring, u8 idx)
+{
+	struct nfp_vnic_ring_hdl *ring_hdl;
+	struct nfp_net_dp *dp = &nn->dp;
+
+	ring_hdl = &dp->ring_rsc_hdl;
+
+	if (is_rx_ring)
+		ring_hdl->rx_ring_used[idx] = 0;
+	else
+		ring_hdl->tx_ring_used[idx] = 0;
+}
+
+int
+nfp_repr_rx_ring_alloc(struct nfp_net *nn,
+		       struct nfp_net_rx_ring **r, u8 *ridx,
+		       struct net_device *netdev)
+{
+	struct nfp_net_rx_ring *rx_ring;
+	int ret;
+	u8 idx;
+
+	idx = nfp_vnic_ring_idx_alloc(nn, true);
+	if (!nfp_vnic_ring_idx_check(nn, idx, true)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	rx_ring = &nn->dp.rx_rings[idx];
+	rx_ring->netdev = netdev;
+	nfp_net_rx_ring_init(rx_ring, &nn->r_vecs[idx], idx);
+
+	ret = nfp_net_rx_ring_alloc(&nn->dp, rx_ring);
+	if (ret)
+		goto free_ring_idx;
+
+	ret = nfp_net_rx_ring_bufs_alloc(&nn->dp, rx_ring);
+	if (ret)
+		goto free_ring_buf;
+
+	*r = rx_ring;
+	*ridx = idx;
+
+	return 0;
+
+free_ring_buf:
+	nfp_net_rx_ring_bufs_free(&nn->dp, rx_ring);
+	nfp_net_rx_ring_free(rx_ring);
+free_ring_idx:
+	nfp_vnic_ring_idx_free(nn, true, idx);
+out:
+	return ret;
+}
+
+void
+nfp_repr_rx_ring_free(struct nfp_net *nn, u8 ridx)
+{
+	struct nfp_net_rx_ring *rx_ring;
+
+	if (!nfp_vnic_ring_idx_check(nn, ridx, true))
+		return;
+
+	rx_ring = &nn->dp.rx_rings[ridx];
+	nfp_net_rx_ring_bufs_free(&nn->dp, rx_ring);
+	nfp_net_rx_ring_free(rx_ring);
+
+	nfp_vnic_ring_idx_free(nn, true, ridx);
+}
+
+int
+nfp_repr_tx_ring_alloc(struct nfp_net *nn,
+		       struct nfp_net_tx_ring **r, u8 *ridx,
+		       struct net_device *netdev)
+{
+	struct nfp_net_tx_ring *tx_ring;
+	int bias = 0;
+	int ret;
+	u8 idx;
+
+	idx = nfp_vnic_ring_idx_alloc(nn, false);
+	if (!nfp_vnic_ring_idx_check(nn, idx, false)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (idx >= nn->dp.num_stack_tx_rings)
+		bias = nn->dp.num_stack_tx_rings;
+
+	tx_ring = &nn->dp.tx_rings[idx];
+	tx_ring->netdev = netdev;
+	nfp_net_tx_ring_init(tx_ring, &nn->dp,
+			     &nn->r_vecs[idx - bias], idx, bias);
+
+	ret = nfp_net_tx_ring_alloc(&nn->dp, tx_ring);
+	if (ret)
+		goto free_ring_idx;
+
+	ret = nfp_net_tx_ring_bufs_alloc(&nn->dp, tx_ring);
+	if (ret)
+		goto free_ring_buf;
+
+	*r = tx_ring;
+	*ridx = idx;
+
+	return 0;
+
+free_ring_buf:
+	nfp_net_tx_ring_bufs_free(&nn->dp, tx_ring);
+	nfp_net_tx_ring_free(&nn->dp, tx_ring);
+free_ring_idx:
+	nfp_vnic_ring_idx_free(nn, false, idx);
+out:
+	return ret;
+}
+
+void
+nfp_repr_tx_ring_free(struct nfp_net *nn, u8 ridx)
+{
+	struct nfp_net_tx_ring *tx_ring;
+
+	if (!nfp_vnic_ring_idx_check(nn, ridx, false))
+		return;
+
+	tx_ring = &nn->dp.tx_rings[ridx];
+	nfp_net_tx_ring_bufs_free(&nn->dp, tx_ring);
+	nfp_net_tx_ring_free(&nn->dp, tx_ring);
+
+	nfp_vnic_ring_idx_free(nn, false, ridx);
+}
 
 struct net_device *
 nfp_repr_get_locked(struct nfp_app *app, struct nfp_reprs *set, unsigned int id)

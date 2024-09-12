@@ -61,7 +61,7 @@ static u8 nfp_net_tx_ring_prio(struct nfp_net *nn, unsigned int idx)
  * @idx:      Ring index
  * @is_xdp:   Is this an XDP TX ring?
  */
-static void
+void
 nfp_net_tx_ring_init(struct nfp_net_tx_ring *tx_ring, struct nfp_net_dp *dp,
 		     struct nfp_net_r_vector *r_vec, unsigned int idx,
 		     bool is_xdp)
@@ -85,7 +85,7 @@ nfp_net_tx_ring_init(struct nfp_net_tx_ring *tx_ring, struct nfp_net_dp *dp,
  * @r_vec:    IRQ vector servicing this ring
  * @idx:      Ring index
  */
-static void
+void
 nfp_net_rx_ring_init(struct nfp_net_rx_ring *rx_ring,
 		     struct nfp_net_r_vector *r_vec, unsigned int idx)
 {
@@ -141,7 +141,7 @@ void nfp_net_rx_ring_reset(struct nfp_net_rx_ring *rx_ring)
  * entries.  After device is disabled nfp_net_rx_ring_reset() must be called
  * to restore required ring geometry.
  */
-static void
+void
 nfp_net_rx_ring_bufs_free(struct nfp_net_dp *dp,
 			  struct nfp_net_rx_ring *rx_ring)
 {
@@ -170,7 +170,7 @@ nfp_net_rx_ring_bufs_free(struct nfp_net_dp *dp,
  * @dp:		NFP Net data path struct
  * @rx_ring:	RX ring to remove buffers from
  */
-static int
+int
 nfp_net_rx_ring_bufs_alloc(struct nfp_net_dp *dp,
 			   struct nfp_net_rx_ring *rx_ring)
 {
@@ -261,7 +261,7 @@ void nfp_net_tx_rings_free(struct nfp_net_dp *dp)
  * nfp_net_rx_ring_free() - Free resources allocated to a RX ring
  * @rx_ring:  RX ring to free
  */
-static void nfp_net_rx_ring_free(struct nfp_net_rx_ring *rx_ring)
+void nfp_net_rx_ring_free(struct nfp_net_rx_ring *rx_ring)
 {
 	struct nfp_net_r_vector *r_vec = rx_ring->r_vec;
 	struct nfp_net_dp *dp = &r_vec->nfp_net->dp;
@@ -293,7 +293,7 @@ static void nfp_net_rx_ring_free(struct nfp_net_rx_ring *rx_ring)
  *
  * Return: 0 on success, negative errno otherwise.
  */
-static int
+int
 nfp_net_rx_ring_alloc(struct nfp_net_dp *dp, struct nfp_net_rx_ring *rx_ring)
 {
 #ifdef COMPAT__HAVE_XDP_SOCK_DRV

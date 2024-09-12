@@ -165,6 +165,7 @@ struct nfp_roce;
 /**
  * struct nfp_net_tx_ring - TX ring structure
  * @r_vec:      Back pointer to ring vector structure
+ * @netdev:     Back pointer to netdev
  * @idx:        Ring index from Linux's perspective
  * @data_pending: number of bytes added to current block (NFDK only)
  * @qcp_q:      Pointer to base of the QCP TX queue
@@ -187,6 +188,7 @@ struct nfp_roce;
  */
 struct nfp_net_tx_ring {
 	struct nfp_net_r_vector *r_vec;
+	struct net_device *netdev;
 
 	u16 idx;
 	u16 data_pending;
@@ -336,6 +338,7 @@ struct nfp_net_xsk_rx_buf {
 /**
  * struct nfp_net_rx_ring - RX ring structure
  * @r_vec:      Back pointer to ring vector structure
+ * @netdev:     Back pointer to netdev
  * @cnt:        Size of the queue in number of descriptors
  * @wr_p:       FL/RX ring write pointer (free running)
  * @rd_p:       FL/RX ring read pointer (free running)
@@ -351,6 +354,7 @@ struct nfp_net_xsk_rx_buf {
  */
 struct nfp_net_rx_ring {
 	struct nfp_net_r_vector *r_vec;
+	struct net_device *netdev;
 
 	u32 cnt;
 	u32 wr_p;
@@ -504,6 +508,11 @@ struct nfp_stat_pair {
 	u64 bytes;
 };
 
+struct nfp_vnic_ring_hdl {
+	u8 rx_ring_used[NFP_NET_MAX_RX_RINGS];
+	u8 tx_ring_used[NFP_NET_MAX_TX_RINGS];
+};
+
 /**
  * struct nfp_net_dp - NFP network device datapath data structure
  * @dev:		Backpointer to struct device
@@ -555,6 +564,7 @@ struct nfp_net_dp {
 
 	struct nfp_net_tx_ring *tx_rings;
 	struct nfp_net_rx_ring *rx_rings;
+	struct nfp_vnic_ring_hdl ring_rsc_hdl;
 
 	u8 __iomem *ctrl_bar;
 
