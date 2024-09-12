@@ -1000,6 +1000,120 @@ nfp_repr_fix_features(struct net_device *netdev, netdev_features_t features)
 	return features;
 }
 
+netdev_features_t
+nfp_sgw_repr_fix_features(struct net_device *netdev, netdev_features_t features)
+{
+	struct nfp_repr *repr = netdev_priv(netdev);
+	netdev_features_t old_features = features;
+	netdev_features_t lower_features;
+	struct net_device *lower_dev;
+	struct nfp_flower_priv *priv;
+	struct nfp_net *nn;
+
+	priv = (struct nfp_flower_priv *)(repr->app->priv);
+	nn = priv->nn;
+
+	lower_dev = repr->dst->u.port_info.lower_dev;
+
+	lower_features = lower_dev->features;
+	if (lower_features & (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM))
+		lower_features |= NETIF_F_HW_CSUM;
+
+	features = netdev_intersect_features(features, lower_features);
+	features |= old_features & (NETIF_F_SOFT_FEATURES | NETIF_F_HW_TC);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+	features |= NETIF_F_LLTX;
+#endif
+
+	return features;
+}
+
+#if COMPAT__HAVE_NDO_FEATURES_CHECK
+netdev_features_t
+nfp_repr_features_check(struct sk_buff *skb, struct net_device *dev,
+			netdev_features_t features)
+{
+	u8 l4_hdr;
+
+	/* We can't do TSO over double tagged packets (802.1AD) */
+	features &= vlan_features_check(skb, features);
+
+	if (!skb->encapsulation)
+		return features;
+
+	/* Ensure that inner L4 header offset fits into TX descriptor field */
+	if (skb_is_gso(skb)) {
+		u32 hdrlen;
+
+		hdrlen = skb_inner_transport_header(skb) - skb->data +
+			inner_tcp_hdrlen(skb);
+
+		/* Assume worst case scenario of having longest possible
+		 * metadata prepend - 8B
+		 */
+		if (unlikely(hdrlen > NFP_NET_LSO_MAX_HDR_SZ - 8))
+			features &= ~NETIF_F_GSO_MASK;
+	}
+
+	/* VXLAN/GRE check */
+	switch (vlan_get_protocol(skb)) {
+	case htons(ETH_P_IP):
+		l4_hdr = ip_hdr(skb)->protocol;
+		break;
+	case htons(ETH_P_IPV6):
+		l4_hdr = ipv6_hdr(skb)->nexthdr;
+		break;
+	default:
+		return features & ~(NETIF_F_CSUM_MASK | NETIF_F_GSO_MASK);
+	}
+
+	if (skb->inner_protocol_type != ENCAP_TYPE_ETHER ||
+	    skb->inner_protocol != htons(ETH_P_TEB) ||
+	    (l4_hdr != IPPROTO_UDP && l4_hdr != IPPROTO_GRE) ||
+	    (l4_hdr == IPPROTO_UDP &&
+	    (skb_inner_mac_header(skb) - skb_transport_header(skb) !=
+	    sizeof(struct udphdr) + sizeof(struct vxlanhdr))))
+		return features & ~(NETIF_F_CSUM_MASK | NETIF_F_GSO_MASK);
+
+	return features;
+}
+#endif
+
+#ifndef COMPAT_SLELINUX
+#if VER_NON_RHEL_LT(5, 6) || VER_RHEL_LT(8, 3)
+void
+nfp_repr_tx_timeout(struct net_device *netdev)
+{
+	struct nfp_repr *repr = netdev_priv(netdev);
+	struct nfp_flower_priv *app_priv;
+	struct nfp_net *nn;
+	int i;
+
+	app_priv = (struct nfp_flower_priv *)repr->app->priv;
+	nn = app_priv->nn;
+
+	for (i = 0; i < netdev->real_num_tx_queues; i++) {
+		if (!netif_tx_queue_stopped(netdev_get_tx_queue(netdev, i)))
+			continue;
+		nn_warn(nn, "TX watchdog timeout on ring: %u\n", i);
+	}
+}
+#else
+void
+nfp_repr_tx_timeout(struct net_device *netdev, unsigned int txqueue)
+{
+	struct nfp_repr *repr = netdev_priv(netdev);
+	struct nfp_flower_priv *app_priv;
+	struct nfp_net *nn;
+
+	app_priv = (struct nfp_flower_priv *)repr->app->priv;
+	nn = app_priv->nn;
+
+	nn_warn(nn, "TX watchdog timeout on ring: %u\n", txqueue);
+}
+#endif
+#endif
+
 const struct net_device_ops nfp_repr_netdev_ops = {
 	.ndo_init		= nfp_app_ndo_init,
 	.ndo_uninit		= nfp_app_ndo_uninit,
