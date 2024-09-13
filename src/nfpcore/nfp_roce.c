@@ -445,8 +445,7 @@ int nfp_net_add_roce(struct nfp_pf *pf, struct nfp_net *nn)
 	if (!roce)
 		return -ENOMEM;
 
-	roce->info = kzalloc(sizeof(struct crdma_res_info) +
-			     sizeof(struct msix_entry) * nn->num_roce_vecs,
+	roce->info = kzalloc(struct_size(roce->info, msix, nn->num_roce_vecs),
 			     GFP_KERNEL);
 	if (!roce->info) {
 		kfree(roce);

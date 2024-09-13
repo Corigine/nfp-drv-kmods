@@ -243,7 +243,7 @@ nfp_fl_lag_config_group(struct nfp_fl_lag *lag, struct nfp_fl_lag_group *group,
 	struct sk_buff *skb;
 
 	priv = container_of(lag, struct nfp_flower_priv, nfp_lag);
-	size = sizeof(*cmsg_payload) + sizeof(__be32) * member_cnt;
+	size = struct_size(cmsg_payload, members, member_cnt);
 	skb = nfp_flower_cmsg_alloc(priv->app, size,
 				    NFP_FLOWER_CMSG_TYPE_LAG_CONFIG,
 				    GFP_KERNEL);
