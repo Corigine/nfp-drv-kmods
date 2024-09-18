@@ -300,6 +300,9 @@ $(eval $(call add_compat_flag,$(srctree)/include/net/flow_offload.h,"struct flow
 # Check for bpf_prog_prepare
 $(eval $(call add_compat_flag,$(srctree)/include/linux/bpf.h,"int (\*prepare)(struct bpf_prog \*prog);",COMPAT__BPF_PROG_PREPARE))
 
+# Check for udp_tunnel_nic_add/del_port
+$(eval $(call add_compat_flag,$(srctree)/include/net/udp_tunnel.h,"udp_tunnel_nic_add_port",COMPAT__UDP_TUN_NIC_PORT))
+
 utsrelease_h_path :=$(srctree)/include/generated/utsrelease.h
 # Check for BC Linux
 $(eval $(call add_compat_flag,$(utsrelease_h_path),bclinux,COMPAT_BCLINUX=1))
