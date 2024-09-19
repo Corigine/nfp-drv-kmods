@@ -189,7 +189,7 @@ static void crdma_compound_order(struct ib_umem *umem, u64 start,
 	 * Go through the memory reducing the alignment to the smallest
 	 * order found in the region.
 	 */
-#if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 365, 0, 0))
+#if (VER_NON_RHEL_GE(5, 15) || (RHEL_RELEASE_GE(8, 365, 0, 0) && !(VER_RHEL_EQ(9, 0))))
 	for_each_sg(umem->sgt_append.sgt.sgl, sg, umem->sgt_append.sgt.nents,
 		    entry) {
 #else
@@ -1475,7 +1475,7 @@ static void crdma_init_wq_ownership(struct crdma_mem *mem, u32 offset,
 
 #define CRDMA_QP1_INDEX   1
 
-#if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 394, 0, 0))
+#if (VER_NON_RHEL_GE(5, 15) || (RHEL_RELEASE_GE(8, 394, 0, 0) && !(VER_RHEL_EQ(9, 0))))
 static int crdma_create_qp(struct ib_qp *qp,
 			   struct ib_qp_init_attr *qp_init_attr,
 			   struct ib_udata *udata)
@@ -3732,7 +3732,7 @@ static struct ib_mr *crdma_reg_user_mr(struct ib_pd *pd, u64 start,
 		goto free_mem;
 	}
 
-#if (VER_NON_RHEL_GE(5, 6))
+#if (VER_NON_RHEL_GE(5, 6) || VER_RHEL_GE(9, 0))
 	cmr->umem = ib_umem_get(pd->device, start, length, access_flags);
 #elif (VER_NON_RHEL_OR_KYL_GE(5, 5) || VER_RHEL_GE(8, 3) || VER_KYL_GE(10, 4))
 	cmr->umem = ib_umem_get(udata, start, length, access_flags);
@@ -4104,7 +4104,7 @@ static const struct ib_device_ops crdma_dev_ops = {
 	INIT_RDMA_OBJ_SIZE(ib_ucontext, crdma_ucontext, ib_uctxt),
 	INIT_RDMA_OBJ_SIZE(ib_ah, crdma_ah, ib_ah),
 	INIT_RDMA_OBJ_SIZE(ib_srq, crdma_srq, ib_srq),
-#if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 394, 0, 0))
+#if (VER_NON_RHEL_GE(5, 15) || (RHEL_RELEASE_GE(8, 394, 0, 0) && !(VER_RHEL_EQ(9, 0))))
 	INIT_RDMA_OBJ_SIZE(ib_qp, crdma_qp, ib_qp),
 #endif
 #endif
