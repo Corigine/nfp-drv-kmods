@@ -7,7 +7,7 @@
 #include "crdma_counters.h"
 #include "crdma_ucif.h"
 
-#if VER_RHEL_GE(8, 7)
+#if (VER_RHEL_GE(8, 7) && !(VER_RHEL_EQ(9, 0)))
 static const struct rdma_stat_desc crdma_counter_name[] = {
 	[CRDMA_CNT_RDMA_SEND].name         =  "rdma_sends",
 	[CRDMA_CNT_RDMA_RECV].name         =  "rdma_recvs",

@@ -1896,7 +1896,7 @@ int crdma_init_mpt(struct crdma_ibdev *dev, struct crdma_mr *cmr,
 					    &cmr->base_mtt))
 			return -ENOMEM;
 
-#if (VER_NON_RHEL_GE(5, 15) || RHEL_RELEASE_GE(8, 365, 0, 0))
+#if (VER_NON_RHEL_GE(5, 15) || (RHEL_RELEASE_GE(8, 365, 0, 0) && !(VER_RHEL_EQ(9, 0))))
 		ret = crdma_mtt_write_sg(dev, umem->sgt_append.sgt.sgl,
 					 umem->sgt_append.sgt.nents,
 					 cmr->base_mtt, cmr->num_mtt,
