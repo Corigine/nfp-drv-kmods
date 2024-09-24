@@ -225,6 +225,7 @@ const struct nfp_dp_ops nfp_nfdk_sgw_ops = {
 	.ctrl_poll		= nfp_nfdk_sgw_ctrl_poll,
 	.xmit			= nfp_nfdk_sgw_tx,
 	.ctrl_tx_one		= nfp_nfdk_sgw_ctrl_tx,
+	.rx_ring_fill_freelist	= nfp_nfdk_sgw_rx_ring_fill_freelist,
 	.tx_ring_free		= nfp_nfdk_tx_ring_free,
 	.tx_ring_bufs_alloc	= nfp_nfdk_tx_ring_bufs_alloc,
 	.tx_ring_bufs_free	= nfp_nfdk_tx_ring_bufs_free,

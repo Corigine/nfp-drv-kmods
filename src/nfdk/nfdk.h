@@ -155,6 +155,8 @@ void nfp_nfdk_sgw_ctrl_poll(unsigned long arg);
 #endif
 void nfp_nfdk_rx_ring_fill_freelist(struct nfp_net_dp *dp,
 				    struct nfp_net_rx_ring *rx_ring);
+void nfp_nfdk_sgw_rx_ring_fill_freelist(struct nfp_net_dp *dp,
+					struct nfp_net_rx_ring *rx_ring);
 #ifndef CONFIG_NFP_NET_IPSEC
 static inline u64 nfp_nfdk_ipsec_tx(u64 flags, struct sk_buff *skb)
 {

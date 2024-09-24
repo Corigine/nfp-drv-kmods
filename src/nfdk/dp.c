@@ -1099,6 +1099,34 @@ void nfp_nfdk_rx_ring_fill_freelist(struct nfp_net_dp *dp,
 }
 
 /**
+ * nfp_nfdk_sgw_rx_ring_fill_freelist() - Give buffers from the ring to sgw FW
+ * @dp:	     NFP Net data path struct
+ * @rx_ring: RX ring to fill
+ */
+void
+nfp_nfdk_sgw_rx_ring_fill_freelist(struct nfp_net_dp *dp,
+				   struct nfp_net_rx_ring *rx_ring)
+{
+	unsigned int i;
+
+	for (i = 0; i < rx_ring->cnt; i++) {
+		nfp_net_dma_sync_dev_rx(dp, rx_ring->rxbufs[i].dma_addr);
+		nfp_desc_set_dma_addr_48b(&rx_ring->rxds[i].fld,
+					  rx_ring->rxbufs[i].dma_addr +
+					  dp->rx_dma_off);
+
+		rx_ring->wr_p++;
+	}
+
+	/* setup write pointer of the freelist queue. Make
+	 * sure all writes are flushed before telling the hardware.
+	 */
+	wmb();
+
+	nfp_qcp_wr_ptr_add(rx_ring->qcp_fl, rx_ring->cnt - 1);
+}
+
+/**
  * nfp_nfdk_rx_csum_has_errors() - group check if rxd has any csum errors
  * @flags: RX descriptor flags field in CPU byte order
  */
