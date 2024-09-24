@@ -208,8 +208,11 @@ nfp_nfdk_print_tx_descs(struct seq_file *file,
 	for (i = 0; i < txd_cnt; i++) {
 		txd = &tx_ring->ktxds[i];
 
-		seq_printf(file, "%04d: 0x%08x 0x%08x 0x%016llx", i,
-			   txd->vals[0], txd->vals[1], tx_ring->ktxbufs[i].raw);
+		seq_printf(file, "%04d: 0x%08x 0x%08x 0x%016llx 0x%016llx", i,
+			   txd->vals[0],
+			   txd->vals[1],
+			   tx_ring->ktxbufs[i].raw,
+			   tx_ring->ktxbufs[i].raw2);
 
 		if (i == tx_ring->rd_p % txd_cnt)
 			seq_puts(file, " H_RD");
@@ -290,4 +293,5 @@ const struct nfp_dp_ops nfp_nfdk_sgw_ops = {
 	.tx_ring_free		= nfp_nfdk_tx_ring_free,
 	.tx_ring_bufs_alloc	= nfp_nfdk_tx_ring_bufs_alloc,
 	.tx_ring_bufs_free	= nfp_nfdk_tx_ring_bufs_free,
+	.print_tx_descs		= nfp_nfdk_print_tx_descs
 };
