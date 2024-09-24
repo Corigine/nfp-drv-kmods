@@ -221,8 +221,11 @@ const struct nfp_dp_ops nfp_nfdk_sgw_ops = {
 	.tx_min_desc_per_pkt	= NFDK_TX_DESC_PER_SIMPLE_PKT,
 	.cap_mask		= NFP_SGW_NFDK_CFG_CTRL_SUPPORTED,
 	.dma_mask		= DMA_BIT_MASK(48),
-
+	.poll			= nfp_nfdk_sgw_poll,
 	.ctrl_poll		= nfp_nfdk_sgw_ctrl_poll,
-
+	.xmit			= nfp_nfdk_sgw_tx,
 	.ctrl_tx_one		= nfp_nfdk_sgw_ctrl_tx,
+	.tx_ring_free		= nfp_nfdk_tx_ring_free,
+	.tx_ring_bufs_alloc	= nfp_nfdk_tx_ring_bufs_alloc,
+	.tx_ring_bufs_free	= nfp_nfdk_tx_ring_bufs_free,
 };
