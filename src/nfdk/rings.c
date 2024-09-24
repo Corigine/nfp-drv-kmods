@@ -73,6 +73,56 @@ next:
 	netdev_tx_reset_queue(nd_q);
 }
 
+static void
+nfp_nfdk_sgw_tx_ring_reset(struct nfp_net_dp *dp,
+			   struct nfp_net_tx_ring *tx_ring)
+{
+	struct sk_buff *last_skb = NULL;
+	struct nfp_nfdk_tx_buf *txbuf;
+	struct netdev_queue *nd_q;
+	int rd_idx;
+
+	if (NULL == dp || NULL == tx_ring)
+		return;
+
+	while (!tx_ring->is_xdp && tx_ring->rd_p != tx_ring->wr_p) {
+		rd_idx = D_IDX(tx_ring, tx_ring->rd_p);
+		txbuf = &tx_ring->ktxbufs[rd_idx];
+
+		if (txbuf->type == NFP_NFDK_TX_BUF_SKB) {
+			if (last_skb)
+				dev_kfree_skb_any(last_skb);
+
+			last_skb = txbuf->skb;
+		} else if (txbuf->type == NFP_NFDK_TX_BUF_DMA_L) {
+			dma_unmap_single(dp->dev, txbuf->dma_addr,
+					 txbuf->dma_size, DMA_TO_DEVICE);
+		} else if (txbuf->type == NFP_NFDK_TX_BUF_DMA_F) {
+			dma_unmap_page(dp->dev, txbuf->dma_addr,
+				       txbuf->dma_size, DMA_TO_DEVICE);
+		}
+		txbuf->raw = 0;
+		txbuf->raw2 = 0;
+		tx_ring->rd_p++;
+	}
+
+	if (last_skb)
+		dev_kfree_skb_any(last_skb);
+
+	memset(tx_ring->txds, 0, tx_ring->size);
+	tx_ring->data_pending = 0;
+	tx_ring->wr_p = 0;
+	tx_ring->rd_p = 0;
+	tx_ring->qcp_rd_p = 0;
+	tx_ring->wr_ptr_add = 0;
+
+	if (tx_ring->is_xdp || !dp->netdev)
+		return;
+
+	nd_q = netdev_get_tx_queue(dp->netdev, tx_ring->idx);
+	netdev_tx_reset_queue(nd_q);
+}
+
 static void nfp_nfdk_tx_ring_free(struct nfp_net_tx_ring *tx_ring)
 {
 	struct nfp_net_r_vector *r_vec = tx_ring->r_vec;
@@ -226,6 +276,7 @@ const struct nfp_dp_ops nfp_nfdk_sgw_ops = {
 	.xmit			= nfp_nfdk_sgw_tx,
 	.ctrl_tx_one		= nfp_nfdk_sgw_ctrl_tx,
 	.rx_ring_fill_freelist	= nfp_nfdk_sgw_rx_ring_fill_freelist,
+	.tx_ring_reset		= nfp_nfdk_sgw_tx_ring_reset,
 	.tx_ring_free		= nfp_nfdk_tx_ring_free,
 	.tx_ring_bufs_alloc	= nfp_nfdk_tx_ring_bufs_alloc,
 	.tx_ring_bufs_free	= nfp_nfdk_tx_ring_bufs_free,
