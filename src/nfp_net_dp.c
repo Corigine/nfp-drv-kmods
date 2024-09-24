@@ -330,6 +330,13 @@ nfp_net_rx_ring_alloc(struct nfp_net_dp *dp, struct nfp_net_rx_ring *rx_ring)
 	}
 
 	rx_ring->cnt = dp->rxd_cnt;
+
+#ifdef COMPAT__HAVE_NFP_APP_FLOWER
+	if (nfp_dp_is_sgw(dp) &&
+	    nfp_netdev_is_phy_repr(rx_ring->netdev))
+		rx_ring->cnt = nfp_get_phy_repr_rx_ring_size(rx_ring->netdev);
+#endif
+
 	rx_ring->size = array_size(rx_ring->cnt, sizeof(*rx_ring->rxds));
 	rx_ring->rxds = dma_alloc_coherent(dp->dev, rx_ring->size,
 					   &rx_ring->dma,

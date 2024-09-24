@@ -1457,3 +1457,45 @@ int nfp_reprs_resync_phys_ports(struct nfp_app *app)
 
 	return 0;
 }
+
+bool
+nfp_netdev_is_phy_repr(struct net_device *netdev)
+{
+	struct nfp_repr *repr;
+
+	if (!netdev)
+		return false;
+
+	if (netdev->netdev_ops != &nfp_sgw_repr_netdev_ops)
+		return false;
+
+	repr = netdev_priv(netdev);
+	if (!repr)
+		return false;
+
+	return repr->port->type == NFP_PORT_PHYS_PORT;
+}
+
+unsigned int
+nfp_get_phy_repr_tx_ring_size(struct net_device *netdev)
+{
+	struct nfp_repr *repr;
+
+	repr = netdev_priv(netdev);
+	if (!repr)
+		return 0;
+
+	return repr->txd_cnt;
+}
+
+unsigned int
+nfp_get_phy_repr_rx_ring_size(struct net_device *netdev)
+{
+	struct nfp_repr *repr;
+
+	repr = netdev_priv(netdev);
+	if (!repr)
+		return 0;
+
+	return repr->rxd_cnt;
+}

@@ -16,6 +16,8 @@ struct nfp_port;
 #endif
 
 #define NFP_REPR_RING_NUM_MAX		32
+#define NFP_PHY_REPR_TX_DESCS_DEFAULT	2048 /* Default Tx descs per ring */
+#define NFP_PHY_REPR_RX_DESCS_DEFAULT	2048 /* Default Rx descs per ring */
 #define NFP_PHY_REPR_INDEX_SHIFT	2    /* Port id shift transformation */
 
 /**
@@ -60,6 +62,8 @@ struct nfp_repr_pcpu_stats {
  * @vnic_rx_ring_map:	Repr rx rings map pf vnic rx rings
  * @vnic_tx_ring_map:	Repr tx rings map pf vnic tx rings
  * @reta:		Repr redirection table
+ * @txd_cnt:		Tx desc ring size
+ * @rxd_cnt:		Rx desc ring size
  * @app_priv:	Pointer for APP data
  * @xmit_lock:		Lock for repr tx
  */
@@ -77,6 +81,9 @@ struct nfp_repr {
 	void *tx_rings[NFP_REPR_RING_NUM_MAX];
 	u8 vnic_rx_ring_map[NFP_REPR_RING_NUM_MAX];
 	u8 vnic_tx_ring_map[NFP_REPR_RING_NUM_MAX];
+	unsigned int txd_cnt;
+	unsigned int rxd_cnt;
+
 	/* rss reta */
 	u8 reta[NFP_NET_CFG_RSS_ITBL_SZ];
 
@@ -150,4 +157,7 @@ nfp_repr_alloc(struct nfp_app *app, unsigned int txqs, unsigned int rxqs)
 	return nfp_repr_alloc_mqs(app, txqs, rxqs);
 }
 
+bool nfp_netdev_is_phy_repr(struct net_device *netdev);
+unsigned int nfp_get_phy_repr_rx_ring_size(struct net_device *netdev);
+unsigned int nfp_get_phy_repr_tx_ring_size(struct net_device *netdev);
 #endif /* NFP_NET_REPR_H */

@@ -591,6 +591,9 @@ nfp_flower_spawn_phy_reprs(struct nfp_app *app, struct nfp_flower_priv *priv)
 
 			nfp_repr->nb_rx_rings = phy_ring_cfg->nb_rx_ring;
 			nfp_repr->nb_tx_rings = phy_ring_cfg->nb_tx_ring;
+
+			nfp_repr->rxd_cnt = NFP_PHY_REPR_RX_DESCS_DEFAULT;
+			nfp_repr->txd_cnt = NFP_PHY_REPR_TX_DESCS_DEFAULT;
 		}
 
 		repr_priv->nfp_repr = nfp_repr;

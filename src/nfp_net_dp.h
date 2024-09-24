@@ -272,7 +272,14 @@ nfp_net_debugfs_print_tx_descs(struct seq_file *file, struct nfp_net_dp *dp,
 
 extern const struct nfp_dp_ops nfp_nfd3_ops;
 extern const struct nfp_dp_ops nfp_nfdk_ops;
+extern const struct nfp_dp_ops nfp_nfdk_sgw_ops;
 
 netdev_tx_t nfp_net_tx(struct sk_buff *skb, struct net_device *netdev);
+
+static inline bool
+nfp_dp_is_sgw(struct nfp_net_dp *dp)
+{
+	return dp && (dp->ops == &nfp_nfdk_sgw_ops);
+}
 
 #endif /* _NFP_NET_DP_ */

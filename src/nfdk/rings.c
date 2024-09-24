@@ -8,6 +8,7 @@
 #include "../nfp_net.h"
 #include "../nfp_net_dp.h"
 #include "nfdk.h"
+#include "../nfp_net_repr.h"
 
 static void
 nfp_nfdk_tx_ring_reset(struct nfp_net_dp *dp, struct nfp_net_tx_ring *tx_ring)
@@ -147,6 +148,14 @@ nfp_nfdk_tx_ring_alloc(struct nfp_net_dp *dp, struct nfp_net_tx_ring *tx_ring)
 	struct nfp_net_r_vector *r_vec = tx_ring->r_vec;
 
 	tx_ring->cnt = dp->txd_cnt * NFDK_TX_DESC_PER_SIMPLE_PKT;
+
+#ifdef COMPAT__HAVE_NFP_APP_FLOWER
+	if (nfp_dp_is_sgw(dp) &&
+	    nfp_netdev_is_phy_repr(tx_ring->netdev))
+		tx_ring->cnt = nfp_get_phy_repr_tx_ring_size(tx_ring->netdev) *
+				NFDK_TX_DESC_PER_SIMPLE_PKT;
+#endif
+
 	tx_ring->size = array_size(tx_ring->cnt, sizeof(*tx_ring->ktxds));
 	tx_ring->ktxds = dma_zalloc_coherent(dp->dev, tx_ring->size,
 					     &tx_ring->dma,
@@ -276,6 +285,7 @@ const struct nfp_dp_ops nfp_nfdk_sgw_ops = {
 	.xmit			= nfp_nfdk_sgw_tx,
 	.ctrl_tx_one		= nfp_nfdk_sgw_ctrl_tx,
 	.rx_ring_fill_freelist	= nfp_nfdk_sgw_rx_ring_fill_freelist,
+	.tx_ring_alloc		= nfp_nfdk_tx_ring_alloc,
 	.tx_ring_reset		= nfp_nfdk_sgw_tx_ring_reset,
 	.tx_ring_free		= nfp_nfdk_tx_ring_free,
 	.tx_ring_bufs_alloc	= nfp_nfdk_tx_ring_bufs_alloc,
