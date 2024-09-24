@@ -1466,6 +1466,26 @@ nfp_nfdk_tx_xdp_buf(struct nfp_net_dp *dp, struct nfp_net_rx_ring *rx_ring,
 }
 #endif
 
+static inline void
+nfp_nfdk_rx_try_alloc(struct nfp_net_rx_ring *rx_ring,
+		      struct nfp_net_dp *dp)
+{
+	dma_addr_t new_dma_addr;
+	void *new_frag;
+	u32 i;
+
+	if (unlikely((rx_ring->wr_p - rx_ring->rd_p) < NFP_NET_FL_BATCH)) {
+		for (i = 0; i < NFP_NET_FL_BATCH; i++) {
+			new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr);
+			if (new_frag)
+				nfp_nfdk_rx_give_one(dp, rx_ring, new_frag,
+						     new_dma_addr);
+			else
+				break;
+		}
+	}
+}
+
 /**
  * nfp_nfdk_rx() - receive up to @budget packets on @rx_ring
  * @rx_ring:   RX ring to receive from
@@ -1734,6 +1754,210 @@ static int nfp_nfdk_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 	return pkts_polled;
 }
 
+static inline void
+nfp_nfdk_rx_pkt_off_get(struct nfp_net_rx_desc *rxd,
+			struct nfp_net_dp *dp,
+			u32 *meta_len,
+			u32 *data_len,
+			u32 *meta_off,
+			u32 *pkt_len,
+			u32 *pkt_off,
+			u32 is_first)
+{
+	/*  < meta_len >
+	 *  <-- [rx_offset] -->
+	 *  ---------------------------------------------------------
+	 * | [XX] |  metadata  |             packet           | XXXX |
+	 *  ---------------------------------------------------------
+	 *         <---------------- data_len --------------->
+	 *
+	 * The rx_offset is fixed for all packets, the meta_len can vary
+	 * on a packet by packet basis. If rx_offset is set to zero
+	 * (_RX_OFFSET_DYNAMIC) metadata starts at the beginning of the
+	 * buffer and is immediately followed by the packet (no [XX]).
+	 */
+	if (is_first)
+		*meta_len = rxd->rxd.meta_len_dd &
+				PCIE_DESC_RX_META_LEN_MASK;
+	else
+		*meta_len = 0;
+
+	*data_len = le16_to_cpu(rxd->rxd.data_len);
+	*pkt_len = *data_len - *meta_len;
+
+	*pkt_off = NFP_NET_RX_BUF_HEADROOM + dp->rx_dma_off;
+	if (dp->rx_offset == NFP_NET_CFG_RX_OFFSET_DYNAMIC)
+		*pkt_off += *meta_len;
+	else
+		*pkt_off += dp->rx_offset;
+
+	*meta_off = *pkt_off - *meta_len;
+}
+
+static inline void
+nfp_nfdk_rx_skb_head_set(struct sk_buff *skb,
+			 struct nfp_net_dp *dp,
+			 struct nfp_net_r_vector *r_vec,
+			 struct net_device *netdev,
+			 struct nfp_meta_parsed *meta,
+			 struct nfp_net_rx_desc *rxd,
+			 u32 pkt_off, u32 pkt_len, u32 qidx)
+{
+	skb_reserve(skb, pkt_off);
+	skb_put(skb, pkt_len);
+
+	skb->mark = meta->mark;
+	skb_set_hash(skb, meta->hash, meta->hash_type);
+
+	skb_record_rx_queue(skb, qidx);
+	skb->protocol = eth_type_trans(skb, netdev);
+
+	if (((rxd->rxd.flags & PCIE_DESC_RX_IP4_CSUM) &&
+	     (rxd->rxd.flags & PCIE_DESC_RX_IP4_CSUM_OK)) ||
+	    ((rxd->rxd.flags & PCIE_DESC_RX_TCP_CSUM) &&
+	     (rxd->rxd.flags & PCIE_DESC_RX_TCP_CSUM_OK)) ||
+	    ((rxd->rxd.flags & PCIE_DESC_RX_UDP_CSUM) &&
+	     (rxd->rxd.flags & PCIE_DESC_RX_UDP_CSUM_OK)))
+		meta->csum_type = CHECKSUM_COMPLETE;
+
+	nfp_nfdk_rx_csum(dp, r_vec, rxd, meta, skb);
+	nfp_net_vlan_strip(skb, rxd, meta);
+}
+
+/**
+ * nfp_nfdk_rx_sc() - receive up to @budget scatter gather packets on @rx_ring
+ * @rx_ring:   RX ring to receive from
+ * @budget:    NAPI budget
+ *
+ * Similar to flower nfdk rx ops, but we still have to rewrite it for sgw,
+ * considering the fw difference and rx scatter support mode.
+ *
+ * Return: Number of packets received.
+ */
+static int
+nfp_nfdk_rx_sc(struct nfp_net_rx_ring *rx_ring, int budget)
+{
+	struct nfp_net_r_vector *r_vec = rx_ring->r_vec;
+	struct nfp_net_dp *dp = &r_vec->nfp_net->dp;
+	struct net_device *netdev = rx_ring->netdev;
+	struct sk_buff *skb_to_stack = NULL;
+	u32 rxd_type = 0, total_bytes = 0;
+	struct nfp_net_rx_desc *rxd;
+	unsigned int true_bufsz;
+	int pkts_polled = 0;
+	int idx;
+
+	if (unlikely(!netdev))
+		return 0;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
+	rcu_read_lock();
+#endif
+
+	true_bufsz = dp->fl_bufsz;
+
+	while (pkts_polled < budget) {
+		u32 meta_len, data_len, meta_off, pkt_len, pkt_off;
+		struct nfp_net_rx_buf *rxbuf;
+		struct nfp_meta_parsed meta;
+		dma_addr_t new_dma_addr;
+		void *new_frag;
+
+		idx = D_IDX(rx_ring, rx_ring->rd_p);
+		rxd = &rx_ring->rxds[idx];
+
+		if (unlikely(!(rxd->rxd.meta_len_dd & PCIE_DESC_RX_DD))) {
+			/* to resolve the issue that
+			 * rd_p and wr_p may be incremented asynchronously.
+			 * if there are no buffer avilable
+			 * the rd_p can be incremented until equal to wr_p
+			 */
+			nfp_nfdk_rx_try_alloc(rx_ring, dp);
+			break;
+		}
+
+		/* Memory barrier to ensure that we won't do other reads
+		 * before the DD bit.
+		 */
+		dma_rmb();
+
+		memset(&meta, 0, sizeof(meta));
+		rx_ring->rd_p++;
+		rxbuf =	&rx_ring->rxbufs[idx];
+
+		rxd_type = rxd->rxd.rxd_type;
+
+		nfp_nfdk_rx_pkt_off_get(rxd, dp, &meta_len, &data_len,
+					&meta_off, &pkt_len,
+					&pkt_off, 1);
+
+		if (unlikely(meta_len > NFP_SGW_MAX_PREPEND ||
+			     (dp->rx_offset && meta_len > dp->rx_offset))) {
+			nn_dp_warn(dp, "oversized RX packet metadata %u\n",
+				   meta_len);
+			nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf, NULL);
+			continue;
+		}
+
+		nfp_net_dma_sync_cpu_rx(dp, rxbuf->dma_addr + meta_off,
+					data_len);
+
+		if (meta_len) {
+			if (unlikely(nfp_nfdk_parse_meta(dp->netdev,
+							 &meta,
+							 rxbuf->frag + meta_off,
+							 rxbuf->frag + pkt_off,
+							 pkt_len,
+							 meta_len))) {
+				nn_dp_warn(dp, "invalid RX packet metadata\n");
+				nfp_nfdk_rx_drop(dp, r_vec, rx_ring,
+						 rxbuf, NULL);
+				continue;
+			}
+		}
+
+		skb_to_stack = build_skb(rxbuf->frag, true_bufsz);
+		if (unlikely(!skb_to_stack)) {
+			nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf, NULL);
+			nn_dp_warn(dp, "RX ring %d failed to build skb\n",
+					rx_ring->idx);
+			continue;
+		}
+		nfp_nfdk_rx_skb_head_set(skb_to_stack, dp, r_vec,
+					 netdev, &meta, rxd, pkt_off,
+					 pkt_len, rx_ring->idx);
+		nfp_net_dma_unmap_rx(dp, rxbuf->dma_addr);
+		pkts_polled++;
+
+		total_bytes += pkt_len;
+
+		if (skb_to_stack) {
+			napi_gro_receive(&rx_ring->r_vec->napi, skb_to_stack);
+			skb_to_stack = NULL;
+		}
+
+		new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr);
+		if (unlikely(!new_frag)) {
+			nn_dp_warn(dp, "RX ring %d failed to alloc new_frag\n",
+				   rx_ring->idx);
+			break;
+		}
+		nfp_nfdk_rx_give_one(dp, rx_ring, new_frag, new_dma_addr);
+	}
+
+	/* Stats update */
+	u64_stats_update_begin(&r_vec->rx_sync);
+	r_vec->rx_pkts += pkts_polled;
+	r_vec->rx_bytes += total_bytes;
+	u64_stats_update_end(&r_vec->rx_sync);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
+	rcu_read_unlock();
+#endif
+
+	return pkts_polled;
+}
+
 /**
  * nfp_nfdk_poll() - napi poll function
  * @napi:    NAPI structure
@@ -1785,6 +2009,65 @@ int nfp_nfdk_poll(struct napi_struct *napi, int budget)
 		dim_update_sample(r_vec->event_ctr, pkts, bytes, &dim_sample);
 		net_dim(&r_vec->tx_dim, dim_sample);
 	}
+
+	return pkts_polled;
+}
+
+/**
+ * nfp_nfdk_sgw_poll() - napi poll function for sgw
+ * @napi:    NAPI structure
+ * @budget:  NAPI budget
+ *
+ * Return: number of packets polled.
+ */
+int
+nfp_nfdk_sgw_poll(struct napi_struct *napi, int budget)
+{
+	struct nfp_net_r_vector *r_vec =
+		container_of(napi, struct nfp_net_r_vector, napi);
+	unsigned int pkts_polled = 0;
+
+	if (r_vec->tx_ring)
+		nfp_nfdk_sgw_tx_complete(r_vec->tx_ring, budget);
+
+	if (r_vec->rx_ring)
+		pkts_polled = nfp_nfdk_rx_sc(r_vec->rx_ring, budget);
+
+	if (pkts_polled < budget)
+		if (napi_complete_done(napi, pkts_polled))
+			nfp_net_irq_unmask(r_vec->nfp_net, r_vec->irq_entry);
+
+#ifdef COMPAT_HAVE_DIM
+	if (r_vec->nfp_net->rx_coalesce_adapt_on && r_vec->rx_ring) {
+		struct dim_sample dim_sample = {};
+		unsigned int start;
+		u64 pkts, bytes;
+
+		do {
+			start = u64_stats_fetch_begin(&r_vec->rx_sync);
+			pkts = r_vec->rx_pkts;
+			bytes = r_vec->rx_bytes;
+		} while (u64_stats_fetch_retry(&r_vec->rx_sync, start));
+
+		dim_update_sample(r_vec->event_ctr, pkts, bytes, &dim_sample);
+		net_dim(&r_vec->rx_dim, dim_sample);
+	}
+
+	if (r_vec->nfp_net->tx_coalesce_adapt_on && r_vec->tx_ring) {
+		struct dim_sample dim_sample = {};
+		unsigned int start;
+		u64 pkts, bytes;
+
+		do {
+			start = u64_stats_fetch_begin(&r_vec->tx_sync);
+			pkts = r_vec->tx_pkts;
+			bytes = r_vec->tx_bytes;
+		} while (u64_stats_fetch_retry(&r_vec->tx_sync, start));
+
+		dim_update_sample(r_vec->event_ctr, pkts, bytes, &dim_sample);
+		net_dim(&r_vec->tx_dim, dim_sample);
+	}
+#endif
 
 	return pkts_polled;
 }

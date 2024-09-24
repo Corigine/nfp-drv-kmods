@@ -82,6 +82,7 @@
 
 /* Maximum number of bytes prepended to a packet */
 #define NFP_NET_MAX_PREPEND		64
+#define NFP_SGW_MAX_PREPEND		96
 
 /* Interrupt definitions */
 #define NFP_NET_NON_Q_VECTORS		2

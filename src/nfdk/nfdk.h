@@ -137,6 +137,7 @@ static inline int nfp_nfdk_headlen_to_segs(unsigned int headlen)
 }
 
 int nfp_nfdk_poll(struct napi_struct *napi, int budget);
+int nfp_nfdk_sgw_poll(struct napi_struct *napi, int budget);
 netdev_tx_t nfp_nfdk_tx(struct sk_buff *skb, struct net_device *netdev);
 netdev_tx_t nfp_nfdk_sgw_tx(struct sk_buff *skb, struct net_device *netdev);
 bool
