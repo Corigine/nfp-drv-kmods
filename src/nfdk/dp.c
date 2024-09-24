@@ -91,7 +91,7 @@ nfp_nfdk_tx_tso(struct nfp_net_r_vector *r_vec, struct nfp_nfdk_tx_buf *txbuf,
 	return txd.raw;
 }
 
-static u8
+static u64
 nfp_nfdk_tx_csum(struct nfp_net_dp *dp, struct nfp_net_r_vector *r_vec,
 		 unsigned int pkt_cnt, struct sk_buff *skb, u64 flags)
 {
@@ -583,6 +583,233 @@ err_flush:
 	r_vec->tx_errors++;
 	u64_stats_update_end(&r_vec->tx_sync);
 	dev_kfree_skb_any(skb);
+	return NETDEV_TX_OK;
+}
+
+/**
+ * nfp_nfdk_sgw_tx() - Main transmit entry point for sgw
+ * @skb:    SKB to transmit
+ * @netdev: pf netdev
+ *
+ * For sgw, phy repr netdev xmit will converge here that means sending pkts
+ * through pf netdev.
+ *
+ * Return: NETDEV_TX_OK on success.
+ */
+netdev_tx_t
+nfp_nfdk_sgw_tx(struct sk_buff *skb, struct net_device *netdev)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+	unsigned int real_len, real_pkts, qidx;
+	struct nfp_nfdk_tx_buf *txbuf, *etxbuf;
+	u32 cnt, tmp_dlen, dlen_type = 0;
+	struct nfp_net_tx_ring *tx_ring;
+	struct nfp_net_r_vector *r_vec;
+	const skb_frag_t *frag, *fend;
+	struct nfp_nfdk_tx_desc *txd;
+	unsigned int dma_len, type;
+	struct nfp_net_dp *dp;
+	int nr_frags, wr_idx;
+	dma_addr_t dma_addr;
+	u64 metadata = 0;
+
+	dp = &nn->dp;
+	qidx = skb_get_queue_mapping(skb);
+	tx_ring = &dp->tx_rings[qidx];
+	r_vec = tx_ring->r_vec;
+
+	/* Don't bother counting frags, assume the worst */
+	if (unlikely(nfp_sgw_tx_full(tx_ring, NFDK_TX_DESC_STOP_CNT))) {
+		u64_stats_update_begin(&r_vec->tx_sync);
+		r_vec->tx_busy++;
+		u64_stats_update_end(&r_vec->tx_sync);
+		dev_kfree_skb_any(skb);
+		return NETDEV_TX_BUSY;
+	}
+
+	metadata |= NFDK_DESC_TX_DEST_SET;
+	if (unlikely(compat_ndo_features_check(nn, skb)))
+		goto err_flush;
+
+	if (nfp_nfdk_tx_maybe_close_block(tx_ring, skb))
+		goto err_flush;
+
+	/* nr_frags will change after skb_linearize so we get nr_frags after
+	 * nfp_nfdk_tx_maybe_close_block function
+	 */
+	nr_frags = skb_shinfo(skb)->nr_frags;
+
+	/* DMA map all */
+	wr_idx = D_IDX(tx_ring, tx_ring->wr_p);
+	txd = &tx_ring->ktxds[wr_idx];
+	txbuf = &tx_ring->ktxbufs[wr_idx];
+
+	dma_len = skb_headlen(skb);
+	if (skb_is_gso(skb))
+		type = NFDK_DESC_TX_TYPE_TSO;
+	else if (!nr_frags && dma_len <= NFDK_TX_MAX_DATA_PER_HEAD)
+		type = NFDK_DESC_TX_TYPE_SIMPLE;
+	else
+		type = NFDK_DESC_TX_TYPE_GATHER;
+
+	dma_addr = dma_map_single(dp->dev, skb->data, dma_len, DMA_TO_DEVICE);
+	if (dma_mapping_error(dp->dev, dma_addr))
+		goto err_warn_dma;
+
+	txbuf->skb = skb;
+	txbuf->type = NFP_NFDK_TX_BUF_SKB;
+	txbuf++;
+
+	txbuf->dma_addr = dma_addr;
+	txbuf->type = NFP_NFDK_TX_BUF_DMA_L;
+	txbuf->dma_size = dma_len;
+	txbuf++;
+
+	/* FIELD_PREP() implicitly truncates to chunk */
+	dma_len -= 1;
+
+	/* We will do our best to pass as much data as we can in descriptor
+	 * and we need to make sure the first descriptor includes whole head
+	 * since there is limitation in firmware side. Sometimes the value of
+	 * dma_len bitwise and NFDK_DESC_TX_DMA_LEN_HEAD will less than
+	 * headlen.
+	 */
+	dlen_type = FIELD_PREP(NFDK_DESC_TX_DMA_LEN_HEAD,
+			       dma_len > NFDK_DESC_TX_DMA_LEN_HEAD ?
+			       NFDK_DESC_TX_DMA_LEN_HEAD : dma_len) |
+			       FIELD_PREP(NFDK_DESC_TX_TYPE_HEAD, type);
+
+	txd->dma_len_type = cpu_to_le16(dlen_type);
+	nfp_desc_set_dma_addr_48b(txd, dma_addr);
+
+	/* starts at bit 0 */
+	BUILD_BUG_ON(!(NFDK_DESC_TX_DMA_LEN_HEAD & 1));
+
+	/* Preserve the original dlen_type, this way below the EOP logic
+	 * can use dlen_type.
+	 */
+	tmp_dlen = dlen_type & NFDK_DESC_TX_DMA_LEN_HEAD;
+	dma_len -= tmp_dlen;
+	dma_addr += tmp_dlen + 1;
+	txd++;
+
+	/* The rest of the data (if any) will be in larger dma descritors
+	 * and is handled with the fragment loop.
+	 */
+	frag = skb_shinfo(skb)->frags;
+	fend = frag + nr_frags;
+
+	while (true) {
+		while (dma_len > 0) {
+			dma_len -= 1;
+			dlen_type = FIELD_PREP(NFDK_DESC_TX_DMA_LEN, dma_len);
+
+			txd->dma_len_type = cpu_to_le16(dlen_type);
+			nfp_desc_set_dma_addr_48b(txd, dma_addr);
+
+			dma_len -= dlen_type;
+			dma_addr += dlen_type + 1;
+			txd++;
+		}
+
+		if (frag >= fend)
+			break;
+
+		dma_len = skb_frag_size(frag);
+		dma_addr = skb_frag_dma_map(dp->dev, frag, 0, dma_len,
+					    DMA_TO_DEVICE);
+		if (dma_mapping_error(dp->dev, dma_addr))
+			goto err_unmap;
+
+		txbuf->dma_addr = dma_addr;
+		txbuf->type = NFP_NFDK_TX_BUF_DMA_F;
+		txbuf->dma_size = dma_len;
+		txbuf++;
+
+		frag++;
+	}
+
+	(txd - 1)->dma_len_type = cpu_to_le16(dlen_type | NFDK_DESC_TX_EOP);
+
+	if (!skb_is_gso(skb)) {
+		real_len = skb->len;
+		real_pkts = 1;
+		/* Metadata desc */
+		metadata = nfp_nfdk_tx_csum(dp, r_vec, 1, skb, metadata);
+		txd->raw = cpu_to_le64(metadata);
+		txd++;
+	} else {
+		/* lso desc should be placed after metadata desc */
+		(txd + 1)->raw = nfp_nfdk_tx_tso(r_vec, txbuf, skb);
+		real_len = txbuf->real_len;
+		real_pkts = txbuf->pkt_cnt;
+		/* Metadata desc */
+		metadata = nfp_nfdk_tx_csum(dp, r_vec, txbuf->pkt_cnt,
+					    skb, metadata);
+		txd->raw = cpu_to_le64(metadata);
+		txd += 2;
+		txbuf->type = NFP_NFDK_TX_BUF_GSOLEN;
+		txbuf++;
+	}
+
+	cnt = txd - tx_ring->ktxds - wr_idx;
+	if (unlikely(round_down(wr_idx, NFDK_TX_DESC_BLOCK_CNT) !=
+		     round_down(wr_idx + cnt - 1, NFDK_TX_DESC_BLOCK_CNT)))
+		goto err_warn_overflow;
+
+	skb_tx_timestamp(skb);
+
+	tx_ring->wr_p += cnt;
+	if (tx_ring->wr_p % NFDK_TX_DESC_BLOCK_CNT)
+		tx_ring->data_pending += skb->len;
+	else
+		tx_ring->data_pending = 0;
+
+	tx_ring->wr_ptr_add += cnt;
+
+	if (tx_ring->wr_ptr_add >= NFDK_TX_DESC_BLOCK_CNT ||
+	    !skb_xmit_more(skb))
+		nfp_net_tx_xmit_more_flush(tx_ring);
+
+	u64_stats_update_begin(&r_vec->tx_sync);
+	r_vec->tx_bytes += real_len;
+	r_vec->tx_pkts += real_pkts;
+	u64_stats_update_end(&r_vec->tx_sync);
+
+	return NETDEV_TX_OK;
+
+err_warn_overflow:
+	WARN_ONCE(1, "unable to fit packet into a descriptor wr_idx:%d head:%d frags:%d cnt:%d",
+		  wr_idx, skb_headlen(skb), nr_frags, cnt);
+	if (skb_is_gso(skb))
+		txbuf--;
+err_unmap:
+	/* txbuf pointed to the next-to-use */
+	etxbuf = txbuf;
+	/* first txbuf holds the skb */
+	txbuf = &tx_ring->ktxbufs[wr_idx];
+	while (txbuf < etxbuf) {
+		if (txbuf->type == NFP_NFDK_TX_BUF_DMA_L) {
+			dma_unmap_single(dp->dev, txbuf->dma_addr,
+					 txbuf->dma_size, DMA_TO_DEVICE);
+		} else if (txbuf->type == NFP_NFDK_TX_BUF_DMA_F) {
+			dma_unmap_page(dp->dev, txbuf->dma_addr,
+				       txbuf->dma_size, DMA_TO_DEVICE);
+		}
+
+		txbuf->raw = 0;
+		txbuf->raw2 = 0;
+		txbuf++;
+	}
+err_warn_dma:
+	nn_dp_warn(dp, "Failed to map DMA TX buffer\n");
+err_flush:
+	nfp_net_tx_xmit_more_flush(tx_ring);
+	u64_stats_update_begin(&r_vec->tx_sync);
+	r_vec->tx_errors++;
+	u64_stats_update_end(&r_vec->tx_sync);
+	dev_kfree_skb_any(skb);
+
 	return NETDEV_TX_OK;
 }
 

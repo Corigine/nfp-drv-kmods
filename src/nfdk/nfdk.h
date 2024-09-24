@@ -22,7 +22,7 @@
 /* TX descriptor format */
 
 #define NFDK_DESC_TX_MSS_MASK		GENMASK(13, 0)
-
+#define NFDK_DESC_TX_DEST_SET		BIT(15)
 #define NFDK_DESC_TX_CHAIN_META		BIT(3)
 #define NFDK_DESC_TX_ENCAP		BIT(2)
 #define NFDK_DESC_TX_L4_CSUM		BIT(1)
@@ -138,6 +138,7 @@ static inline int nfp_nfdk_headlen_to_segs(unsigned int headlen)
 
 int nfp_nfdk_poll(struct napi_struct *napi, int budget);
 netdev_tx_t nfp_nfdk_tx(struct sk_buff *skb, struct net_device *netdev);
+netdev_tx_t nfp_nfdk_sgw_tx(struct sk_buff *skb, struct net_device *netdev);
 bool
 nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 		     struct sk_buff *skb, bool old);
