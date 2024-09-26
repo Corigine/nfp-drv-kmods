@@ -971,6 +971,21 @@ static int nfp_pflag_set_dis_fwlldp(struct net_device *netdev, bool en)
 	return err < 0 ? err : 0;
 }
 
+static bool nfp_pflag_get_rx_lldp(struct net_device *netdev)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+
+	return nn->rx_lldp;
+}
+
+static int nfp_pflag_set_rx_lldp(struct net_device *netdev, bool en)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+
+	nn->rx_lldp = en;
+	return 0;
+}
+
 static bool nfp_pflag_get_link_state_detach(struct net_device *netdev)
 {
 	struct nfp_port *port = nfp_port_from_netdev(netdev);
@@ -1019,6 +1034,7 @@ static const struct {
 } nfp_pflags[] = {
 	DECLARE_NFP_PFLAG("disable-fw-lldp", dis_fwlldp),
 	DECLARE_NFP_PFLAG("link-state-detach", link_state_detach),
+	DECLARE_NFP_PFLAG("enable-rx-lldp", rx_lldp),
 };
 
 #define NFP_PFLAG_MAX ARRAY_SIZE(nfp_pflags)

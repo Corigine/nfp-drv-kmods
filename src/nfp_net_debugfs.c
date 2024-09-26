@@ -12,7 +12,74 @@
 #include "nfp_net_dp.h"
 #include "nfpcore/nfp_cpp.h"
 
+#ifdef CONFIG_DCB
+#include "nfp_app.h"
+#include "nic/main.h"
+#endif
+
 static struct dentry *nfp_dir;
+
+#ifdef CONFIG_DCB
+static int nfp_lldp_dcbx_show(struct seq_file *file, void *data)
+{
+	struct nfp_dcbx_config *remote_dcbcfg;
+	struct nfp_net *nn = file->private;
+	struct nfp_dcb *dcb;
+	int i;
+
+	remote_dcbcfg = &((struct nfp_app_nic_private *)nn->app_priv)->remote_dcbx;
+	dcb = &((struct nfp_app_nic_private *)nn->app_priv)->dcb;
+
+	rtnl_lock();
+
+	/* local ets configuration */
+	for (i = 0; i < NFP_NET_MAX_TC; i++) {
+		seq_printf(file, "port ets_rec : %d dscp2prio: %d prio_tc=%d \
+			   tc_index=%d tc_maxrate %llu tx_pct = %d tctsa=%d\n",
+			   i, dcb->dscp2prio[i], dcb->prio2tc[i],
+			   dcb->tc2idx[i], dcb->tc_maxrate[i],
+			   dcb->tc_tx_pct[i], dcb->tc_tsa[i]);
+	}
+
+	/* Peer TLV DCBX data of ets */
+	seq_printf(file, "remote port ets_cfg: willing=%d cbs=%d, maxtcs=%d\n",
+		   remote_dcbcfg->etscfg.willing, remote_dcbcfg->etscfg.cbs,
+		   remote_dcbcfg->etscfg.maxtcs);
+
+	for (i = 0; i < NFP_NET_MAX_TC; i++) {
+		seq_printf(file, "remote port ets_cfg: %d prio_tc=%d tcbw=%d tctsa=%d\n",
+			   i, remote_dcbcfg->etscfg.prioritytable[i],
+			   remote_dcbcfg->etscfg.tcbwtable[i],
+			   remote_dcbcfg->etscfg.tsatable[i]);
+	}
+
+	for (i = 0; i < NFP_NET_MAX_TC; i++) {
+		seq_printf(file, "remote port ets_rec: %d prio_tc=%d tcbw=%d tctsa=%d\n",
+			   i, remote_dcbcfg->etsrec.prioritytable[i],
+			   remote_dcbcfg->etsrec.tcbwtable[i],
+			   remote_dcbcfg->etsrec.tsatable[i]);
+	}
+
+	/* Peer TLV DCBX data of pfc */
+	seq_printf(file, "remote port pfc_cfg: willing=%d mbc=%d, pfccap=%d pfcenable=0x%x\n",
+		   remote_dcbcfg->pfc.willing, remote_dcbcfg->pfc.mbc, remote_dcbcfg->pfc.pfccap,
+		   remote_dcbcfg->pfc.pfcenable);
+
+	/* Peer TLV DCBX data of app */
+	seq_printf(file, "remote port app_table: num_apps=%d\n",
+		   remote_dcbcfg->numapps);
+	for (i = 0; i < remote_dcbcfg->numapps; i++) {
+		seq_printf(file, "remote port app_table: %d prio=%d selector=%d protocol=0x%x\n",
+			   i, remote_dcbcfg->app[i].priority,
+			   remote_dcbcfg->app[i].selector,
+			   remote_dcbcfg->app[i].protocolid);
+	}
+	seq_putc(file, '\n');
+	rtnl_unlock();
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(nfp_lldp_dcbx);
+#endif
 
 static int nfp_rx_q_show(struct seq_file *file, void *data)
 {
@@ -136,6 +203,10 @@ void nfp_net_debugfs_vnic_add(struct nfp_net *nn, struct dentry *ddir)
 
 	if (IS_ERR_OR_NULL(nfp_dir))
 		return;
+
+#ifdef CONFIG_DCB
+	debugfs_create_file("lldp-dcbx", 0400, ddir, nn, &nfp_lldp_dcbx_fops);
+#endif
 
 	if (nfp_net_is_data_vnic(nn))
 		sprintf(name, "vnic%d", nn->id);
