@@ -194,4 +194,5 @@ const struct nfp_app_type app_nic = {
 	.select_tclass  = nfp_nic_select_tclass,
 	.vnic_init      = nfp_nic_vnic_init,
 	.vnic_clean     = nfp_nic_vnic_clean,
+	.lldp_packet_parse = nfp_nic_lldp_rx_parse,
 };

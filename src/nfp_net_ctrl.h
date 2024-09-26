@@ -47,7 +47,8 @@
 #define NFP_NET_META_CONN_HANDLE	7
 #define NFP_NET_META_RESYNC_INFO	8 /* RX resync info request */
 #define NFP_NET_META_IPSEC		9 /* IPsec SA index for tx and rx */
-#define NFP_NET_META_PAD               10 /* Padding for dma alignment */
+#define NFP_NET_META_PAD		10 /* Padding for dma alignment */
+#define NFP_NET_META_LLDP		14 /* LLDP packet type */
 
 #define NFP_META_PORT_ID_CTRL		~0U
 

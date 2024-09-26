@@ -299,6 +299,7 @@ struct nfp_net_rx_desc {
 struct nfp_meta_parsed {
 	u8 hash_type;
 	u8 csum_type;
+	bool is_lldp_type;
 	u32 hash;
 	u32 mark;
 	u32 portid;
@@ -715,6 +716,7 @@ struct nfp_net {
 	struct nfp_net_r_vector r_vecs[NFP_NET_MAX_R_VECS];
 	struct msix_entry irq_entries[NFP_NET_MAX_IRQS];
 	struct netdev_tc_txq tc_config[TC_MAX_QUEUE];
+	bool rx_lldp;
 
 	irq_handler_t lsc_handler;
 	char lsc_name[IFNAMSIZ + 8];

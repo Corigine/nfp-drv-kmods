@@ -1265,6 +1265,9 @@ nfp_nfdk_parse_meta(struct net_device *netdev, struct nfp_meta_parsed *meta,
 				return false;
 			data += sizeof(struct nfp_net_tls_resync_req);
 			break;
+		case NFP_NET_META_LLDP:
+			meta->is_lldp_type = true;
+			return false;
                case NFP_NET_META_PAD:
 			return false;
 #ifdef CONFIG_NFP_NET_IPSEC
@@ -1629,6 +1632,13 @@ static int nfp_nfdk_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 						 NULL);
 				continue;
 			}
+		}
+
+		if (meta.is_lldp_type) {
+			struct nfp_net *nn = netdev_priv(dp->netdev);
+
+			nfp_app_lldp_rx_raw(nn->app, dp->netdev, rxbuf->frag + pkt_off,
+					    pkt_len);
 		}
 
 #if COMPAT__HAVE_XDP
