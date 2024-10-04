@@ -45,16 +45,6 @@ jobs:
           token: ${{ secrets.GHUB_TOKEN }}
           path: ci-libs
 
-      - name: Get local buildinfo.json files
-        id: local-buildinfo
-        uses: Corigine/ci-libs/github_actions/azure/azcopy_download@main
-        with:
-          connection-string: ${{ secrets.AZ_SAS_TOK }}
-          src: ${{ env.LOCAL_KERNELS }}
-          dst: latest/
-          pattern: '*buildinfo.json'
-          force_download: true
-
       - name: Get local kernel-devel packages
         id: local-kernels
         uses: Corigine/ci-libs/github_actions/azure/azcopy_list@main
@@ -69,7 +59,7 @@ jobs:
           UP_TO_DATE=true
 
           for ARCH in x86_64 aarch64; do
-            for DIR in latest/kernel-devel-c4c/${ARCH}/*; do
+            for DIR in .github/data/kernel-devel-c4c/${ARCH}/*; do
               OS=${DIR##*/}
               MIRROR=$(sed -n 's/.*\"mirror\": \"\(.*\)\"/\1/p' $DIR/buildinfo.json)
               if [[ "${OS}" != "opensuse"* && "${OS}" != "uos"* ]]; then
@@ -95,11 +85,11 @@ jobs:
           done
           wait
 
-          if [[ $(find latest -type f -name downloads.txt) ]]; then
+          if [[ $(find .github/data/ -type f -name downloads.txt) ]]; then
             UP_TO_DATE=false
           fi
 
-          sudo find latest -type f -name "downloads.txt" -delete \
+          sudo find .github/data/ -type f -name "downloads.txt" -delete \
                               -o -name "packages.txt" -delete
 
           echo  "UP_TO_DATE=${UP_TO_DATE}" | tee -a $GITHUB_OUTPUT
@@ -109,7 +99,7 @@ jobs:
         uses: Corigine/ci-libs/github_actions/azure/azcopy_upload@main
         with:
           connection-string: ${{ secrets.AZ_SAS_TOK }}
-          src: latest/kernel-devel-c4c/*
+          src: .github/data/kernel-devel-c4c/*
           dst: ${{ env.LOCAL_KERNELS }}
 
   build-local:
