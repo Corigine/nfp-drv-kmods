@@ -5,22 +5,26 @@ VERSION=MODULE_VERSION
 
 set -e
 
+dkms_deconfigure () {
+	if [ "`dkms status -m $NAME`" ]; then
+		dkms remove -m $NAME -v $VERSION --all
+	fi
+	rm -rf /opt/netronome/drv
+	rm -f /etc/profile.d/nfp_drv_kmods_dkms_profile.sh
+}
+
 case "$1" in
-    remove|upgrade|deconfigure)
-      if [  "`dkms status -m $NAME`" ]; then
-         dkms remove -m $NAME -v $VERSION --all
-      fi
-      rm -rf /opt/netronome/drv
-      rm -f /etc/profile.d/nfp_drv_kmods_dkms_profile.sh
-    ;;
+	remove|upgrade|deconfigure)
+		dkms_deconfigure
+	;;
 
-    failed-upgrade)
-    ;;
+	failed-upgrade)
+	;;
 
-    *)
-        echo "prerm called with unknown argument \`$1'" >&2
-        exit 1
-    ;;
+	*)
+		echo "prerm called with unknown argument \`$1'" >&2
+		exit 1
+	;;
 esac
 
 #DEBHELPER#
