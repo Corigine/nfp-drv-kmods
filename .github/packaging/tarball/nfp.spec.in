@@ -55,6 +55,7 @@ install -m 755 ./tools/set_irq_affinity.sh %{buildroot}/opt/netronome/drv/nfp_se
 # Disable the executable bit of nfp_troubleshoot_gather to ensure the python interpreter is not modified
 # when building packages on CentOS
 install -m 644 ./tools/nfp_troubleshoot_gather.py %{buildroot}/opt/netronome/drv/nfp_troubleshoot_gather
+install -m 755 ./tools/corigine_pciids.sh %{buildroot}/opt/netronome/drv/corigine_pciids
 install -m 755 ./tools/profile.sh %{buildroot}/etc/profile.d/nfp_drv_kmods_dkms_profile.sh
 # Remove the files that we do not need
 find %{buildroot}/lib/modules/ -name 'modules.*' -exec rm -f {} \;
@@ -68,6 +69,8 @@ find lib -name "nfp_driver.symvers" -printf "/%p\n" \
 find ./ -name "nfp_set_irq_affinity" -printf "/%p\n" \
 	>%{_builddir}/%{name}-%{version}/tools.list
 find ./ -name "nfp_troubleshoot_gather" -printf "/%p\n" \
+	>>%{_builddir}/%{name}-%{version}/tools.list
+find ./ -name "corigine_pciids" -printf "/%p\n" \
 	>>%{_builddir}/%{name}-%{version}/tools.list
 find ./ -name "nfp_drv_kmods_dkms_profile.sh" -printf "/%p\n" \
 	>>%{_builddir}/%{name}-%{version}/tools.list
