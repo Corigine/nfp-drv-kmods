@@ -47,6 +47,7 @@
 #define NSP_ETH_STATE_FWLLDP		BIT_ULL(30)
 #define NSP_ETH_STATE_TX_PAUSE		BIT_ULL(31)
 #define NSP_ETH_STATE_RX_PAUSE		BIT_ULL(32)
+#define NSP_ETH_STATE_LLDP_RX		BIT_ULL(33)
 
 #define NSP_ETH_CTRL_CONFIGURED		BIT_ULL(0)
 #define NSP_ETH_CTRL_ENABLED		BIT_ULL(1)
@@ -60,6 +61,7 @@
 #define NSP_ETH_CTRL_SET_FWLLDP		BIT_ULL(9)
 #define NSP_ETH_CTRL_SET_TX_PAUSE	BIT_ULL(10)
 #define NSP_ETH_CTRL_SET_RX_PAUSE	BIT_ULL(11)
+#define NSP_ETH_CTRL_RX_LLDP		BIT_ULL(12)
 
 enum nfp_eth_raw {
 	NSP_ETH_RAW_PORT = 0,
@@ -203,6 +205,11 @@ nfp_eth_port_translate(struct nfp_nsp *nsp, const union eth_table_entry *src,
 
 	dst->tx_pause = FIELD_GET(NSP_ETH_STATE_TX_PAUSE, state);
 	dst->rx_pause = FIELD_GET(NSP_ETH_STATE_RX_PAUSE, state);
+
+	if (nfp_nsp_get_abi_ver_minor(nsp) < 38)
+		return;
+
+	dst->lldp_rx  = FIELD_GET(NSP_ETH_STATE_LLDP_RX, state);
 }
 
 static void
@@ -650,6 +657,36 @@ static int __nfp_eth_set_fec(struct nfp_nsp *nsp, enum nfp_eth_fec mode)
 	return NFP_ETH_SET_BIT_CONFIG(nsp, NSP_ETH_RAW_STATE,
 				      NSP_ETH_STATE_FEC, mode,
 				      NSP_ETH_CTRL_SET_FEC);
+}
+
+int nfp_eth_set_lldp_rx(struct nfp_cpp *cpp, unsigned int idx, bool state)
+{
+	union eth_table_entry *entries;
+	struct nfp_nsp *nsp;
+	u64 reg;
+
+	nsp = nfp_eth_config_start(cpp, idx);
+	if (IS_ERR(nsp))
+		return PTR_ERR(nsp);
+
+	/* Set this features were added in ABI 0.38 */
+	if (nfp_nsp_get_abi_ver_minor(nsp) < 38) {
+		nfp_err(nfp_nsp_cpp(nsp),
+			"set lldp rx operation not supported, please update flash\n");
+		nfp_eth_config_cleanup_end(nsp);
+		return -EOPNOTSUPP;
+	}
+
+	entries = nfp_nsp_config_entries(nsp);
+
+	reg = le64_to_cpu(entries[idx].control);
+	reg &= ~NSP_ETH_CTRL_RX_LLDP;
+	reg |= FIELD_PREP(NSP_ETH_CTRL_RX_LLDP, state);
+	entries[idx].control = cpu_to_le64(reg);
+
+	nfp_nsp_config_set_modified(nsp, true);
+
+	return nfp_eth_config_commit_end(nsp);
 }
 
 /**

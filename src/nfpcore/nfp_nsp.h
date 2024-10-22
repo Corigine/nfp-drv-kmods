@@ -236,6 +236,7 @@ struct nfp_eth_table {
 		bool supp_aneg;
 		bool supp_fwlldp;
 		bool fwlldp_enabled;
+		bool lldp_rx;
 		bool override_changed;
 		bool rx_pause;
 		bool tx_pause;
@@ -264,6 +265,7 @@ int nfp_eth_set_configured(struct nfp_cpp *cpp, unsigned int idx,
 int
 nfp_eth_set_fec(struct nfp_cpp *cpp, unsigned int idx, enum nfp_eth_fec mode);
 int nfp_eth_set_fwlldp(struct nfp_cpp *cpp, unsigned int idx, bool state);
+int nfp_eth_set_lldp_rx(struct nfp_cpp *cpp, unsigned int idx, bool state);
 
 int nfp_eth_set_idmode(struct nfp_cpp *cpp, unsigned int idx, bool state);
 int nfp_eth_set_pauseparam(struct nfp_cpp *cpp, unsigned int idx,

@@ -27,6 +27,9 @@ static int nfp_lldp_dcbx_show(struct seq_file *file, void *data)
 	struct nfp_dcb *dcb;
 	int i;
 
+	if (!nn->app_priv)
+		return 0;
+
 	remote_dcbcfg = &((struct nfp_app_nic_private *)nn->app_priv)->remote_dcbx;
 	dcb = &((struct nfp_app_nic_private *)nn->app_priv)->dcb;
 

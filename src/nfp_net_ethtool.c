@@ -940,7 +940,7 @@ static void nfp_net_self_test(struct net_device *netdev, struct ethtool_test *et
 	netdev_info(netdev, "Test end\n");
 }
 
-static bool nfp_pflag_get_dis_fwlldp(struct net_device *netdev)
+static bool nfp_pflag_get_tx_fwlldp(struct net_device *netdev)
 {
 	struct nfp_eth_table_port *eth_port;
 	struct nfp_port *port;
@@ -950,10 +950,10 @@ static bool nfp_pflag_get_dis_fwlldp(struct net_device *netdev)
 	if (!eth_port)
 		return false;
 
-	return eth_port->fwlldp_enabled == 0;
+	return eth_port->fwlldp_enabled;
 }
 
-static int nfp_pflag_set_dis_fwlldp(struct net_device *netdev, bool en)
+static int nfp_pflag_set_tx_fwlldp(struct net_device *netdev, bool en)
 {
 	struct nfp_eth_table_port *eth_port;
 	struct nfp_port *port;
@@ -964,7 +964,7 @@ static int nfp_pflag_set_dis_fwlldp(struct net_device *netdev, bool en)
 	if (!eth_port || !eth_port->supp_fwlldp)
 		return -EOPNOTSUPP;
 
-	err = nfp_eth_set_fwlldp(port->app->cpp, eth_port->index, !en);
+	err = nfp_eth_set_fwlldp(port->app->cpp, eth_port->index, en);
 	if (!err)
 		nfp_net_refresh_port_table(port);
 
@@ -974,16 +974,37 @@ static int nfp_pflag_set_dis_fwlldp(struct net_device *netdev, bool en)
 static bool nfp_pflag_get_rx_lldp(struct net_device *netdev)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
+	struct nfp_eth_table_port *eth_port;
+	struct nfp_port *port;
 
-	return nn->rx_lldp;
+	port = nfp_port_from_netdev(netdev);
+	eth_port = __nfp_port_get_eth_port(port);
+	if (!eth_port)
+		return -EOPNOTSUPP;
+
+	nn->rx_lldp = eth_port->lldp_rx;
+	return eth_port->lldp_rx;
 }
 
 static int nfp_pflag_set_rx_lldp(struct net_device *netdev, bool en)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
+	struct nfp_eth_table_port *eth_port;
+	struct nfp_port *port;
+	int err;
 
-	nn->rx_lldp = en;
-	return 0;
+	port = nfp_port_from_netdev(netdev);
+	eth_port = __nfp_port_get_eth_port(port);
+	if (!eth_port)
+		return -EOPNOTSUPP;
+
+	err = nfp_eth_set_lldp_rx(port->app->cpp, eth_port->index, en);
+	if (!err) {
+		nfp_net_refresh_port_table(port);
+		nn->rx_lldp = en;
+	}
+
+	return err < 0 ? err : 0;
 }
 
 static bool nfp_pflag_get_link_state_detach(struct net_device *netdev)
@@ -1032,9 +1053,9 @@ static const struct {
 	bool (*get)(struct net_device *netdev);
 	int (*set)(struct net_device *netdev, bool en);
 } nfp_pflags[] = {
-	DECLARE_NFP_PFLAG("disable-fw-lldp", dis_fwlldp),
 	DECLARE_NFP_PFLAG("link-state-detach", link_state_detach),
 	DECLARE_NFP_PFLAG("enable-rx-lldp", rx_lldp),
+	DECLARE_NFP_PFLAG("enable-tx-lldp", tx_fwlldp),
 };
 
 #define NFP_PFLAG_MAX ARRAY_SIZE(nfp_pflags)
