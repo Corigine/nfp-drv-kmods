@@ -135,6 +135,12 @@ if [ "${tmp}" = "y" ]; then
 	BUILD_CRDMA=y
 fi
 
+# CentOS < 9.0
+tmp=$(rhel_ge 9 6)
+if [ "${tmp}" = "y" ]; then
+       BUILD_CRDMA=0
+fi
+
 # Kylin os >= V10SP3
 tmp=$(kylin_ge 10 3)
 if [ "${tmp}" = "y" ]; then
