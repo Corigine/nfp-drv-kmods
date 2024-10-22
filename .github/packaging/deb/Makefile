@@ -31,6 +31,9 @@ ifeq ("$(wildcard tools)", "tools")
 	# nfp_troubleshoot_gather, install nfp_troubleshoot_gather script
 	install -m 755 tools/nfp_troubleshoot_gather.py $(DESTDIR)/opt/netronome/drv/nfp_troubleshoot_gather
 
+	# corigine_pciids, install corigine_pciids script
+	install -m 755 tools/corigine_pciids.sh $(DESTDIR)//opt/netronome/drv/corigine_pciids
+
 	# profile, install script to add /opt/netronome/drv to the PATH
 	install -m 644 -d "$(DESTDIR)/etc/profile.d"
 	install -m 644 tools/profile.sh $(DESTDIR)/etc/profile.d/nfp_drv_kmods_dkms_profile.sh

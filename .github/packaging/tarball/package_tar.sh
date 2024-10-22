@@ -87,7 +87,7 @@ build_nfp_drv_kmod_tar () {
 
     # Copy over tools directory
     mkdir ${BUILDDIR}/${PKG_NAME}-${PKG_VERSION}/tools
-    for tl in set_irq_affinity.sh profile.sh nfp_troubleshoot_gather.py; do
+    for tl in set_irq_affinity.sh profile.sh nfp_troubleshoot_gather.py corigine_pciids.sh; do
         cp -Lpr ${SRCDIR}/tools/${tl} ${BUILDDIR}/${PKG_NAME}-${PKG_VERSION}/tools/
     done
 
