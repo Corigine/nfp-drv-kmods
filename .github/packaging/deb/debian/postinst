@@ -38,6 +38,7 @@ case "$1" in
 	configure)
 		dkms_configure
 		add_blacklist
+		/opt/netronome/drv/corigine_pciids apply
 	;;
 
 	abort-upgrade|abort-remove|abort-deconfigure)
