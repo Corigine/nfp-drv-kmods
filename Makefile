@@ -97,6 +97,7 @@ ifeq ("$(wildcard tools)", "tools")
 	install -d "/etc/profile.d"
 	install -m 755 tools/profile.sh /etc/profile.d/nfp_drv_kmods_dkms_profile.sh
 endif
+	tools/corigine_pciids.sh apply
 	$(MAKE) modules_install_only
 
 uninstall:
@@ -107,6 +108,7 @@ uninstall:
 	rm -f $(INSTALL_MOD_PATH)/lib/modules/$(KVER)/$(MOD_DIR)-symvers/nfp_driver.symvers
 	rm -rf /opt/netronome/drv
 	rm -f /etc/profile.d/nfp_drv_kmods_dkms_profile.sh
+	tools/corigine_pciids.sh revert
 	depmod $(DEPMOD_PATH) $(KVER)
 
 .PHONY: build nfp_net noisy coccicheck sparse clean modules_install_only install uninstall

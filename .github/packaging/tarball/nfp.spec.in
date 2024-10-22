@@ -114,8 +114,18 @@ else
 	echo "You must update your initrd manually for changes to take place."
 	exit -1
 fi
+if [ $1 -ge 1 ] ; then
+        # Update pci.ids file(s) if package is being installed/upgraded.
+        bash /opt/netronome/drv/corigine_pciids apply
+fi
+exit 0
 
 %preun
+if [ $1 -eq 0 ] ; then
+        # Only revert pci.ids file(s) if package is being uninstalled.
+        bash /opt/netronome/drv/corigine_pciids revert
+fi
+exit 0
 
 %postun
 uname -r | grep BOOT || /sbin/depmod -a > /dev/null 2>&1 || true

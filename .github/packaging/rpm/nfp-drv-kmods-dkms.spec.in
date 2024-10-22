@@ -17,7 +17,7 @@ License:    %license
 BuildArch:      noarch
 Group:      System/Kernel
 URL:            https://www.corigine.com.cn
-Requires:       kernel-devel, dkms >= 1.95
+Requires:       kernel-devel, dkms >= 1.95, bash
 BuildRequires:  dkms
 AutoReqProv:    yes
 # This package should not be installed side-by-side with the nfp-bsp-dkms package
@@ -96,12 +96,20 @@ if [ $status == no_postinst ]; then
         echo -e "support or upgrade DKMS to a more current version."
         status=1
 fi
+if [ $1 -ge 1 ] ; then
+        # Update pci.ids file(s) if package is being installed/upgraded.
+        bash /opt/netronome/drv/corigine_pciids apply
+fi
 exit $status
 
 
 %preun
 echo -e
 echo -e "Uninstall of %{module_name} module (version %{version}-%{release}) beginning:"
+if [ $1 -eq 0 ] ; then
+        # Only revert pci.ids file(s) if package is being uninstalled.
+        bash /opt/netronome/drv/corigine_pciids revert
+fi
 dkms remove -m %{module_name} -v %{version}-%{release} --all --rpm_safe_upgrade
 rm -f %{blacklist_file}
 exit 0

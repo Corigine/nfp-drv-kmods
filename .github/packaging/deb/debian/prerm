@@ -14,7 +14,14 @@ dkms_deconfigure () {
 }
 
 case "$1" in
-	remove|upgrade|deconfigure)
+	remove)
+		if [ "$2" != "in-favour" ]; then
+			/opt/netronome/drv/corigine_pciids revert
+		fi
+		dkms_deconfigure
+	;;
+
+	upgrade|deconfigure)
 		dkms_deconfigure
 	;;
 
