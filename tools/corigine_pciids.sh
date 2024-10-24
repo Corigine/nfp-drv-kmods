@@ -116,10 +116,6 @@ apply () {
         else
                 can_optimise=false
         fi
-        # TODO: force set this to false as it breaks lspci when the VENDOR
-        # line is present but not the others. Do this as urgent fix while an
-        # improved version can be developed.
-        can_optimise=false
 
         # Preserve whitespace on all reads.
         IFS=
@@ -174,7 +170,8 @@ apply () {
                         # Optimisation: Quick read to the position.
                         # This block may be removed without changing the outcome.
                         if [[ $can_optimise == true ]]; then
-                                if grep -q "$update_line" $target_file; then
+                                if grep -q "$update_line" $target_file &&
+                                   [[ "$(compare_update_and_pciid)" == gt ]]; then
                                         echo "$pciids_line"
                                         sed "/$update_line/q"
                                         pciids_vendor_id=$update_vendor_id
