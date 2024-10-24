@@ -116,6 +116,10 @@ apply () {
         else
                 can_optimise=false
         fi
+        # TODO: force set this to false as it breaks lspci when the VENDOR
+        # line is present but not the others. Do this as urgent fix while an
+        # improved version can be developed.
+        can_optimise=false
 
         # Preserve whitespace on all reads.
         IFS=
