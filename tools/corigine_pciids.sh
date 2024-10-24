@@ -263,6 +263,22 @@ apply () {
 
         # Overwrite `target_file` with new version.
         \mv -f "$target_file_tmp" "$target_file"
+
+        # Finally, test to ensure the new file is valid.
+        # If not, restore the original and bail out.
+        if which lspci 1>/dev/null 2>&1; then
+                if ! lspci 1>/dev/null 2>&1; then
+                        echo "Reverting changes to $target_file!" 1>&2
+                        \cp -f "$target_file_bak" "$target_file"
+                        return 1
+                fi
+        else
+                echo "Cannot verify whether $target_file was updated "\
+"correctly because \`lspci\` is not installed." 1>&2
+                echo "If you encounter problems, run \`corigine_pciids revert\`" 1>&2
+        fi
+
+        return 0
 }
 
 
