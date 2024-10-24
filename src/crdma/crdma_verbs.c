@@ -2891,7 +2891,167 @@ static void crdma_drain_rq(struct ib_qp *qp)
 {
 }
 
-#if (VER_NON_RHEL_OR_KYL_GE(5, 3) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
+#if (VER_NON_RHEL_OR_KYL_GE(6, 11) || RHEL_RELEASE_GE(9, 522, 0, 0))
+static int crdma_create_cq(struct ib_cq *cq,
+			   const struct ib_cq_init_attr *attr,
+			   struct uverbs_attr_bundle *attrs)
+{
+	struct ib_udata *udata = NULL;
+	struct crdma_ibdev *dev = to_crdma_ibdev(cq->device);
+	struct crdma_cq *ccq = container_of(cq, struct crdma_cq, ib_cq);
+	struct crdma_cqe *cqe;
+	unsigned int num_cqe = attr->cqe;
+	int comp_vector = attr->comp_vector;
+	int err;
+	int i;
+
+	if (num_cqe < 1 || num_cqe > dev->cap.ib.max_cqe - 1) {
+		crdma_warn("Too many CQE requested %d\n", num_cqe);
+		return -EINVAL;
+	}
+
+	if (attrs)
+		udata = &attrs->driver_udata;
+
+	spin_lock_init(&ccq->lock);
+	ccq->num_cqe = roundup_pow_of_two(num_cqe + 1);
+	ccq->ib_cq.cqe = ccq->num_cqe - 1;
+
+	/* Allocate resource index for the CQ control object */
+	if (crdma_alloc_bitmap_index(&dev->cq_map, &ccq->cqn)) {
+		crdma_warn("No CQ index available\n");
+		err = -ENOMEM;
+		goto free_mem;
+	}
+
+	/* Kernel allocates CQ memory, user contexts will mmap it */
+	ccq->mem = crdma_alloc_hw_queue(dev,
+				ccq->num_cqe * dev->cap.cqe_size);
+	if (IS_ERR(ccq->mem)) {
+		crdma_dev_err(dev, "Unable to allocate CQ HW queue\n");
+		err = -ENOMEM;
+		goto free_cq;
+	}
+
+	/*
+	 * Hardware CQE ownership is initially indicated by 0, and alternates
+	 * between 1 and 0 for each reuse of the CQE. Set kernel virtual
+	 * address and initialize to indicate invalid CQE.
+	 */
+	ccq->cqe_buf = sg_virt(ccq->mem->alloc);
+	for (i = 0, cqe = ccq->cqe_buf; i < ccq->num_cqe; i++, cqe++)
+		cqe->owner = 0;
+
+	/*
+	 * We are currently just allocating a page for each CQ
+	 * for the consumer state mailbox. We should modify this later to
+	 * have multiple CQ mailboxes for the same context share pages
+	 * to reduce overhead.
+	 */
+	ccq->ci_mbox = alloc_pages_exact(PAGE_SIZE, GFP_KERNEL | __GFP_ZERO);
+	if (!ccq->ci_mbox) {
+		crdma_warn("ci_mbox allocation failed\n");
+		err = -ENOMEM;
+		goto free_queue_mem;
+	}
+	ccq->ci_mbox_paddr = dma_map_single(&dev->info->pdev->dev,
+			     ccq->ci_mbox, PAGE_SIZE, DMA_BIDIRECTIONAL);
+	if (dma_mapping_error(&dev->info->pdev->dev, ccq->ci_mbox_paddr)) {
+		crdma_warn("Failed to map DMA address\n");
+		err = -ENOMEM;
+		goto free_ci_mbox;
+	}
+	ccq->ci_mbox->ci = 0;
+	ccq->ci_mbox->last_db_state = 0;
+	/* Memory barrier */
+	wmb();
+
+	/* Assign CQ to MSI-X EQ based on completion vector */
+	ccq->eq_num = dev->eq_table.num_eq > 1 ? 1 + comp_vector %
+			(dev->eq_table.num_eq - 1) : 0;
+	dev->cq_table[ccq->cqn] = ccq;
+
+	if (udata) {
+		struct crdma_ucontext *crdma_uctxt = rdma_udata_to_drv_context(
+				udata, struct crdma_ucontext, ib_uctxt);
+		struct crdma_ib_create_cq_resp resp;
+
+		err = crdma_cq_create_cmd(dev, ccq, &crdma_uctxt->uar);
+		if (err) {
+			crdma_err("Microcode error creating CQ, %d\n", err);
+			goto cmd_fail;
+		}
+		resp.cq_base_addr = virt_to_phys(ccq->cqe_buf);
+		resp.cq_size = ccq->mem->tot_len;
+		resp.ci_mbox_base_addr = virt_to_phys(ccq->ci_mbox);
+		resp.ci_mbox_size = PAGE_SIZE;
+		resp.cqn = ccq->cqn;
+		resp.num_cqe = ccq->num_cqe;
+
+		err = ib_copy_to_udata(udata, &resp, sizeof(resp));
+		if (err) {
+			crdma_warn("Copy of UDATA failed, %d\n", err);
+			goto cq_destroy;
+		}
+
+		err = crdma_add_mmap_req(crdma_uctxt, resp.cq_base_addr,
+				ccq->mem->tot_len);
+		if (err) {
+			crdma_warn("Failed to add pending mmap, %d\n", err);
+			goto cq_destroy;
+		}
+		err = crdma_add_mmap_req(crdma_uctxt, resp.ci_mbox_base_addr,
+				PAGE_SIZE);
+		if (err) {
+			crdma_warn("Failed to add mbox pending mmap, %d\n",
+					err);
+			crdma_remove_mmap_req(crdma_uctxt, resp.cq_base_addr,
+					ccq->mem->tot_len);
+			goto cq_destroy;
+		}
+	} else {
+		err = crdma_cq_create_cmd(dev, ccq, &dev->priv_uar);
+		if (err) {
+			crdma_err("Microcode error creating CQ, %d\n", err);
+			goto cmd_fail;
+		}
+		ccq->mask = ccq->num_cqe - 1;
+		ccq->arm_seqn = 1;
+		ccq->sn_rev = 0;
+		while ((1 << ccq->num_cqe_log2) < ccq->num_cqe)
+			ccq->num_cqe_log2++;
+	}
+
+	atomic_set(&ccq->ref_cnt, 1);
+	init_completion(&ccq->free);
+
+	return 0;
+
+cq_destroy:
+	crdma_cq_destroy_cmd(dev, ccq);
+cmd_fail:
+	dev->cq_table[ccq->cqn] = NULL;
+	dma_unmap_single(&dev->info->pdev->dev, ccq->ci_mbox_paddr,
+			PAGE_SIZE, DMA_BIDIRECTIONAL);
+free_ci_mbox:
+	free_pages_exact(ccq->ci_mbox, PAGE_SIZE);
+free_queue_mem:
+	crdma_free_hw_queue(dev, ccq->mem);
+free_cq:
+	crdma_free_bitmap_index(&dev->cq_map, ccq->cqn);
+free_mem:
+
+	/*
+	 * XXX: For development only to catch error codes that are not
+	 * set properly. This should be removed ultimately.
+	 */
+	if (err >= 0) {
+		crdma_warn("Error not set correctly, %d\n", err);
+		err = -ENOMEM;
+	}
+	return err;
+}
+#elif (VER_NON_RHEL_OR_KYL_GE(5, 3) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
 static int crdma_create_cq(struct ib_cq *cq,
 			   const struct ib_cq_init_attr *attr,
 			   struct ib_udata *udata)
