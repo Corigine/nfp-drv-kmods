@@ -37,12 +37,13 @@ EOH
 #    significantly faster though.
 apply () {
         local target_file="$1"
-        local target_file_bak="${target_file}.corigine_backup"
-        local target_file_tmp="/tmp/$(basename "${target_file}").tmp"
 
         if [[ ! -f "$target_file" ]]; then
                 return 0  # Nothing to apply because file does not exist.
         fi
+
+        local iso_date_time="$(date -Iseconds)"
+        local target_file_tmp="/var/run/$(basename "${target_file}").tmp.$iso_date_time"
 
         # Note: It would have been convenient to combine the IDs into 64 bit
         #       hex numbers, but `bash` (or `test`?) interprets hex as signed
@@ -253,12 +254,14 @@ apply () {
 	6003  Network Flow Processor 6003 Virtual Function
 '
 
-        # Create backup.
-        target_file_bak="${target_file}.corigine_backup"
-        if ! \cp -f "$target_file" "$target_file_bak"; then
-                echo "Failed to create backup of '${target_file}'" 1>&2
-                echo "Aborting pci.ids update for this file." 1>&2
-                return 1
+        # Create backup (only if one doesn't already exist).
+        local target_file_bak="${target_file}.corigine_backup"
+        if [[ ! -f "$target_file_bak" ]]; then
+                if ! \cp -f "$target_file" "$target_file_bak"; then
+                        echo "Failed to create backup of '${target_file}'" 1>&2
+                        echo "Aborting pci.ids update for this file." 1>&2
+                        return 1
+                fi
         fi
 
         # Overwrite `target_file` with new version.
@@ -288,11 +291,13 @@ apply () {
 # removed.
 revert () {
         local target_file="$1"
-        local target_file_tmp="/tmp/$(basename "${target_file}").tmp"
 
         if [ ! -f "$target_file" ]; then
                 return 0  # Nothing to revert because file does not exist.
         fi
+
+        local iso_date_time="$(date -Iseconds)"
+        local target_file_tmp="/var/run/$(basename "${target_file}").tmp.$iso_date_time"
 
         # Set up input/output file descriptors.
         exec 3>$target_file_tmp
