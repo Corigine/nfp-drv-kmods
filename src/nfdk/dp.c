@@ -194,7 +194,7 @@ close_block:
 
 static int
 nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
-		      struct sk_buff *skb, bool *ipsec)
+		      struct sk_buff *skb, u64 tls_handle, bool *ipsec)
 {
 #ifdef COMPAT__HAVE_METADATA_IP_TUNNEL
 	struct metadata_dst *md_dst = skb_metadata_dst(skb);
@@ -223,12 +223,13 @@ nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
 	pad_cap = !!(dp->ctrl_w1 & NFP_NET_CFG_CTRL_META_PAD);
 	cur_phys = virt_to_phys(skb->data);
 
-	if (!(md_dst || vlan_insert || *ipsec) &&
+	if (!(md_dst || tls_handle || vlan_insert || *ipsec) &&
 	    !(pad_cap && (cur_phys % cache_line_size())))
 		return 0;
 
 	md_bytes = sizeof(meta_id) +
 		   (!!md_dst ? NFP_NET_META_PORTID_SIZE : 0) +
+		   (!!tls_handle ? NFP_NET_META_CONN_HANDLE_SIZE : 0) +
 		   (vlan_insert ? NFP_NET_META_VLAN_SIZE : 0) +
 		   (*ipsec ? NFP_NET_META_IPSEC_FIELD_SIZE : 0);
 
@@ -288,6 +289,15 @@ nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
 		meta_id |= NFP_NET_META_PORTID;
 	}
 #endif
+	if (tls_handle) {
+		/* conn handle is opaque, we just use u64 to be able to quickly
+		 * compare it to zero
+		 */
+		data -= NFP_NET_META_CONN_HANDLE_SIZE;
+		memcpy(data, &tls_handle, sizeof(tls_handle));
+		meta_id <<= (NFP_NET_META_FIELD_SIZE * 2);
+		meta_id |= NFP_NET_META_CONN_HANDLE << 4 | NFP_NET_META_CONN_HANDLE;
+	}
 	if (vlan_insert) {
 		__be16 vlan_proto;
 		data -= NFP_NET_META_VLAN_SIZE;
@@ -377,6 +387,7 @@ netdev_tx_t nfp_nfdk_tx(struct sk_buff *skb, struct net_device *netdev)
 	struct nfp_net_dp *dp;
 	int nr_frags, wr_idx;
 	dma_addr_t dma_addr;
+	u64 tls_handle = 0;
 	bool ipsec = false;
 	u64 metadata;
 
@@ -398,7 +409,13 @@ netdev_tx_t nfp_nfdk_tx(struct sk_buff *skb, struct net_device *netdev)
 		return NETDEV_TX_BUSY;
 	}
 
-	metadata = nfp_nfdk_prep_tx_meta(dp, nn->app, skb, &ipsec);
+	skb = nfp_net_tls_tx(dp, r_vec, skb, &tls_handle, &nr_frags);
+	if (unlikely(!skb)) {
+		nfp_net_tx_xmit_more_flush(tx_ring);
+		return NETDEV_TX_OK;
+	}
+
+	metadata = nfp_nfdk_prep_tx_meta(dp, nn->app, skb, tls_handle, &ipsec);
 	if (unlikely((int)metadata < 0))
 		goto err_flush;
 
@@ -582,6 +599,7 @@ err_flush:
 	u64_stats_update_begin(&r_vec->tx_sync);
 	r_vec->tx_errors++;
 	u64_stats_update_end(&r_vec->tx_sync);
+	nfp_net_tls_tx_undo(skb, tls_handle);
 	dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
 }
@@ -1751,6 +1769,15 @@ static int nfp_nfdk_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 		skb->protocol = eth_type_trans(skb, netdev);
 
 		nfp_nfdk_rx_csum(dp, r_vec, rxd, &meta, skb);
+
+#ifdef COMPAT__HAVE_TLS_OFFLOAD
+		if (rxd->rxd.flags & PCIE_DESC_RX_DECRYPTED) {
+			skb->decrypted = true;
+			u64_stats_update_begin(&r_vec->rx_sync);
+			r_vec->hw_tls_rx++;
+			u64_stats_update_end(&r_vec->rx_sync);
+		}
+#endif
 
 		if (unlikely(!nfp_net_vlan_strip(skb, rxd, &meta))) {
 			nfp_nfdk_rx_drop(dp, r_vec, rx_ring, NULL, skb);
