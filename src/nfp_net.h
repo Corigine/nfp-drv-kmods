@@ -1109,6 +1109,7 @@ void nfp_net_rx_dim_work(struct work_struct *work);
 void nfp_net_tx_dim_work(struct work_struct *work);
 
 int nfp_net_sgw_netdev_start(struct net_device *netdev);
+int nfp_net_sgw_netdev_stop(struct net_device *netdev);
 #ifdef CONFIG_NFP_DEBUG
 void nfp_net_debugfs_create(void);
 void nfp_net_debugfs_destroy(void);

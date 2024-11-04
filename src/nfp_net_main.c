@@ -93,6 +93,10 @@ static void nfp_net_pf_free_vnic(struct nfp_pf *pf, struct nfp_net *nn)
 	if (nfp_net_is_data_vnic(nn))
 		nfp_app_vnic_free(pf->app, nn);
 	nfp_port_free(nn->port);
+
+	if (nfp_app_is_sgw(pf->app) && nn->dp.netdev)
+		nfp_net_sgw_netdev_stop(nn->dp.netdev);
+
 	list_del(&nn->vnic_list);
 	pf->num_vnics--;
 	nfp_net_free(nn);

@@ -1340,6 +1340,33 @@ static int nfp_net_netdev_close(struct net_device *netdev)
 	return 0;
 }
 
+/**
+ * nfp_net_sgw_netdev_stop() - Called when the device is downed
+ * @netdev:      netdev structure
+ */
+int
+nfp_net_sgw_netdev_stop(struct net_device *netdev)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+
+	/* Step 1: Disable RX and TX rings from the Linux kernel perspective
+	 */
+	disable_irq(nn->irq_entries[NFP_NET_IRQ_LSC_IDX].vector);
+	nn->link_up = false;
+
+	/* Step 2: Tell NFP
+	 */
+	nfp_net_sgw_clear_config_and_disable(nn);
+
+	/* Step 3: Free resources
+	 */
+	nfp_net_sgw_close_free_all(nn);
+
+	nn_dbg(nn, "pf netdev %s stop", netdev->name);
+
+	return 0;
+}
+
 void nfp_ctrl_close(struct nfp_net *nn)
 {
 	int r;
