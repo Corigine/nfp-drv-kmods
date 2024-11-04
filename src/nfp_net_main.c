@@ -35,6 +35,7 @@
 #include "nfp_port.h"
 
 #include "nfpcore/nfp_roce.h"
+#include "flower/sgw/nfp_config.h"
 
 #ifdef CONFIG_NFP_ROCE
 unsigned int nfp_roce_ints_num = 4;
@@ -78,6 +79,18 @@ nfp_net_find_port(struct nfp_eth_table *eth_tbl, unsigned int index)
 
 	for (i = 0; eth_tbl && i < eth_tbl->count; i++)
 		if (eth_tbl->ports[i].index == index)
+			return &eth_tbl->ports[i];
+
+	return NULL;
+}
+
+static struct nfp_eth_table_port *
+nfp_net_sgw_find_port(struct nfp_eth_table *eth_tbl, unsigned int eth_index)
+{
+	int i;
+
+	for (i = 0; eth_tbl && i < eth_tbl->count; i++)
+		if (eth_tbl->ports[i].eth_index == eth_index)
 			return &eth_tbl->ports[i];
 
 	return NULL;
@@ -521,7 +534,12 @@ static int nfp_net_pci_map_mem(struct nfp_pf *pf, u32 ctrl_bar_sz)
 	}
 
 	if (pf->eth_tbl) {
-		min_size =  NFP_MAC_STATS_SIZE * (pf->eth_tbl->max_index + 1);
+		if (nfp_net_pf_get_app_id(pf) == NFP_APP_SGW_NIC)
+			min_size = NFP_MAC_STATS_SIZE * PHY_REPR_MAX;
+		else
+			min_size =  NFP_MAC_STATS_SIZE *
+				    (pf->eth_tbl->max_index + 1);
+
 		pf->mac_stats_mem = nfp_rtsym_map(pf->rtbl, "_mac_stats",
 						  "net.macstats", min_size,
 						  &pf->mac_stats_bar);
@@ -651,7 +669,10 @@ nfp_net_eth_port_update(struct nfp_cpp *cpp, struct nfp_port *port,
 
 	ASSERT_RTNL();
 
-	eth_port = nfp_net_find_port(eth_table, port->eth_id);
+	eth_port = nfp_app_is_sgw(port->app) ?
+			nfp_net_sgw_find_port(eth_table, port->eth_id) :
+			nfp_net_find_port(eth_table, port->eth_id);
+
 	if (!eth_port) {
 		set_bit(NFP_PORT_CHANGED, &port->flags);
 		nfp_warn(cpp, "Warning: port #%d not present after reconfig\n",

@@ -241,7 +241,10 @@ int nfp_port_init_phy_port(struct nfp_pf *pf, struct nfp_app *app,
 	}
 
 	port->eth_port = &pf->eth_tbl->ports[id];
-	port->eth_id = pf->eth_tbl->ports[id].index;
+	port->eth_id = nfp_app_is_sgw(app) ?
+			pf->eth_tbl->ports[id].eth_index :
+			pf->eth_tbl->ports[id].index;
+
 #if VER_NON_RHEL_GE(3, 15) || VER_RHEL_GE(7, 1)
 	if (!pf->multi_pf.en)
 		port->netdev->dev_port = id;
