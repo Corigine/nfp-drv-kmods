@@ -154,6 +154,8 @@ nfp_net_pf_init_vnic(struct nfp_pf *pf, struct nfp_net *nn, unsigned int id)
 {
 	int err;
 
+	bool is_sgw = nfp_app_is_sgw(nn->app);
+
 	nn->id = pf->multi_pf.en ? pf->multi_pf.id : id;
 
 	if (nn->port) {
@@ -174,6 +176,9 @@ nfp_net_pf_init_vnic(struct nfp_pf *pf, struct nfp_net *nn, unsigned int id)
 #endif
 
 	nfp_net_info(nn);
+
+	if (is_sgw && nn->dp.netdev)
+		nfp_net_sgw_netdev_start(nn->dp.netdev);
 
 	if (nfp_net_is_data_vnic(nn)) {
 		err = nfp_app_vnic_init(pf->app, nn);

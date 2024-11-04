@@ -993,6 +993,36 @@ static void nfp_net_write_mac_addr(struct nfp_net *nn, const u8 *addr)
 }
 
 /**
+ * nfp_net_sgw_clear_config_and_disable() - Clear control BAR and disable NFP
+ * @nn:      NFP Net device to reconfigure
+ *
+ * Warning: must be fully idempotent.
+ */
+static void
+nfp_net_sgw_clear_config_and_disable(struct nfp_net *nn)
+{
+	u32 new_ctrl, update;
+	int err;
+
+	new_ctrl = nn->dp.ctrl;
+	new_ctrl &= ~NFP_NET_CFG_CTRL_ENABLE;
+	update = NFP_NET_CFG_UPDATE_GEN;
+	update |= NFP_NET_CFG_UPDATE_RING;
+
+	if (nn->cap & NFP_NET_CFG_CTRL_RINGCFG)
+		new_ctrl &= ~NFP_NET_CFG_CTRL_RINGCFG;
+
+	nn_writeq(nn, NFP_NET_CFG_TXRS_ENABLE, 0);
+	nn_writeq(nn, NFP_NET_CFG_RXRS_ENABLE, 0);
+	nn_writel(nn, NFP_NET_CFG_CTRL, new_ctrl);
+	err = nfp_net_reconfig(nn, update);
+	if (err)
+		nn_err(nn, "Could not disable device: %d\n", err);
+
+	nn->dp.ctrl = new_ctrl;
+}
+
+/**
  * nfp_net_clear_config_and_disable() - Clear control BAR and disable NFP
  * @nn:      NFP Net device to reconfigure
  *
@@ -1047,6 +1077,49 @@ static void nfp_net_clear_config_and_disable(struct nfp_net *nn)
 		nfp_net_vec_clear_ring_data(nn, r);
 
 	nn->dp.ctrl = new_ctrl;
+}
+
+/**
+ * nfp_net_sgw_set_config_and_enable() - Write control BAR and enable NFP
+ * @nn:      NFP Net device to reconfigure
+ */
+static int
+nfp_net_sgw_set_config_and_enable(struct nfp_net *nn)
+{
+	u32 bufsz, new_ctrl, update = 0;
+	int err;
+
+	new_ctrl = nn->dp.ctrl;
+
+	if (nn->dp.ctrl & NFP_NET_CFG_CTRL_RSS_ANY) {
+		nfp_net_rss_write_key(nn);
+		nn_writel(nn, NFP_NET_CFG_RSS_CTRL, nn->rss_cfg);
+		update |= NFP_NET_CFG_UPDATE_RSS;
+	}
+
+	if (nn->dp.netdev)
+		nfp_net_write_mac_addr(nn, nn->dp.netdev->dev_addr);
+
+	nn_writel(nn, NFP_NET_CFG_MTU, nn->dp.mtu);
+
+	bufsz = nn->dp.fl_bufsz - nn->dp.rx_dma_off - NFP_NET_RX_BUF_NON_DATA;
+	nn_writel(nn, NFP_NET_CFG_FLBUFSZ, bufsz);
+
+	/* Enable device */
+	new_ctrl |= NFP_NET_CFG_CTRL_ENABLE;
+	update |= NFP_NET_CFG_UPDATE_GEN;
+
+	nn_writel(nn, NFP_NET_CFG_CTRL, new_ctrl);
+	nn_writel(nn, NFP_NET_CFG_CTRL_WORD1, nn->dp.ctrl_w1);
+	err = nfp_net_reconfig(nn, update);
+	if (err) {
+		nfp_net_sgw_clear_config_and_disable(nn);
+		return err;
+	}
+
+	nn->dp.ctrl = new_ctrl;
+
+	return 0;
 }
 
 /**
@@ -1179,6 +1252,31 @@ static void nfp_net_close_stack(struct nfp_net *nn)
 	}
 
 	netif_tx_disable(nn->dp.netdev);
+}
+
+/**
+ * nfp_net_sgw_close_free_all() - Free all runtime resources
+ * @nn:      NFP Net device to reconfigure
+ */
+static void
+nfp_net_sgw_close_free_all(struct nfp_net *nn)
+{
+	struct nfp_net_dp *dp = &nn->dp;
+
+	if (dp->txrwb) {
+		dma_free_coherent(dp->dev, dp->num_tx_rings * sizeof(u64),
+				  dp->txrwb, dp->txrwb_dma);
+		dp->txrwb = NULL;
+	}
+
+	kfree(dp->tx_rings);
+	dp->tx_rings = NULL;
+
+	kfree(dp->rx_rings);
+	dp->rx_rings = NULL;
+
+	nfp_net_aux_irq_free(nn, NFP_NET_CFG_LSC, NFP_NET_IRQ_LSC_IDX);
+	nfp_net_aux_irq_free(nn, NFP_NET_CFG_EXN, NFP_NET_IRQ_EXN_IDX);
 }
 
 /**
@@ -1363,6 +1461,67 @@ static void nfp_net_open_stack(struct nfp_net *nn)
 	nfp_net_read_link_status(nn);
 }
 
+static int
+nfp_net_sgw_open_alloc_all(struct nfp_net *nn)
+{
+	struct nfp_net_dp *dp;
+	int err;
+
+	err = nfp_net_aux_irq_request(nn, NFP_NET_CFG_EXN, "%s-exn",
+				      nn->exn_name, sizeof(nn->exn_name),
+				      NFP_NET_IRQ_EXN_IDX, nn->exn_handler);
+	if (err)
+		return err;
+
+	err = nfp_net_aux_irq_request(nn, NFP_NET_CFG_LSC, "%s-lsc",
+				      nn->lsc_name, sizeof(nn->lsc_name),
+				      NFP_NET_IRQ_LSC_IDX, nn->lsc_handler);
+	if (err)
+		goto err_free_exn;
+
+	disable_irq(nn->irq_entries[NFP_NET_IRQ_LSC_IDX].vector);
+
+	dp =  &nn->dp;
+	dp->rx_rings = kcalloc(dp->num_rx_rings, sizeof(*dp->rx_rings),
+			       GFP_KERNEL);
+	if (!dp->rx_rings) {
+		err = -ENOMEM;
+		goto err_free_lsc;
+	}
+
+	dp->tx_rings = kcalloc(dp->num_tx_rings, sizeof(*dp->tx_rings),
+			       GFP_KERNEL);
+	if (!dp->tx_rings) {
+		err = -ENOMEM;
+		goto err_free_rx_rings;
+	}
+
+	if (dp->ctrl & NFP_NET_CFG_CTRL_TXRWB) {
+		dp->txrwb = dma_alloc_coherent(dp->dev,
+					       dp->num_tx_rings * sizeof(u64),
+					       &dp->txrwb_dma, GFP_KERNEL);
+		if (!dp->txrwb) {
+			err = -ENOMEM;
+			goto err_free_tx_rings;
+		}
+	}
+
+	return 0;
+
+err_free_tx_rings:
+	kfree(nn->dp.tx_rings);
+	nn->dp.tx_rings = NULL;
+err_free_rx_rings:
+	kfree(nn->dp.rx_rings);
+	nn->dp.rx_rings = NULL;
+err_free_lsc:
+	nfp_net_aux_irq_free(nn, NFP_NET_CFG_LSC, NFP_NET_IRQ_LSC_IDX);
+err_free_exn:
+	nfp_net_aux_irq_free(nn, NFP_NET_CFG_EXN, NFP_NET_IRQ_EXN_IDX);
+
+	return err;
+}
+
 static int nfp_net_open_alloc_all(struct nfp_net *nn)
 {
 	int err, r;
@@ -1464,6 +1623,42 @@ err_port_disable:
 	nfp_port_configure(netdev, false);
 err_free_all:
 	nfp_net_close_free_all(nn);
+	return err;
+}
+
+int
+nfp_net_sgw_netdev_start(struct net_device *netdev)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+	int err;
+
+	if (nn->dp.rx_rings)
+		return 0;
+
+	/* Step 1: Allocate resources for rings and the like
+	 * - Request interrupts
+	 * - Allocate RX and TX ring resources
+	 */
+	err = nfp_net_sgw_open_alloc_all(nn);
+	if (err)
+		return err;
+
+	/* Step 2: Configure the NFP
+	 * - Write MAC address (in case it changed)
+	 * - Set the MTU
+	 * - Enable the FW
+	 */
+	err = nfp_net_sgw_set_config_and_enable(nn);
+	if (err)
+		goto err_free_all;
+
+	nn_dbg(nn, "pf netdev %s start", netdev->name);
+
+	return 0;
+
+err_free_all:
+	nfp_net_sgw_close_free_all(nn);
+
 	return err;
 }
 
