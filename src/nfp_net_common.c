@@ -1367,6 +1367,20 @@ nfp_net_sgw_netdev_stop(struct net_device *netdev)
 	return 0;
 }
 
+/**
+ * nfp_net_sgw_netdev_close() - Called when the device is downed
+ * @netdev:      netdev structure
+ */
+static int
+nfp_net_sgw_netdev_close(struct net_device *netdev)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+
+	nn_dbg(nn, "pf netdev %s close", netdev->name);
+
+	return 0;
+}
+
 void nfp_ctrl_close(struct nfp_net *nn)
 {
 	int r;
@@ -1687,6 +1701,16 @@ err_free_all:
 	nfp_net_sgw_close_free_all(nn);
 
 	return err;
+}
+
+static int
+nfp_net_sgw_netdev_open(struct net_device *netdev)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+
+	nn_dbg(nn, "pf netdev %s open", netdev->name);
+
+	return 0;
 }
 
 int nfp_ctrl_open(struct nfp_net *nn)
@@ -2084,6 +2108,23 @@ static int nfp_net_change_mtu(struct net_device *netdev, int new_mtu)
 	dp->mtu = new_mtu;
 
 	return nfp_net_ring_reconfig(nn, dp, NULL);
+}
+
+static int
+nfp_net_sgw_change_mtu(struct net_device *netdev, int new_mtu)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+	int err;
+
+	err = nfp_app_check_mtu(nn->app, netdev, new_mtu);
+	if (err) {
+		nn_err(nn, "New MTU (%d) is not valid\n", new_mtu);
+		return err;
+	}
+
+	netdev->mtu = new_mtu;
+
+	return 0;
 }
 
 static int
@@ -3130,6 +3171,52 @@ const struct net_device_ops nfp_nfdk_netdev_ops = {
 };
 
 const struct net_device_ops nfp_nfdk_sgw_netdev_ops = {
+	.ndo_init		= nfp_app_ndo_init,
+	.ndo_uninit		= nfp_app_ndo_uninit,
+	.ndo_open		= nfp_net_sgw_netdev_open,
+	.ndo_stop		= nfp_net_sgw_netdev_close,
+	.ndo_start_xmit		= nfp_net_tx,
+	.ndo_get_stats64	= nfp_net_stat64,
+#if COMPAT__NEED_NDO_POLL_CONTROLLER
+	.ndo_poll_controller	= nfp_net_netpoll,
+#endif
+	.ndo_tx_timeout		= nfp_net_tx_timeout,
+	.ndo_set_rx_mode	= nfp_net_set_rx_mode,
+#if VER_IS_NON_RHEL || VER_RHEL_LT(7, 5) || VER_RHEL_GE(8, 0)
+	.ndo_change_mtu		= nfp_net_sgw_change_mtu,
+#elif VER_RHEL_GE(7, 5)
+	.ndo_change_mtu_rh74	= nfp_net_sgw_change_mtu,
+#endif
+	.ndo_set_mac_address	= nfp_net_set_mac_address,
+	.ndo_set_features	= nfp_net_set_features,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+	.ndo_fix_features	= nfp_net_fix_features,
+#endif
+#if COMPAT__HAVE_NDO_FEATURES_CHECK
+	.ndo_features_check	= nfp_net_features_check,
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0)
+	.ndo_get_phys_port_name	= nfp_net_get_phys_port_name,
+#endif
+#if LINUX_VERSION_CODE == KERNEL_VERSION(5, 1, 0)
+	.ndo_get_port_parent_id	= nfp_port_get_port_parent_id,
+#endif
+#ifdef CONFIG_NFP_NET_PF
+#if (VER_NON_RHEL_GE(5, 2) && VER_NON_RHEL_LT(6, 2)) || \
+	(VER_RHEL_GE(8, 2) && RHEL_RELEASE_LT(9, 305, 0, 0))
+	.ndo_get_devlink_port	= nfp_devlink_get_devlink_port,
+#elif VER_NON_RHEL_GE(5, 1) && VER_NON_RHEL_LT(5, 2)
+	.ndo_get_devlink	= nfp_devlink_get_devlink,
+#endif
+#endif
+#if VER_RHEL_GE(7, 3) && VER_RHEL_LT(8, 0)
+	.ndo_size		= sizeof(nfp_nfdk_sgw_netdev_ops),
+	.extended		= {
+#if VER_RHEL_GE(7, 4)
+		.ndo_get_phys_port_name	= nfp_net_get_phys_port_name,
+#endif
+	},
+#endif
 };
 
 #ifdef COMPAT__UDP_TUN_NIC_PORT
