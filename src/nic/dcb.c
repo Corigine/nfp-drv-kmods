@@ -311,6 +311,8 @@ static int nfp_nic_dcbnl_ieee_setets(struct net_device *dev,
 		return err;
 
 	dcb = get_dcb_priv(nn);
+	if (!dcb->dcbcfg_tbl)
+		return -EADDRNOTAVAIL;
 
 	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
 		dcb->prio2tc[i] = ets->prio_tc[i];
@@ -370,6 +372,10 @@ static int nfp_nic_dcbnl_ieee_setmaxrate(struct net_device *dev,
 	u32 update = 0;
 	int err;
 
+	dcb = get_dcb_priv(nn);
+	if (!dcb->dcbcfg_tbl)
+		return -EADDRNOTAVAIL;
+
 	err = nfp_fill_maxrate(nn, maxrate->tc_maxrate);
 	if (err) {
 		nfp_warn(app->cpp,
@@ -377,8 +383,6 @@ static int nfp_nic_dcbnl_ieee_setmaxrate(struct net_device *dev,
 			 err);
 		return err;
 	}
-
-	dcb = get_dcb_priv(nn);
 
 	dcb->rate_init = true;
 	nfp_nic_set_enable(nn, NFP_DCB_ALL_QOS_ENABLE, &update);
@@ -476,6 +480,8 @@ static int nfp_nic_dcbnl_ieee_setapp(struct net_device *dev,
 		return -EINVAL;
 
 	dcb = get_dcb_priv(nn);
+	if (!dcb->dcbcfg_tbl)
+		return -ENXIO;
 
 	/* Save the old entry info */
 	old_app.selector = IEEE_8021QAZ_APP_SEL_DSCP;
@@ -521,6 +527,8 @@ static int nfp_nic_dcbnl_ieee_delapp(struct net_device *dev,
 		return -EINVAL;
 
 	dcb = get_dcb_priv(nn);
+	if (!dcb->dcbcfg_tbl)
+		return -ENXIO;
 
 	/* Check if the dcb_app param match fw */
 	if (app->priority != dcb->dscp2prio[app->protocol])
@@ -650,6 +658,9 @@ static int nfp_nic_dcbnl_ieee_getpfc(struct net_device *dev, struct ieee_pfc *pf
 	if (!(dcb->dcb_cap & NFP_DCB_PFC_ENABLE))
 		return -EOPNOTSUPP;
 
+	if (!dcb->dcbcfg_tbl)
+		return -EADDRNOTAVAIL;
+
 	base_offset = dcb->dcbcfg_tbl + dcb->cfg_offset;
 	pfc->pfc_cap = IEEE_8021QAZ_MAX_TCS;
 	pfc->pfc_en  = readb(base_offset + NFP_DCB_DATA_OFF_PFC);
@@ -677,6 +688,9 @@ static int nfp_nic_dcbnl_ieee_setpfc(struct net_device *dev, struct ieee_pfc *pf
 	dcb = get_dcb_priv(nn);
 	if (!(dcb->dcb_cap & NFP_DCB_PFC_ENABLE))
 		return -EOPNOTSUPP;
+
+	if (!dcb->dcbcfg_tbl)
+		return -EADDRNOTAVAIL;
 
 	err = nfp_net_mbox_lock(nn, NFP_DCB_UPDATE_MSK_SZ);
 	if (err)
@@ -804,6 +818,8 @@ static u8 nfp_nic_dcbnl_setall(struct net_device *dev)
 	int err, i;
 
 	dcb = get_dcb_priv(nn);
+	if (!dcb->dcbcfg_tbl)
+		return NFP_DCB_STATUS_ERROR;
 
 	if (!dcb->dcb_cee_state) {
 		nfp_warn(app->cpp,
@@ -975,7 +991,7 @@ static u8 nfp_nic_dcbnl_getpfcstate(struct net_device *dev)
 	u8 pfc_en;
 
 	dcb = get_dcb_priv(nn);
-	if (!(dcb->dcb_cap & NFP_DCB_PFC_ENABLE))
+	if (!(dcb->dcb_cap & NFP_DCB_PFC_ENABLE) || !dcb->dcbcfg_tbl)
 		return NFP_CEE_STATE_DOWN;
 
 	base_offset = dcb->dcbcfg_tbl + dcb->cfg_offset;
