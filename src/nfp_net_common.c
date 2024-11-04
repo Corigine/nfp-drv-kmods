@@ -2907,6 +2907,9 @@ const struct net_device_ops nfp_nfdk_netdev_ops = {
 #endif
 };
 
+const struct net_device_ops nfp_nfdk_sgw_netdev_ops = {
+};
+
 #ifdef COMPAT__UDP_TUN_NIC_PORT
 static int nfp_udp_tunnel_sync(struct net_device *netdev, unsigned int table)
 {
@@ -3242,6 +3245,8 @@ static void nfp_net_netdev_init(struct nfp_net *nn)
 {
 	struct net_device *netdev = nn->dp.netdev;
 
+	bool is_sgw = nfp_app_is_sgw(nn->app);
+
 	nfp_net_write_mac_addr(nn, nn->dp.netdev->dev_addr);
 
 	netdev->mtu = nn->dp.mtu;
@@ -3256,7 +3261,7 @@ static void nfp_net_netdev_init(struct nfp_net *nn)
 		netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
 
 	netdev->hw_features = NETIF_F_HIGHDMA;
-	if (nn->cap & NFP_NET_CFG_CTRL_RXCSUM_ANY) {
+	if (!is_sgw && nn->cap & NFP_NET_CFG_CTRL_RXCSUM_ANY) {
 		netdev->hw_features |= NETIF_F_RXCSUM;
 		nn->dp.ctrl |= nn->cap & NFP_NET_CFG_CTRL_RXCSUM_ANY;
 	}
@@ -3272,7 +3277,7 @@ static void nfp_net_netdev_init(struct nfp_net *nn)
 	    nn->cap & NFP_NET_CFG_CTRL_LSO2) {
 		netdev->hw_features |= NETIF_F_TSO | NETIF_F_TSO6;
 #if VER_NON_RHEL_GE(5, 4) || VER_RHEL_GE(8, 2)
-		if (nn->cap_w1 & NFP_NET_CFG_CTRL_USO)
+		if (!is_sgw && nn->cap_w1 & NFP_NET_CFG_CTRL_USO)
 			netdev->hw_features |= NETIF_F_GSO_UDP_L4;
 #endif
 		nn->dp.ctrl |= nn->cap & NFP_NET_CFG_CTRL_LSO2 ?:
@@ -3282,7 +3287,7 @@ static void nfp_net_netdev_init(struct nfp_net *nn)
 		netdev->hw_features |= NETIF_F_RXHASH;
 
 #ifdef CONFIG_NFP_NET_IPSEC
-       if (nn->cap_w1 & NFP_NET_CFG_CTRL_IPSEC)
+       if (!is_sgw && nn->cap_w1 & NFP_NET_CFG_CTRL_IPSEC)
                netdev->hw_features |= NETIF_F_HW_ESP | NETIF_F_HW_ESP_TX_CSUM;
 #endif
 
@@ -3352,22 +3357,27 @@ static void nfp_net_netdev_init(struct nfp_net *nn)
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-	netdev->xdp_features = NETDEV_XDP_ACT_BASIC;
-	if (nn->app && nn->app->type->id == NFP_APP_BPF_NIC)
-		netdev->xdp_features |= NETDEV_XDP_ACT_HW_OFFLOAD;
+	if (!is_sgw) {
+		netdev->xdp_features = NETDEV_XDP_ACT_BASIC;
+		if (nn->app && nn->app->type->id == NFP_APP_BPF_NIC)
+			netdev->xdp_features |= NETDEV_XDP_ACT_HW_OFFLOAD;
+	}
 #endif
 
 	/* Finalise the netdev setup */
 	switch (nn->dp.ops->version) {
 	case NFP_NFD_VER_NFD3:
-		netdev->netdev_ops = &nfp_nfd3_netdev_ops;
+		if (!is_sgw) {
+			netdev->netdev_ops = &nfp_nfd3_netdev_ops;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-		netdev->xdp_features |= NETDEV_XDP_ACT_XSK_ZEROCOPY;
-		netdev->xdp_features |= NETDEV_XDP_ACT_REDIRECT;
+			netdev->xdp_features |= NETDEV_XDP_ACT_XSK_ZEROCOPY;
+			netdev->xdp_features |= NETDEV_XDP_ACT_REDIRECT;
 #endif
+		}
 		break;
 	case NFP_NFD_VER_NFDK:
-		netdev->netdev_ops = &nfp_nfdk_netdev_ops;
+		netdev->netdev_ops = is_sgw ? &nfp_nfdk_sgw_netdev_ops:
+				&nfp_nfdk_netdev_ops;
 		break;
 	}
 
@@ -3386,7 +3396,8 @@ static void nfp_net_netdev_init(struct nfp_net *nn)
 
 	netif_carrier_off(netdev);
 
-	nfp_net_set_ethtool_ops(netdev);
+	if (!is_sgw)
+		nfp_net_set_ethtool_ops(netdev);
 }
 
 static int nfp_net_read_caps(struct nfp_net *nn)
@@ -3502,6 +3513,8 @@ int nfp_net_init(struct nfp_net *nn)
 {
 	int err;
 
+	bool is_sgw = nfp_app_is_sgw(nn->app);
+
 	nn->dp.rx_dma_dir = DMA_FROM_DEVICE;
 
 	err = nfp_net_read_caps(nn);
@@ -3518,7 +3531,7 @@ int nfp_net_init(struct nfp_net *nn)
 	}
 
 #ifdef CONFIG_ARCH_PHYTIUM
-	if (nn->cap_w1 & NFP_NET_CFG_CTRL_RX_ALIGNMENT)
+	if (!is_sgw && nn->cap_w1 & NFP_NET_CFG_CTRL_RX_ALIGNMENT)
 		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_RX_ALIGNMENT;
 #endif
 
@@ -3553,15 +3566,15 @@ int nfp_net_init(struct nfp_net *nn)
 #endif
 
 	/* Multi-PF is already enabled during pre-init, preserve control bit */
-	if (nn->cap_w1 & NFP_NET_CFG_CTRL_MULTI_PF)
+	if (!is_sgw && nn->cap_w1 & NFP_NET_CFG_CTRL_MULTI_PF)
 		nn->dp.ctrl_w1 |= (nn_readl(nn, NFP_NET_CFG_CTRL_WORD1) &
 				   NFP_NET_CFG_CTRL_MULTI_PF);
 
-	if (nn->cap_w1 & NFP_NET_CFG_CTRL_TC_MQPRIO)
+	if (!is_sgw && nn->cap_w1 & NFP_NET_CFG_CTRL_TC_MQPRIO)
 		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_TC_MQPRIO;
 
 	/* Enable metadata padding for dma alignment, if supported */
-	if (nn->cap_w1 & NFP_NET_CFG_CTRL_META_PAD)
+	if (!is_sgw && nn->cap_w1 & NFP_NET_CFG_CTRL_META_PAD)
 		nn->dp.ctrl_w1 |= NFP_NET_CFG_CTRL_META_PAD;
 
 	/* Stash the re-configuration queue away.  First odd queue in TX Bar */
@@ -3580,15 +3593,17 @@ int nfp_net_init(struct nfp_net *nn)
 	if (nn->dp.netdev) {
 		nfp_net_netdev_init(nn);
 
-		err = nfp_ccm_mbox_init(nn);
-		if (err)
-			return err;
+		if (!is_sgw) {
+			err = nfp_ccm_mbox_init(nn);
+			if (err)
+				return err;
 
-		err = nfp_net_tls_init(nn);
-		if (err)
-			goto err_clean_mbox;
+			err = nfp_net_tls_init(nn);
+			if (err)
+				goto err_clean_mbox;
 
-		nfp_net_ipsec_init(nn);
+			nfp_net_ipsec_init(nn);
+		}
 	}
 
 	nfp_net_vecs_init(nn);
@@ -3596,11 +3611,13 @@ int nfp_net_init(struct nfp_net *nn)
 	if (!nn->dp.netdev)
 		return 0;
 
-	spin_lock_init(&nn->mbox_amsg.lock);
-	INIT_LIST_HEAD(&nn->mbox_amsg.list);
-	INIT_WORK(&nn->mbox_amsg.work, nfp_net_mbox_amsg_work);
+	if (!is_sgw) {
+		spin_lock_init(&nn->mbox_amsg.lock);
+		INIT_LIST_HEAD(&nn->mbox_amsg.list);
+		INIT_WORK(&nn->mbox_amsg.work, nfp_net_mbox_amsg_work);
 
-	INIT_LIST_HEAD(&nn->fs.list);
+		INIT_LIST_HEAD(&nn->fs.list);
+	}
 
 	return register_netdev(nn->dp.netdev);
 

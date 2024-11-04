@@ -1033,11 +1033,13 @@ extern const char nfp_driver_version[];
 
 extern const struct net_device_ops nfp_nfd3_netdev_ops;
 extern const struct net_device_ops nfp_nfdk_netdev_ops;
+extern const struct net_device_ops nfp_nfdk_sgw_netdev_ops;
 
 static inline bool nfp_netdev_is_nfp_net(struct net_device *netdev)
 {
 	return netdev->netdev_ops == &nfp_nfd3_netdev_ops ||
-	       netdev->netdev_ops == &nfp_nfdk_netdev_ops;
+	       netdev->netdev_ops == &nfp_nfdk_netdev_ops ||
+	       netdev->netdev_ops == &nfp_nfdk_sgw_netdev_ops;
 }
 
 static inline int nfp_net_coalesce_para_check(u32 param)
