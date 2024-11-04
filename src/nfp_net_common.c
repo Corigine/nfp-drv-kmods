@@ -1170,7 +1170,8 @@ static int nfp_net_set_config_and_enable(struct nfp_net *nn)
 		update |= NFP_NET_CFG_UPDATE_RSS;
 	}
 
-	if (nn->dp.ctrl & NFP_NET_CFG_CTRL_IRQMOD) {
+	if (!nfp_app_is_sgw(nn->app) &&
+	    nn->dp.ctrl & NFP_NET_CFG_CTRL_IRQMOD) {
 		nfp_net_coalesce_write_cfg(nn, true, true);
 		update |= NFP_NET_CFG_UPDATE_IRQMOD;
 	}
@@ -1202,6 +1203,10 @@ static int nfp_net_set_config_and_enable(struct nfp_net *nn)
 		new_ctrl_w1 |= NFP_NET_CFG_CTRL_FREELIST_EN;
 	else
 		new_ctrl |= NFP_NET_CFG_CTRL_ENABLE;
+
+	if (nfp_app_is_sgw(nn->app))
+		new_ctrl |= NFP_NET_CFG_CTRL_MSIX_TX_OFF;
+
 	update |= NFP_NET_CFG_UPDATE_GEN;
 	update |= NFP_NET_CFG_UPDATE_MSIX;
 	update |= NFP_NET_CFG_UPDATE_RING;
@@ -3494,7 +3499,8 @@ void nfp_net_free(struct nfp_net *nn)
 	if (nn->xdp.prog)
 		bpf_prog_put(nn->xdp.prog);
 #endif
-	nfp_ccm_mbox_free(nn);
+	if (!nfp_app_is_sgw(nn->app))
+		nfp_ccm_mbox_free(nn);
 
 #ifdef COMPAT__HAVE_XDP_SOCK_DRV
 	kfree(nn->dp.xsk_pools);
@@ -3974,9 +3980,13 @@ void nfp_net_clean(struct nfp_net *nn)
 
 	unregister_netdev(nn->dp.netdev);
 	nfp_net_ipsec_clean(nn);
-	nfp_ccm_mbox_clean(nn);
-	nfp_net_fs_clean(nn);
-	flush_work(&nn->mbox_amsg.work);
+
+	if (!nfp_app_is_sgw(nn->app)) {
+		nfp_ccm_mbox_clean(nn);
+		nfp_net_fs_clean(nn);
+		flush_work(&nn->mbox_amsg.work);
+	}
+
 	nfp_net_reconfig_wait_posted(nn);
 }
 

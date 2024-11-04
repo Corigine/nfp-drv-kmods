@@ -1160,6 +1160,7 @@ static void nfp_pf_cfg_hwinfo(struct nfp_pf *pf)
 		goto end;
 
 	sp_indiff = (nfp_net_pf_get_app_id(pf) == NFP_APP_FLOWER_NIC) ||
+		    (nfp_net_pf_get_app_id(pf) == NFP_APP_SGW_NIC) ||
 		    (nfp_net_pf_get_app_cap(pf) & NFP_NET_APP_CAP_SP_INDIFF);
 
 	/* No need to clean `sp_indiff` in driver, management firmware

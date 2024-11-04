@@ -117,6 +117,7 @@
 #define   NFP_NET_CFG_CTRL_TXVLAN_V2	  (0x1 << 23) /* Enable VLAN C-tag insert*/
 #define   NFP_NET_CFG_CTRL_VXLAN	  (0x1 << 24) /* VXLAN tunnel support */
 #define   NFP_NET_CFG_CTRL_NVGRE	  (0x1 << 25) /* NVGRE tunnel support */
+#define   NFP_NET_CFG_CTRL_MSIX_TX_OFF	  (0x1 << 26) /* MSIX TX off */
 #define   NFP_NET_CFG_CTRL_BPF		  (0x1 << 27) /* BPF offload capable */
 #define   NFP_NET_CFG_CTRL_LSO2		  (0x1 << 28) /* LSO/TSO (version 2) */
 #define   NFP_NET_CFG_CTRL_RSS2		  (0x1 << 29) /* RSS (version 2) */

@@ -73,7 +73,9 @@ nfp_net_tx_ring_init(struct nfp_net_tx_ring *tx_ring, struct nfp_net_dp *dp,
 	tx_ring->is_xdp = is_xdp;
 	u64_stats_init(&tx_ring->r_vec->tx_sync);
 
-	tx_ring->prio  = nfp_net_tx_ring_prio(nn, idx);
+	if (!nfp_dp_is_sgw(dp))
+		tx_ring->prio = nfp_net_tx_ring_prio(nn, idx);
+
 	tx_ring->qcidx = tx_ring->idx * nn->stride_tx;
 	tx_ring->txrwb = dp->txrwb ? &dp->txrwb[idx] : NULL;
 	tx_ring->qcp_q = nn->tx_bar + NFP_QCP_QUEUE_OFF(tx_ring->qcidx);
@@ -146,11 +148,14 @@ nfp_net_rx_ring_bufs_free(struct nfp_net_dp *dp,
 			  struct nfp_net_rx_ring *rx_ring)
 {
 	unsigned int i;
+	u32 cnt;
 
 	if (nfp_net_has_xsk_pool_slow(dp, rx_ring->idx))
 		return;
 
-	for (i = 0; i < rx_ring->cnt - 1; i++) {
+	cnt = nfp_dp_is_sgw(dp) ? rx_ring->cnt : rx_ring->cnt - 1;
+
+	for (i = 0; i < cnt; i++) {
 		/* NULL skb can only happen when initial filling of the ring
 		 * fails to allocate enough buffers and calls here to free
 		 * already allocated ones.
@@ -162,6 +167,13 @@ nfp_net_rx_ring_bufs_free(struct nfp_net_dp *dp,
 		nfp_net_free_frag(rx_ring->rxbufs[i].frag, dp->xdp_prog);
 		rx_ring->rxbufs[i].dma_addr = 0;
 		rx_ring->rxbufs[i].frag = NULL;
+	}
+
+	if (nfp_dp_is_sgw(dp) && rx_ring->sc_first_skb) {
+		nn_dp_warn(dp, "RX ring %d sc_first_skb %p is not NULL\n",
+			   rx_ring->idx, rx_ring->sc_first_skb);
+		dev_kfree_skb_any(rx_ring->sc_first_skb);
+		rx_ring->sc_first_skb = NULL;
 	}
 }
 
@@ -176,13 +188,15 @@ nfp_net_rx_ring_bufs_alloc(struct nfp_net_dp *dp,
 {
 	struct nfp_net_rx_buf *rxbufs;
 	unsigned int i;
+	u32 cnt;
 
 	if (nfp_net_has_xsk_pool_slow(dp, rx_ring->idx))
 		return 0;
 
 	rxbufs = rx_ring->rxbufs;
+	cnt = nfp_dp_is_sgw(dp) ? rx_ring->cnt : rx_ring->cnt - 1;
 
-	for (i = 0; i < rx_ring->cnt - 1; i++) {
+	for (i = 0; i < cnt; i++) {
 		rxbufs[i].frag = nfp_net_rx_alloc_one(dp, &rxbufs[i].dma_addr);
 		if (!rxbufs[i].frag) {
 			nfp_net_rx_ring_bufs_free(dp, rx_ring);
@@ -436,7 +450,10 @@ nfp_net_tx_ring_hw_cfg_write(struct nfp_net *nn,
 		nn_writeq(nn, NFP_NET_CFG_TXR_WB_ADDR(idx),
 			  nn->dp.txrwb_dma + idx * sizeof(u64));
 	}
-	nn_writeb(nn, NFP_NET_CFG_TXR_PRIO(idx), tx_ring->prio);
+
+	if (!nfp_app_is_sgw(nn->app))
+		nn_writeb(nn, NFP_NET_CFG_TXR_PRIO(idx), tx_ring->prio);
+
 	nn_writeb(nn, NFP_NET_CFG_TXR_SZ(idx), ilog2(tx_ring->cnt));
 	nn_writeb(nn, NFP_NET_CFG_TXR_VEC(idx), tx_ring->r_vec->irq_entry);
 }
