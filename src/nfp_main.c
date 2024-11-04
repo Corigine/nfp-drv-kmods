@@ -60,8 +60,14 @@ int nfp_dev_cpp = -1;
 module_param(nfp_dev_cpp, bint, 0444);
 MODULE_PARM_DESC(nfp_dev_cpp,
 		 "NFP CPP /dev interface (default = !nfp_pf_netdev)");
+
+int rx_scatter = 1;
+module_param(rx_scatter, bint, 0444);
+MODULE_PARM_DESC(rx_scatter,
+		 "NFP Global rx scatter enable or disable. Only takes effect for sgw firmaware (default = true)");
 #else
 int nfp_dev_cpp;
+int rx_scatter;
 #endif
 
 bool nfp_net_vnic;

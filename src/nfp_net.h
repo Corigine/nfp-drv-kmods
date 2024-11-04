@@ -113,6 +113,8 @@
 #define NFP_NET_RX_BUF_HEADROOM	(NET_SKB_PAD + NET_IP_ALIGN)
 #define NFP_NET_RX_BUF_NON_DATA	(NFP_NET_RX_BUF_HEADROOM +		\
 				 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+#define NFP_NET_RX_BUF_DEFAULT_SIZE		2048
+#define NFP_NET_RX_BUF_MAX_SIZE			(16 * 1024)
 
 #ifdef CONFIG_NFP_ROCE
 #define NFP_NET_MAX_ROCE_VECTORS        8
@@ -292,6 +294,12 @@ struct nfp_net_rx_desc {
 	};
 };
 
+/* rxd_type */
+#define PCIE_DESC_RXD_SIMPLE		0
+#define PCIE_DESC_RXD_SC_FIRST		1
+#define PCIE_DESC_RXD_SC_MIDDLE		2
+#define PCIE_DESC_RXD_SC_FINAL		3
+
 #define NFP_NET_META_FIELD_MASK GENMASK(NFP_NET_META_FIELD_SIZE - 1, 0)
 #define NFP_NET_VLAN_CTAG	0
 #define NFP_NET_VLAN_STAG	1
@@ -351,6 +359,7 @@ struct nfp_net_xsk_rx_buf {
  * @repr_ridx:  Repr rx ring idx from repr perspective
  * @fl_qcidx:   Queue Controller Peripheral (QCP) queue index for the freelist
  * @qcp_fl:     Pointer to base of the QCP freelist queue
+ * @sc_first_skb: First skb for sgw rx scatter mode
  * @rxbufs:     Array of transmitted FL/RX buffers
  * @xsk_rxbufs: Array of transmitted FL/RX buffers (for AF_XDP)
  * @rxds:       Virtual address of FL/RX ring in host memory
@@ -371,7 +380,7 @@ struct nfp_net_rx_ring {
 
 	int fl_qcidx;
 	u8 __iomem *qcp_fl;
-
+	struct sk_buff *sc_first_skb;
 	struct nfp_net_rx_buf *rxbufs;
 	struct nfp_net_xsk_rx_buf *xsk_rxbufs;
 	struct nfp_net_rx_desc *rxds;
@@ -455,6 +464,10 @@ struct nfp_net_r_vector {
 	u64 rx_pkts;
 	u64 rx_bytes;
 	u64 rx_drops;
+	u64 rx_sc_err_simple;
+	u64 rx_sc_err_first;
+	u64 rx_sc_err_middle;
+	u64 rx_sc_err_finnal;
 	u64 hw_csum_rx_ok;
 	u64 hw_csum_rx_inner_ok;
 	u64 hw_csum_rx_complete;
@@ -536,6 +549,7 @@ struct nfp_vnic_ring_hdl {
  * @xdp_prog:		Installed XDP program
  * @tx_rings:		Array of pre-allocated TX ring structures
  * @rx_rings:		Array of pre-allocated RX ring structures
+ * @ring_rsc_hdl:	Vnic rx/tx rings used or not
  * @ctrl_bar:		Pointer to mapped control BAR
  *
  * @ops:		Callbacks and parameters for this vNIC's NFD version
@@ -1101,6 +1115,9 @@ int nfp_net_fs_add_hw(struct nfp_net *nn, struct nfp_fs_entry *entry);
 int nfp_net_fs_del_hw(struct nfp_net *nn, struct nfp_fs_entry *entry);
 
 int nfp_net_recover(struct nfp_net *nn, bool resume);
+void nfp_net_scatter_set(struct nfp_net *nn, u64 val);
+u64 nfp_net_scatter_get(struct nfp_net *nn);
+
 int nfp_net_prepare_vector(struct nfp_net *nn,
 			   struct nfp_net_r_vector *r_vec, int idx);
 void nfp_net_cleanup_vector(struct nfp_net *nn,

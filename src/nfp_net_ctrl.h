@@ -151,9 +151,11 @@
 #define   NFP_NET_CFG_UPDATE_MBOX	  (0x1 << 12) /* Mailbox update */
 #define   NFP_NET_CFG_UPDATE_VF		  (0x1 << 13) /* VF settings change */
 #define   NFP_NET_CFG_UPDATE_CRYPTO	  (0x1 << 14) /* Crypto on/off */
+#define   NFP_NET_CFG_UPDATE_RX_SCATTER	  (0x1 << 15) /* RX SCATTER DMA Enable change */
 #define   NFP_NET_CFG_UPDATE_ERR	  (0x1 << 31) /* A error occurred */
 #define NFP_NET_CFG_TXRS_ENABLE		0x0008
 #define NFP_NET_CFG_RXRS_ENABLE		0x0010
+#define NFP_NET_CFG_SCATTER_RX_ENABLE	0x00b0
 #define NFP_NET_CFG_MTU			0x0018
 #define NFP_NET_CFG_FLBUFSZ		0x001c
 #define NFP_NET_CFG_EXN			0x001f

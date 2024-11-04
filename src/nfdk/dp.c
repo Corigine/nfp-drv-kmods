@@ -1925,47 +1925,150 @@ nfp_nfdk_rx_sc(struct nfp_net_rx_ring *rx_ring, int budget)
 
 		rxd_type = rxd->rxd.rxd_type;
 
-		nfp_nfdk_rx_pkt_off_get(rxd, dp, &meta_len, &data_len,
-					&meta_off, &pkt_len,
-					&pkt_off, 1);
+		if (PCIE_DESC_RXD_SIMPLE == rxd_type) {
+			if (unlikely(rx_ring->sc_first_skb)) {
+				dev_kfree_skb_any(rx_ring->sc_first_skb);
+				rx_ring->sc_first_skb = NULL;
 
-		if (unlikely(meta_len > NFP_SGW_MAX_PREPEND ||
-			     (dp->rx_offset && meta_len > dp->rx_offset))) {
-			nn_dp_warn(dp, "oversized RX packet metadata %u\n",
-				   meta_len);
-			nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf, NULL);
-			continue;
-		}
+				u64_stats_update_begin(&r_vec->rx_sync);
+				r_vec->rx_sc_err_simple++;
+				u64_stats_update_end(&r_vec->rx_sync);
+			}
 
-		nfp_net_dma_sync_cpu_rx(dp, rxbuf->dma_addr + meta_off,
-					data_len);
+			nfp_nfdk_rx_pkt_off_get(rxd, dp, &meta_len, &data_len,
+						&meta_off, &pkt_len,
+						&pkt_off, 1);
 
-		if (meta_len) {
-			if (unlikely(nfp_nfdk_parse_meta(dp->netdev,
-							 &meta,
-							 rxbuf->frag + meta_off,
-							 rxbuf->frag + pkt_off,
-							 pkt_len,
-							 meta_len))) {
-				nn_dp_warn(dp, "invalid RX packet metadata\n");
+			if (unlikely(meta_len > NFP_SGW_MAX_PREPEND ||
+				     (dp->rx_offset &&
+				      meta_len > dp->rx_offset))) {
+				nn_dp_warn(dp, "oversized RX packet metadata %u\n",
+					   meta_len);
+				nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf,
+						 NULL);
+				continue;
+			}
+
+			nfp_net_dma_sync_cpu_rx(dp,
+						rxbuf->dma_addr + meta_off,
+						data_len);
+
+			if (meta_len) {
+				if (unlikely(nfp_nfdk_parse_meta(dp->netdev,
+								 &meta,
+								 rxbuf->frag + meta_off,
+								 rxbuf->frag + pkt_off,
+								 pkt_len,
+								 meta_len))) {
+					nn_dp_warn(dp, "invalid RX packet metadata\n");
+					nfp_nfdk_rx_drop(dp, r_vec, rx_ring,
+							 rxbuf, NULL);
+					continue;
+				}
+			}
+
+			skb_to_stack = build_skb(rxbuf->frag, true_bufsz);
+			if (unlikely(!skb_to_stack)) {
+				nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf,
+						 NULL);
+				nn_dp_warn(dp, "RX ring %d failed to build skb\n",
+					   rx_ring->idx);
+				continue;
+			}
+			nfp_nfdk_rx_skb_head_set(skb_to_stack, dp, r_vec,
+						 netdev, &meta, rxd, pkt_off,
+						 pkt_len, rx_ring->idx);
+			nfp_net_dma_unmap_rx(dp, rxbuf->dma_addr);
+			pkts_polled++;
+		} else if (PCIE_DESC_RXD_SC_FIRST == rxd_type) {
+			if (unlikely(rx_ring->sc_first_skb)) {
+				dev_kfree_skb_any(rx_ring->sc_first_skb);
+				rx_ring->sc_first_skb = NULL;
+
+				u64_stats_update_begin(&r_vec->rx_sync);
+				r_vec->rx_sc_err_first++;
+				u64_stats_update_end(&r_vec->rx_sync);
+			}
+
+			nfp_nfdk_rx_pkt_off_get(rxd, dp, &meta_len,
+						&data_len, &meta_off,
+						&pkt_len, &pkt_off, 1);
+			if (unlikely(meta_len > NFP_SGW_MAX_PREPEND ||
+				     (dp->rx_offset &&
+				      meta_len > dp->rx_offset))) {
+				nn_dp_warn(dp, "oversized RX packet metadata %u\n",
+					   meta_len);
 				nfp_nfdk_rx_drop(dp, r_vec, rx_ring,
 						 rxbuf, NULL);
 				continue;
 			}
-		}
 
-		skb_to_stack = build_skb(rxbuf->frag, true_bufsz);
-		if (unlikely(!skb_to_stack)) {
-			nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf, NULL);
-			nn_dp_warn(dp, "RX ring %d failed to build skb\n",
-					rx_ring->idx);
-			continue;
+			nfp_net_dma_sync_cpu_rx(dp, rxbuf->dma_addr + meta_off,
+						data_len);
+			if (meta_len) {
+				if (unlikely(nfp_nfdk_parse_meta(dp->netdev,
+								 &meta,
+								 rxbuf->frag + meta_off,
+								 rxbuf->frag + pkt_off,
+								 pkt_len,
+								 meta_len))) {
+					nn_dp_warn(dp, "invalid RX packet metadata\n");
+					nfp_nfdk_rx_drop(dp, r_vec, rx_ring,
+							 rxbuf, NULL);
+					continue;
+				}
+			}
+
+			rx_ring->sc_first_skb = build_skb(rxbuf->frag,
+							  true_bufsz);
+			if (unlikely(!rx_ring->sc_first_skb)) {
+				nfp_nfdk_rx_drop(dp, r_vec, rx_ring,
+						 rxbuf, NULL);
+				nn_dp_warn(dp, "RX ring %d failed to build skb\n",
+					   rx_ring->idx);
+				continue;
+			}
+
+			nfp_nfdk_rx_skb_head_set(rx_ring->sc_first_skb,
+						 dp, r_vec, netdev,
+						 &meta, rxd, pkt_off,
+						 pkt_len, rx_ring->idx);
+			nfp_net_dma_unmap_rx(dp, rxbuf->dma_addr);
+		} else {
+			if (unlikely(!rx_ring->sc_first_skb)) {
+				nfp_nfdk_rx_drop(dp, r_vec, rx_ring,
+						 rxbuf, NULL);
+
+				if (PCIE_DESC_RXD_SC_MIDDLE == rxd_type) {
+					u64_stats_update_begin(&r_vec->rx_sync);
+					r_vec->rx_sc_err_middle++;
+					u64_stats_update_end(&r_vec->rx_sync);
+				} else {
+					u64_stats_update_begin(&r_vec->rx_sync);
+					r_vec->rx_sc_err_finnal++;
+					u64_stats_update_end(&r_vec->rx_sync);
+				}
+				continue;
+			}
+			nfp_nfdk_rx_pkt_off_get(rxd, dp, &meta_len,
+						&data_len, &meta_off,
+						&pkt_len, &pkt_off, 0);
+			nfp_net_dma_sync_cpu_rx(dp, rxbuf->dma_addr + meta_off,
+						data_len);
+			/* add frag to skb, pkt_off is offset in frag */
+			skb_add_rx_frag(rx_ring->sc_first_skb,
+					skb_shinfo(rx_ring->sc_first_skb)->nr_frags,
+					virt_to_page(rxbuf->frag),
+					offset_in_page(rxbuf->frag) + pkt_off,
+					data_len, data_len + pkt_off);
+			nfp_net_dma_unmap_rx(dp, rxbuf->dma_addr);
+
+			if (PCIE_DESC_RXD_SC_FINAL == rxd_type) {
+				skb_to_stack = rx_ring->sc_first_skb;
+				rx_ring->sc_first_skb = NULL;
+				pkts_polled++;
+			}
 		}
-		nfp_nfdk_rx_skb_head_set(skb_to_stack, dp, r_vec,
-					 netdev, &meta, rxd, pkt_off,
-					 pkt_len, rx_ring->idx);
-		nfp_net_dma_unmap_rx(dp, rxbuf->dma_addr);
-		pkts_polled++;
 
 		total_bytes += pkt_len;
 

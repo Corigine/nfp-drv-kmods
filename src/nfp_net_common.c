@@ -67,6 +67,7 @@
 #include "nfp_port.h"
 #include "crypto/crypto.h"
 #include "crypto/fw.h"
+#include "nfp_main.h"
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 15, 0)
 static int nfp_net_mc_unsync(struct net_device *netdev, const unsigned char *addr);
@@ -746,13 +747,40 @@ nfp_net_calc_fl_bufsz_data(struct nfp_net_dp *dp)
 	return fl_bufsz;
 }
 
+static unsigned int
+nfp_net_sgw_calc_fl_bufsz_data(struct nfp_net_dp *dp)
+{
+	unsigned int fl_bufsz = 0;
+
+	if (dp->rx_offset == NFP_NET_CFG_RX_OFFSET_DYNAMIC)
+		fl_bufsz += NFP_NET_MAX_PREPEND;
+	else
+		fl_bufsz += dp->rx_offset;
+
+	/* fl_bufsz += ETH_HLEN + VLAN_HLEN * 2 + dp->mtu;
+	 * SGW firmware will split the packet when length
+	 * is larger than NFP_NET_RX_BUF_DEFAULT_SIZE
+	 * so don't need associate fl_bufsz with mtu
+	 */
+	if (!rx_scatter)
+		fl_bufsz += NFP_NET_RX_BUF_MAX_SIZE;
+	else
+		fl_bufsz += NFP_NET_RX_BUF_DEFAULT_SIZE;
+
+	return fl_bufsz;
+}
+
 static unsigned int nfp_net_calc_fl_bufsz(struct nfp_net_dp *dp)
 {
 	unsigned int fl_bufsz;
 
 	fl_bufsz = NFP_NET_RX_BUF_HEADROOM;
 	fl_bufsz += dp->rx_dma_off;
-	fl_bufsz += nfp_net_calc_fl_bufsz_data(dp);
+
+	if (nfp_dp_is_sgw(dp))
+		fl_bufsz += nfp_net_sgw_calc_fl_bufsz_data(dp);
+	else
+		fl_bufsz += nfp_net_calc_fl_bufsz_data(dp);
 
 	fl_bufsz = SKB_DATA_ALIGN(fl_bufsz);
 	fl_bufsz += SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
@@ -3950,4 +3978,34 @@ void nfp_net_clean(struct nfp_net *nn)
 	nfp_net_fs_clean(nn);
 	flush_work(&nn->mbox_amsg.work);
 	nfp_net_reconfig_wait_posted(nn);
+}
+
+void
+nfp_net_scatter_set(struct nfp_net *nn, u64 val)
+{
+	u32 update   = 0;
+	u32 new_ctrl = 0;
+
+	if (NULL == nn)
+		return;
+
+	nn_writeq(nn, NFP_NET_CFG_SCATTER_RX_ENABLE, val);
+
+	new_ctrl = nn->dp.ctrl | NFP_NET_CFG_CTRL_ENABLE;
+	nn_writel(nn, NFP_NET_CFG_CTRL, new_ctrl);
+
+	update = NFP_NET_CFG_UPDATE_GEN | NFP_NET_CFG_UPDATE_RX_SCATTER;
+	if (nfp_net_reconfig(nn, update) < 0)
+		return;
+
+	nn->dp.ctrl = new_ctrl;
+}
+
+u64
+nfp_net_scatter_get(struct nfp_net *nn)
+{
+	if (NULL == nn)
+		return 0;
+
+	return nn_readq(nn, NFP_NET_CFG_SCATTER_RX_ENABLE);
 }

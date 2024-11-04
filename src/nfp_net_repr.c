@@ -858,6 +858,7 @@ nfp_sgw_repr_open(struct net_device *netdev)
 	struct nfp_flower_priv *app_priv;
 	struct nfp_net_rx_ring *rx_ring;
 	struct nfp_net_tx_ring *tx_ring;
+	u64 scatter_val  = 0;
 	struct nfp_net *nn;
 	int err;
 
@@ -938,6 +939,21 @@ nfp_sgw_repr_open(struct net_device *netdev)
 	nfp_net_repr_set_config_and_enable(nn, repr);
 
 	nfp_net_repr_reconfig(nn);
+
+	scatter_val = nfp_net_scatter_get(nn);
+	if (!rx_scatter) {
+		/* Scatter disable to firmware */
+		for (k = 0; k < repr->nb_rx_rings; k++)
+			scatter_val &= ~(1ULL << repr->vnic_rx_ring_map[k]);
+	} else {
+		if (nn->cap & NFP_NET_CFG_CTRL_SCATTER) {
+			/* Scatter enable to firmware */
+			for (k = 0; k < repr->nb_rx_rings; k++)
+				scatter_val |=
+					(1ULL << repr->vnic_rx_ring_map[k]);
+		}
+	}
+	nfp_net_scatter_set(nn, scatter_val);
 
 	nfp_net_repr_rx_rings_fill_freelist(nn, repr);
 
