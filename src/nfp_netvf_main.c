@@ -208,7 +208,7 @@ static int nfp_netvf_pci_probe(struct pci_dev *pdev,
 
 	/* Allocate and initialise the netdev */
 	nn = nfp_net_alloc(pdev, dev_info, ctrl_bar, ctrl_bar_sz, true,
-			   max_tx_rings, max_rx_rings);
+			   max_tx_rings, max_rx_rings, false);
 	if (IS_ERR(nn)) {
 		err = PTR_ERR(nn);
 		goto err_ctrl_unmap;

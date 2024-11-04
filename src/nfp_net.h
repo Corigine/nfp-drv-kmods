@@ -1055,7 +1055,8 @@ void nfp_net_get_fw_version(struct nfp_net_fw_version *fw_ver,
 struct nfp_net *
 nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
 	      void __iomem *ctrl_bar, u32 ctrl_bar_sz, bool needs_netdev,
-	      unsigned int max_tx_rings, unsigned int max_rx_rings);
+	      unsigned int max_tx_rings, unsigned int max_rx_rings,
+	      bool is_sgw);
 void nfp_net_free(struct nfp_net *nn);
 
 int nfp_net_init(struct nfp_net *nn);

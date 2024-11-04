@@ -123,7 +123,8 @@ nfp_net_pf_alloc_vnic(struct nfp_pf *pf, bool needs_netdev,
 
 	/* Allocate and initialise the vNIC */
 	nn = nfp_net_alloc(pf->pdev, pf->dev_info, ctrl_bar, ctrl_bar_sz,
-			   needs_netdev, n_tx_rings, n_rx_rings);
+			   needs_netdev, n_tx_rings, n_rx_rings,
+			   nfp_app_is_sgw(pf->app));
 	if (IS_ERR(nn))
 		return nn;
 

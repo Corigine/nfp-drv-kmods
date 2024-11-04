@@ -2987,25 +2987,47 @@ void nfp_net_info(struct nfp_net *nn)
 		nfp_app_extra_cap(nn->app, nn));
 }
 
+static inline void
+nfp_net_sgw_ring_num_adjust(struct nfp_net *nn, u32 max_rx_ring, u32 max_tx_ring)
+{
+	struct nfp_net_dp *dp = &nn->dp;
+
+	/* pf vnic */
+	if (dp->netdev) {
+		dp->num_tx_rings = max_tx_ring;
+		dp->num_rx_rings = max_rx_ring;
+		nn->dp.num_r_vecs = dp->num_rx_rings;
+	} else { /* ctrl vnic */
+		dp->num_tx_rings = 1;
+		dp->num_rx_rings = 1;
+		nn->dp.num_r_vecs = 1;
+	}
+
+	dp->num_stack_tx_rings = dp->num_tx_rings;
+}
+
 /**
  * nfp_net_alloc() - Allocate netdev and related structure
  * @pdev:         PCI device
  * @dev_info:     NFP ASIC params
  * @ctrl_bar:     PCI IOMEM with vNIC config memory
+ * @ctrl_bar_sz:  Ctrl vnic bar size
  * @needs_netdev: Whether to allocate a netdev for this vNIC
  * @max_tx_rings: Maximum number of TX rings supported by device
  * @max_rx_rings: Maximum number of RX rings supported by device
+ * @is_sgw:       SGW app or not
  *
  * This function allocates a netdev device and fills in the initial
  * part of the @struct nfp_net structure.  In case of control device
- * nfp_net structure is allocated without the netdev.
+ * nfp_net structure is allocated without the netdev. Of course, some
+ * differences between sgw and other vnic are considered.
  *
  * Return: NFP Net device structure, or ERR_PTR on error.
  */
 struct nfp_net *
 nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
 	      void __iomem *ctrl_bar, u32 ctrl_bar_sz, bool needs_netdev,
-	      unsigned int max_tx_rings, unsigned int max_rx_rings)
+	      unsigned int max_tx_rings, unsigned int max_rx_rings, bool is_sgw)
 {
 	u64 dma_mask = dma_get_mask(&pdev->dev);
 	struct nfp_net *nn;
@@ -3037,7 +3059,7 @@ nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
 
 	switch (FIELD_GET(NFP_NET_CFG_VERSION_DP_MASK, nn->fw_ver.extend)) {
 	case NFP_NET_CFG_VERSION_DP_NFD3:
-		nn->dp.ops = &nfp_nfd3_ops;
+		nn->dp.ops = is_sgw ? NULL : &nfp_nfd3_ops;
 		break;
 	case NFP_NET_CFG_VERSION_DP_NFDK:
 		if (nn->fw_ver.major < 5) {
@@ -3047,7 +3069,7 @@ nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
 			err = -EINVAL;
 			goto err_free_nn;
 		}
-		nn->dp.ops = &nfp_nfdk_ops;
+		nn->dp.ops = is_sgw ? &nfp_nfdk_sgw_ops : &nfp_nfdk_ops;
 		break;
 	default:
 		err = -EINVAL;
@@ -3065,24 +3087,30 @@ nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
 	nn->max_tx_rings = max_tx_rings;
 	nn->max_rx_rings = max_rx_rings;
 
-	nn->dp.num_tx_rings = min_t(unsigned int,
-				    max_tx_rings, num_online_cpus());
-	nn->dp.num_rx_rings = min_t(unsigned int, max_rx_rings,
-				 netif_get_num_default_rss_queues());
+	if (is_sgw) {
+		nfp_net_sgw_ring_num_adjust(nn, max_rx_rings, max_tx_rings);
+		nn->max_r_vecs = nn->dp.num_r_vecs;
+	} else {
+		nn->dp.num_tx_rings = min_t(unsigned int,
+					    max_tx_rings, num_online_cpus());
+		nn->dp.num_rx_rings = min_t(unsigned int, max_rx_rings,
+					    netif_get_num_default_rss_queues());
 
-	nn->dp.num_r_vecs = max(nn->dp.num_tx_rings, nn->dp.num_rx_rings);
-	nn->dp.num_r_vecs = min_t(unsigned int,
-				  nn->dp.num_r_vecs, num_online_cpus());
-	nn->max_r_vecs = nn->dp.num_r_vecs;
+		nn->dp.num_r_vecs = max(nn->dp.num_tx_rings, nn->dp.num_rx_rings);
+		nn->dp.num_r_vecs = min_t(unsigned int,
+					  nn->dp.num_r_vecs, num_online_cpus());
+		nn->max_r_vecs = nn->dp.num_r_vecs;
 
 #ifdef COMPAT__HAVE_XDP_SOCK_DRV
-	nn->dp.xsk_pools = kcalloc(nn->max_r_vecs, sizeof(nn->dp.xsk_pools),
-				   GFP_KERNEL);
-	if (!nn->dp.xsk_pools) {
-		err = -ENOMEM;
-		goto err_free_nn;
-	}
+		nn->dp.xsk_pools = kcalloc(nn->max_r_vecs,
+					   sizeof(nn->dp.xsk_pools),
+					   GFP_KERNEL);
+		if (!nn->dp.xsk_pools) {
+			err = -ENOMEM;
+			goto err_free_nn;
+		}
 #endif
+	}
 
 	nn->dp.txd_cnt = NFP_NET_TX_DESCS_DEFAULT;
 	nn->dp.rxd_cnt = NFP_NET_RX_DESCS_DEFAULT;
@@ -3099,9 +3127,11 @@ nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
 	if (err)
 		goto err_free_nn;
 
-	err = nfp_ccm_mbox_alloc(nn);
-	if (err)
-		goto err_free_nn;
+	if (!is_sgw) {
+		err = nfp_ccm_mbox_alloc(nn);
+		if (err)
+			goto err_free_nn;
+	}
 
 	return nn;
 
