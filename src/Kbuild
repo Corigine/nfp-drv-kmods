@@ -334,11 +334,14 @@ ifneq (, $(wildcard $(srctree)/include/generated/uapi/linux/suse_version.h))
   ccflags-y += -DSLEL_LOCALVER_Y=$(shell echo $(local_version) | cut -d '.' -f 2)
   COMPAT_SUSE := y
 endif
-# Check for auxiliary bus
+# Check for auxiliary bus, intel_auxiliary is conflicted kernel auxiliary, so if intel_auxiliary is installed, we do not use auxiliary
 ifneq (, $(wildcard $(srctree)/include/linux/auxiliary_bus.h))
+  $(eval $(call add_compat_var,$(srctree)/drivers/net/ethernet/intel/ice/Makefile,intel_auxiliary,INTEL_AUXILIBRY_IS_INSTALLED))
   ifeq ($(CONFIG_AUXILIARY_BUS), y)
-    ccflags-y += -DKERNEL_SUPPORT_AUXI
-    $(eval $(call add_compat_flag,$(srctree)/include/linux/auxiliary_bus.h, "int (\*remove)(struct auxiliary_device \*auxdev)",COMPAT__AUXI_INT_REMOVE))
+    ifneq ($(INTEL_AUXILIBRY_IS_INSTALLED),y)
+      ccflags-y += -DKERNEL_SUPPORT_AUXI
+      $(eval $(call add_compat_flag,$(srctree)/include/linux/auxiliary_bus.h, "int (\*remove)(struct auxiliary_device \*auxdev)",COMPAT__AUXI_INT_REMOVE))
+    endif
   endif
 endif
 
