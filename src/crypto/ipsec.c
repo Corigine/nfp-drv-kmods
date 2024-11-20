@@ -21,6 +21,7 @@
 #include "../nfp_net.h"
 #include "crypto.h"
 #include "../nfp_app.h"
+#include"../flower/cmsg.h"
 
 #define NFP_NET_IPSEC_MAX_SA_CNT  (16 * 1024) /* Firmware support a maximum of 16K SA offload */
 
@@ -101,22 +102,30 @@ struct nfp_ipsec_cfg_add_sa {
 			u32 resv[15];
 		} aesgcm_fields;
 	};
-	struct sa_ctrl_word {
-		uint32_t hash   :4;	  /* From nfp_ipsec_sa_hash_type */
-		uint32_t cimode :4;	  /* From nfp_ipsec_sa_cipher_mode */
-		uint32_t cipher :4;	  /* From nfp_ipsec_sa_cipher */
-		uint32_t mode   :2;	  /* From nfp_ipsec_sa_mode */
-		uint32_t proto  :2;	  /* From nfp_ipsec_sa_prot */
-		uint32_t dir :1;	  /* SA direction */
-		uint32_t resv0 :12;
-		uint32_t encap_dsbl:1;	  /* Encap/Decap disable */
-		uint32_t resv1 :2;	  /* Must be set to 0 */
-	} ctrl_word;
+	union {
+		struct sa_ctrl_word {
+			uint32_t hash   :4;	  /* From nfp_ipsec_sa_hash_type */
+			uint32_t cimode :4;	  /* From nfp_ipsec_sa_cipher_mode */
+			uint32_t cipher :4;	  /* From nfp_ipsec_sa_cipher */
+			uint32_t mode   :2;	  /* From nfp_ipsec_sa_mode */
+			uint32_t proto  :2;	  /* From nfp_ipsec_sa_prot */
+			uint32_t dir :1;	  /* SA direction */
+			uint32_t resv0 :12;
+			uint32_t encap_dsbl:1;	  /* Encap/Decap disable */
+			uint32_t resv1 :2;	  /* Must be set to 0 */
+		} ctrl_word;
+		uint32_t ctrl_word_raw;
+	};
 	u32 spi;			  /* SPI Value */
-	uint32_t pmtu_limit :16;          /* PMTU Limit */
-	uint32_t resv0 :5;
-	uint32_t ipv6       :1;		  /* Outbound IPv6 addr format */
-	uint32_t resv1	 :10;
+	union {
+		struct bits_word {
+			uint32_t pmtu_limit :16;          /* PMTU Limit */
+			uint32_t resv0 :5;
+			uint32_t ipv6       :1;		  /* Outbound IPv6 addr format */
+			uint32_t resv1	 :10;
+		} bits_word;
+		uint32_t bits_word_raw;
+	};
 	u32 resv2[2];
 	u32 src_ip[4];			  /* Src IP addr */
 	u32 dst_ip[4];			  /* Dst IP addr */
@@ -131,6 +140,20 @@ struct nfp_ipsec_cfg_mssg {
 			uint32_t rsp:16;     /* One of nfp_ipsec_cfg_mssg_rsp_codes */
 			uint32_t sa_idx:16;  /* SA table index */
 			uint32_t spare0:16;
+			struct nfp_ipsec_cfg_add_sa cfg_add_sa;
+		};
+		u32 raw[64];
+	};
+};
+
+/* SGW IPSEC_CFG_MSSG */
+struct nfp_sgw_ipsec_cfg_msg {
+	union {
+		struct {
+			uint32_t if_id;		/* interface id : 0,4,10,14*/
+			uint32_t spare:16;	/* One of nfp_ipsec_cfg_msg_rsp_codes */
+			uint32_t cmd:16;	/* One of nfp_ipsec_cfg_msg_cmd_codes */
+			uint32_t sa_idx;	/* SA table index */
 			struct nfp_ipsec_cfg_add_sa cfg_add_sa;
 		};
 		u32 raw[64];
@@ -518,12 +541,12 @@ static int nfp_net_xfrm_add_state(struct xfrm_state *x,
 	/* IP related info */
 	switch (x->props.family) {
 	case AF_INET:
-		cfg->ipv6 = 0;
+		cfg->bits_word.ipv6 = 0;
 		cfg->src_ip[0] = ntohl(x->props.saddr.a4);
 		cfg->dst_ip[0] = ntohl(x->id.daddr.a4);
 		break;
 	case AF_INET6:
-		cfg->ipv6 = 1;
+		cfg->bits_word.ipv6 = 1;
 		for (i = 0; i < 4; i++) {
 			cfg->src_ip[i] = ntohl(x->props.saddr.a6[i]);
 			cfg->dst_ip[i] = ntohl(x->id.daddr.a6[i]);
@@ -535,7 +558,7 @@ static int nfp_net_xfrm_add_state(struct xfrm_state *x,
 	}
 
 	/* Maximum nic IPsec code could handle. Other limits may apply. */
-	cfg->pmtu_limit = 0xffff;
+	cfg->bits_word.pmtu_limit = 0xffff;
 	cfg->ctrl_word.encap_dsbl = 1;
 
 	/* SA direction */
@@ -691,6 +714,53 @@ int nfp_net_ipsec_rx(struct nfp_meta_parsed *meta, struct sk_buff *skb)
 	xo->status = CRYPTO_SUCCESS;
 
 	return 0;
+}
+
+int nfp_sgw_cmsg_ipsec(struct nfp_app *app, struct nfp_sgw_ipsec_cfg_msg cfg)
+{
+#ifdef COMPAT__HAVE_NFP_APP_FLOWER
+	struct nfp_sgw_ipsec_cfg_msg *msg;
+	struct sk_buff *skb = NULL;
+	int i = 0;
+
+	skb = nfp_flower_cmsg_alloc(app, sizeof(*msg),
+				    NFP_FLOWER_CMSG_TYPE_IPSEC, GFP_KERNEL);
+	if (!skb)
+		return -ENOMEM;
+
+	msg = nfp_flower_cmsg_get_data(skb);
+	memcpy(msg, &cfg, sizeof(*msg));
+
+	msg->if_id = cpu_to_be32(msg->if_id);
+	msg->cmd = cpu_to_be16(msg->cmd);
+	msg->sa_idx = cpu_to_be32(msg->sa_idx);
+	if (cfg.cmd == NFP_IPSEC_CFG_MSSG_ADD_SA) {
+		msg->cfg_add_sa.ctrl_word_raw =
+			cpu_to_be32(msg->cfg_add_sa.ctrl_word_raw);
+		msg->cfg_add_sa.spi= cpu_to_be32(msg->cfg_add_sa.spi);
+		msg->cfg_add_sa.bits_word_raw =
+			cpu_to_be32(msg->cfg_add_sa.bits_word_raw);
+		if (cfg.cfg_add_sa.bits_word.ipv6) {
+			for (i = 0; i < 4; i++) {
+				msg->cfg_add_sa.src_ip[i] =
+					htonl(msg->cfg_add_sa.src_ip[i]);
+				msg->cfg_add_sa.dst_ip[i] =
+					htonl(msg->cfg_add_sa.dst_ip[i]);
+			}
+		} else {
+			msg->cfg_add_sa.src_ip[0] =
+				htonl(msg->cfg_add_sa.src_ip[0]);
+			msg->cfg_add_sa.dst_ip[0] =
+				htonl(msg->cfg_add_sa.dst_ip[0]);
+		}
+	}
+
+	nfp_ctrl_tx(app->ctrl, skb);
+
+	return 0;
+#else
+	return  -EOPNOTSUPP;
+#endif
 }
 
 static const struct xfrmdev_ops nfp_sgw_ipsec_xfrmdev_ops = {
