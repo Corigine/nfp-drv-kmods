@@ -1907,6 +1907,9 @@ nfp_nfdk_rx_sc(struct nfp_net_rx_ring *rx_ring, int budget)
 	struct net_device *netdev = rx_ring->netdev;
 	struct sk_buff *skb_to_stack = NULL;
 	u32 rxd_type = 0, total_bytes = 0;
+#ifdef CONFIG_NFP_NET_IPSEC
+	struct sk_buff *first_skb = NULL;
+#endif
 	struct nfp_net_rx_desc *rxd;
 	unsigned int true_bufsz;
 	int pkts_polled = 0;
@@ -2098,7 +2101,18 @@ nfp_nfdk_rx_sc(struct nfp_net_rx_ring *rx_ring, int budget)
 		}
 
 		total_bytes += pkt_len;
-
+#ifdef CONFIG_NFP_NET_IPSEC
+		if (meta.ipsec_saidx != 0) {
+			first_skb = skb_to_stack ? skb_to_stack :
+					rx_ring->sc_first_skb;
+			if (unlikely(nfp_sgw_ipsec_rx(&meta, first_skb))) {
+				nfp_nfdk_rx_drop(dp, r_vec, rx_ring,
+						 rxbuf, first_skb);
+				rx_ring->sc_first_skb = NULL;
+				continue;
+			}
+		}
+#endif
 		if (skb_to_stack) {
 			napi_gro_receive(&rx_ring->r_vec->napi, skb_to_stack);
 			skb_to_stack = NULL;

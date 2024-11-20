@@ -1057,6 +1057,58 @@ static const struct xfrmdev_ops nfp_sgw_ipsec_xfrmdev_ops = {
 	.xdo_dev_offload_ok   = nfp_net_ipsec_offload_ok,
 };
 
+int nfp_sgw_ipsec_rx(struct nfp_meta_parsed *meta, struct sk_buff *skb)
+{
+	struct net_device *netdev = skb->dev;
+	struct nfp_flower_priv *priv;
+	struct xfrm_offload *xo;
+	struct nfp_repr *repr;
+	struct xfrm_state *x;
+#if VER_NON_KYL_GE(5, 0) || VER_KYL_GE(10, 3)
+	struct sec_path *sp;
+#endif
+	struct nfp_net *nn;
+	u32 saidx;
+
+	repr = netdev_priv(netdev);
+	priv = (struct nfp_flower_priv *)(repr->app->priv);
+	nn = priv->nn;
+
+	saidx = meta->ipsec_saidx - 1;
+	if (saidx >= NFP_NET_IPSEC_MAX_SA_CNT)
+		return -EINVAL;
+
+	xa_lock(&nn->xa_ipsec);
+	x = xa_load(&nn->xa_ipsec, saidx);
+	xa_unlock(&nn->xa_ipsec);
+	if (!x)
+		return -EINVAL;
+
+#if VER_NON_KYL_GE(5, 0) || VER_KYL_GE(10, 3)
+	sp = secpath_set(skb);
+	if (unlikely(!sp))
+		return -ENOMEM;
+
+	xfrm_state_hold(x);
+	sp->xvec[sp->len++] = x;
+	sp->olen++;
+#else
+	skb->sp = secpath_dup(skb->sp);
+	if (unlikely(!skb->sp))
+		return -ENOMEM;
+
+	xfrm_state_hold(x);
+	skb->sp->xvec[skb->sp->len++] = x;
+	skb->sp->olen++;
+#endif
+
+	xo = xfrm_offload(skb);
+	xo->flags = CRYPTO_DONE;
+	xo->status = CRYPTO_SUCCESS;
+
+	return 0;
+}
+
 void nfp_sgw_repr_ipsec_init(struct net_device *repr, struct nfp_net *nn)
 {
 	if (!(nn->cap_w1 & NFP_NET_CFG_CTRL_IPSEC))
