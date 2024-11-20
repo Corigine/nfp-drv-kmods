@@ -334,6 +334,41 @@ nfp_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
 
 	return NFDK_DESC_TX_CHAIN_META;
 }
+static int
+nfp_sgw_nfdk_prep_tx_meta(struct nfp_net_dp *dp, struct nfp_app *app,
+			  struct sk_buff *skb, bool *ipsec)
+{
+	struct nfp_ipsec_offload offload_info;
+	unsigned char *data;
+	u32 meta_id = 0;
+	int md_bytes;
+
+#ifdef CONFIG_NFP_NET_IPSEC
+	if (xfrm_offload(skb))
+		*ipsec = nfp_net_ipsec_tx_prep(dp, skb, &offload_info);
+#endif
+	if (!*ipsec)
+		return 0;
+
+	md_bytes = sizeof(meta_id) + NFP_SGW_META_IPSEC_FIELD_SIZE;
+
+	if (unlikely(skb_cow_head(skb, md_bytes)))
+		return -ENOMEM;
+
+	data = skb_push(skb, md_bytes) + md_bytes;
+
+	data -= NFP_NET_META_IPSEC_SIZE;
+	put_unaligned_be32(offload_info.handle - 1, data);
+	meta_id =  NFP_NET_META_IPSEC;
+
+	meta_id = FIELD_PREP(NFDK_META_LEN, md_bytes) |
+		  FIELD_PREP(NFDK_META_FIELDS, meta_id);
+
+	data -= sizeof(meta_id);
+	put_unaligned_be32(meta_id, data);
+
+	return NFDK_DESC_TX_CHAIN_META;
+}
 
 static void
 nfp_nfdk_align_first_frag(struct sk_buff *skb)
@@ -629,6 +664,7 @@ nfp_nfdk_sgw_tx(struct sk_buff *skb, struct net_device *netdev)
 	struct nfp_net_dp *dp;
 	int nr_frags, wr_idx;
 	dma_addr_t dma_addr;
+	bool ipsec = false;
 	u64 metadata = 0;
 
 	dp = &nn->dp;
@@ -644,6 +680,10 @@ nfp_nfdk_sgw_tx(struct sk_buff *skb, struct net_device *netdev)
 		dev_kfree_skb_any(skb);
 		return NETDEV_TX_BUSY;
 	}
+
+	metadata = nfp_sgw_nfdk_prep_tx_meta(dp, nn->app, skb, &ipsec);
+	if (unlikely((int)metadata < 0))
+		goto err_flush;
 
 	metadata |= NFDK_DESC_TX_DEST_SET;
 	if (unlikely(compat_ndo_features_check(nn, skb)))
@@ -748,12 +788,15 @@ nfp_nfdk_sgw_tx(struct sk_buff *skb, struct net_device *netdev)
 	}
 
 	(txd - 1)->dma_len_type = cpu_to_le16(dlen_type | NFDK_DESC_TX_EOP);
+	if (ipsec)
+		metadata = nfp_nfdk_ipsec_tx(metadata, skb);
 
 	if (!skb_is_gso(skb)) {
 		real_len = skb->len;
 		real_pkts = 1;
 		/* Metadata desc */
-		metadata = nfp_nfdk_tx_csum(dp, r_vec, 1, skb, metadata);
+		if (!ipsec)
+			metadata = nfp_nfdk_tx_csum(dp, r_vec, 1, skb, metadata);
 		txd->raw = cpu_to_le64(metadata);
 		txd++;
 	} else {
@@ -762,8 +805,9 @@ nfp_nfdk_sgw_tx(struct sk_buff *skb, struct net_device *netdev)
 		real_len = txbuf->real_len;
 		real_pkts = txbuf->pkt_cnt;
 		/* Metadata desc */
-		metadata = nfp_nfdk_tx_csum(dp, r_vec, txbuf->pkt_cnt,
-					    skb, metadata);
+		if (!ipsec)
+			metadata = nfp_nfdk_tx_csum(dp, r_vec, txbuf->pkt_cnt,
+						    skb, metadata);
 		txd->raw = cpu_to_le64(metadata);
 		txd += 2;
 		txbuf->type = NFP_NFDK_TX_BUF_GSOLEN;

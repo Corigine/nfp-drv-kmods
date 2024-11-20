@@ -58,6 +58,7 @@
 #define NFP_NET_META_CONN_HANDLE_SIZE		8
 #define NFP_NET_META_IPSEC_SIZE			4
 #define NFP_NET_META_IPSEC_FIELD_SIZE		12
+#define NFP_SGW_META_IPSEC_FIELD_SIZE		4
 #define NFP_NET_META_PAD_SIZE			1
 /* Hash type pre-pended when a RSS hash was computed */
 #define NFP_NET_RSS_NONE		0
