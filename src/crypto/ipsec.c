@@ -20,6 +20,7 @@
 #include "../nfp_net_ctrl.h"
 #include "../nfp_net.h"
 #include "crypto.h"
+#include "../nfp_app.h"
 
 #define NFP_NET_IPSEC_MAX_SA_CNT  (16 * 1024) /* Firmware support a maximum of 16K SA offload */
 
@@ -613,7 +614,9 @@ void nfp_net_ipsec_init(struct nfp_net *nn)
 		return;
 
 	xa_init_flags(&nn->xa_ipsec, XA_FLAGS_ALLOC);
-	nn->dp.netdev->xfrmdev_ops = &nfp_net_ipsec_xfrmdev_ops;
+
+	if (!nfp_app_is_sgw(nn->app))
+		nn->dp.netdev->xfrmdev_ops = &nfp_net_ipsec_xfrmdev_ops;
 }
 
 void nfp_net_ipsec_clean(struct nfp_net *nn)
@@ -688,4 +691,16 @@ int nfp_net_ipsec_rx(struct nfp_meta_parsed *meta, struct sk_buff *skb)
 	xo->status = CRYPTO_SUCCESS;
 
 	return 0;
+}
+
+static const struct xfrmdev_ops nfp_sgw_ipsec_xfrmdev_ops = {
+
+};
+
+void nfp_sgw_repr_ipsec_init(struct net_device *repr, struct nfp_net *nn)
+{
+	if (!(nn->cap_w1 & NFP_NET_CFG_CTRL_IPSEC))
+		return;
+
+	repr->xfrmdev_ops = &nfp_sgw_ipsec_xfrmdev_ops;
 }

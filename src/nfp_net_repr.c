@@ -20,6 +20,7 @@
 #include "nfp_net_sriov.h"
 #include "nfp_port.h"
 #include "nfp_net_dp.h"
+#include "crypto/crypto.h"
 
 static bool
 nfp_vnic_ring_idx_check(struct nfp_net *nn,
@@ -1255,6 +1256,7 @@ int nfp_repr_init(struct nfp_app *app, struct net_device *netdev,
 			spin_lock_init(&repr->xmit_lock[i]);
 
 		netdev->netdev_ops = &nfp_sgw_repr_netdev_ops;
+		nfp_sgw_repr_ipsec_init(netdev, nn);
 	} else {
 		netdev->netdev_ops = &nfp_repr_netdev_ops;
 		netdev->ethtool_ops = &nfp_port_ethtool_ops;
