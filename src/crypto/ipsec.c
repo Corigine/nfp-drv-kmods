@@ -20,7 +20,8 @@
 #include "../nfp_net_ctrl.h"
 #include "../nfp_net.h"
 #include "crypto.h"
-#include "../nfp_app.h"
+#include "../nfp_port.h"
+#include"../flower/main.h"
 #include"../flower/cmsg.h"
 
 #define NFP_NET_IPSEC_MAX_SA_CNT  (16 * 1024) /* Firmware support a maximum of 16K SA offload */
@@ -716,7 +717,7 @@ int nfp_net_ipsec_rx(struct nfp_meta_parsed *meta, struct sk_buff *skb)
 	return 0;
 }
 
-int nfp_sgw_cmsg_ipsec(struct nfp_app *app, struct nfp_sgw_ipsec_cfg_msg cfg)
+static int nfp_sgw_cmsg_ipsec(struct nfp_app *app, struct nfp_sgw_ipsec_cfg_msg cfg)
 {
 #ifdef COMPAT__HAVE_NFP_APP_FLOWER
 	struct nfp_sgw_ipsec_cfg_msg *msg;
@@ -763,8 +764,297 @@ int nfp_sgw_cmsg_ipsec(struct nfp_app *app, struct nfp_sgw_ipsec_cfg_msg cfg)
 #endif
 }
 
-static const struct xfrmdev_ops nfp_sgw_ipsec_xfrmdev_ops = {
+#if VER_NON_RHEL_LT(6, 3) || RHEL_RELEASE_LT(9, 316, 0, 0)
+#undef NL_SET_ERR_MSG_MOD
+#define NL_SET_ERR_MSG_MOD(e, m)	nn_err(nn, "%s\n", m)
+static int nfp_sgw_xfrm_add_state(struct xfrm_state *x)
+#else
+static int nfp_sgw_xfrm_add_state(struct xfrm_state *x,
+				  struct netlink_ext_ack *extack)
+#endif
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
+	struct net_device *netdev = x->xso.real_dev;
+#else
+	struct net_device *netdev = x->xso.dev;
+#endif
+	struct nfp_sgw_ipsec_cfg_msg msg = {};
+	int i, key_len, trunc_len, err = 0;
+	struct nfp_ipsec_cfg_add_sa *cfg;
+	struct nfp_flower_priv *priv;
+	struct nfp_repr *repr;
+	struct nfp_net *nn;
+	unsigned int saidx;
 
+	repr = netdev_priv(netdev);
+	priv = (struct nfp_flower_priv *)(repr->app->priv);
+	nn = priv->nn;
+	cfg = &msg.cfg_add_sa;
+
+	/* General */
+	switch (x->props.mode) {
+	case XFRM_MODE_TUNNEL:
+		cfg->ctrl_word.mode = NFP_IPSEC_PROTMODE_TUNNEL;
+		break;
+	case XFRM_MODE_TRANSPORT:
+		cfg->ctrl_word.mode = NFP_IPSEC_PROTMODE_TRANSPORT;
+		break;
+	default:
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported mode for xfrm offload");
+		return -EINVAL;
+	}
+
+	switch (x->id.proto) {
+	case IPPROTO_ESP:
+		cfg->ctrl_word.proto = NFP_IPSEC_PROTOCOL_ESP;
+		break;
+	default:
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported protocol for xfrm offload");
+		return -EINVAL;
+	}
+
+	if (x->props.flags & XFRM_STATE_ESN) {
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported XFRM_REPLAY_MODE_ESN for xfrm offload");
+		return -EINVAL;
+	}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+	if (x->xso.type != XFRM_DEV_OFFLOAD_CRYPTO) {
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported xfrm offload type");
+		return -EINVAL;
+	}
+#endif
+
+	cfg->spi = ntohl(x->id.spi);
+	/* Hash/Authentication */
+	if (x->aalg)
+		trunc_len = x->aalg->alg_trunc_len;
+	else
+		trunc_len = 0;
+
+	switch (x->props.aalgo) {
+	case SADB_AALG_NONE:
+		if (x->aead) {
+			trunc_len = -1;
+		} else {
+			NL_SET_ERR_MSG_MOD(extack, "Unsupported authentication algorithm");
+			return -EINVAL;
+		}
+		break;
+	case SADB_X_AALG_NULL:
+		cfg->ctrl_word.hash = NFP_IPSEC_HASH_NONE;
+		trunc_len = -1;
+		break;
+	case SADB_AALG_MD5HMAC:
+		if (nn->pdev->device == PCI_DEVICE_ID_NFP3800) {
+			NL_SET_ERR_MSG_MOD(extack, "Unsupported authentication algorithm");
+			return -EINVAL;
+		}
+		set_md5hmac(cfg, &trunc_len);
+		break;
+	case SADB_AALG_SHA1HMAC:
+		set_sha1hmac(cfg, &trunc_len);
+		break;
+	case SADB_X_AALG_SHA2_256HMAC:
+		set_sha2_256hmac(cfg, &trunc_len);
+		break;
+	case SADB_X_AALG_SHA2_384HMAC:
+		set_sha2_384hmac(cfg, &trunc_len);
+		break;
+	case SADB_X_AALG_SHA2_512HMAC:
+		set_sha2_512hmac(cfg, &trunc_len);
+		break;
+	default:
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported authentication algorithm");
+		return -EINVAL;
+	}
+
+	if (!trunc_len) {
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported authentication algorithm trunc length");
+		return -EINVAL;
+	}
+
+	if (x->aalg) {
+		key_len = DIV_ROUND_UP(x->aalg->alg_key_len, BITS_PER_BYTE);
+		if (key_len > sizeof(cfg->auth_key)) {
+			NL_SET_ERR_MSG_MOD(extack, "Insufficient space for offloaded auth key");
+			return -EINVAL;
+		}
+		for (i = 0; i < key_len / sizeof(cfg->auth_key[0]) ; i++)
+			cfg->auth_key[i] = *((u32 *)(x->aalg->alg_key +
+				sizeof(cfg->auth_key[0]) * i));
+	}
+
+	/* Encryption */
+	switch (x->props.ealgo) {
+	case SADB_EALG_NONE:
+	case SADB_EALG_NULL:
+		cfg->ctrl_word.cimode = NFP_IPSEC_CIMODE_CBC;
+		cfg->ctrl_word.cipher = NFP_IPSEC_CIPHER_NULL;
+		break;
+	case SADB_EALG_3DESCBC:
+		if (nn->pdev->device == PCI_DEVICE_ID_NFP3800) {
+			NL_SET_ERR_MSG_MOD(extack, "Unsupported encryption algorithm for offload");
+			return -EINVAL;
+		}
+		cfg->ctrl_word.cimode = NFP_IPSEC_CIMODE_CBC;
+		cfg->ctrl_word.cipher = NFP_IPSEC_CIPHER_3DES;
+		break;
+	case SADB_X_EALG_AES_GCM_ICV16:
+	case SADB_X_EALG_NULL_AES_GMAC:
+		if (!x->aead) {
+			NL_SET_ERR_MSG_MOD(extack, "Invalid AES key data");
+			return -EINVAL;
+		}
+
+		if (x->aead->alg_icv_len != 128) {
+			NL_SET_ERR_MSG_MOD(extack, "ICV must be 128bit with SADB_X_EALG_AES_GCM_ICV16");
+			return -EINVAL;
+		}
+		cfg->ctrl_word.cimode = NFP_IPSEC_CIMODE_CTR;
+		cfg->ctrl_word.hash = NFP_IPSEC_HASH_GF128_128;
+
+		/* Aead->alg_key_len includes 32-bit salt */
+		if (set_aes_keylen(cfg, x->props.ealgo,
+				   x->aead->alg_key_len - 32)) {
+			NL_SET_ERR_MSG_MOD(extack, "Unsupported AES key length");
+			return -EINVAL;
+		}
+		break;
+	case SADB_X_EALG_AESCBC:
+		cfg->ctrl_word.cimode = NFP_IPSEC_CIMODE_CBC;
+		if (!x->ealg) {
+			NL_SET_ERR_MSG_MOD(extack, "Invalid AES key data");
+			return -EINVAL;
+		}
+		if (set_aes_keylen(cfg, x->props.ealgo, x->ealg->alg_key_len) < 0) {
+			NL_SET_ERR_MSG_MOD(extack, "Unsupported AES key length");
+			return -EINVAL;
+		}
+		break;
+	default:
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported encryption algorithm for offload");
+		return -EINVAL;
+	}
+
+	if (x->aead) {
+		int salt_len = 4;
+
+		key_len = DIV_ROUND_UP(x->aead->alg_key_len, BITS_PER_BYTE);
+		key_len -= salt_len;
+
+		if (key_len > sizeof(cfg->ciph_key)) {
+			NL_SET_ERR_MSG_MOD(extack, "aead: Insufficient space for offloaded key");
+			return -EINVAL;
+		}
+
+		for (i = 0; i < key_len / sizeof(cfg->ciph_key[0]) ; i++)
+			cfg->ciph_key[i] = *((u32 *)(x->aead->alg_key +
+				sizeof(cfg->ciph_key[0]) * i));
+
+		/* Load up the salt */
+		cfg->aesgcm_fields.salt = *((u32 *)(x->aead->alg_key + key_len));
+	}
+
+	if (x->ealg) {
+		key_len = DIV_ROUND_UP(x->ealg->alg_key_len, BITS_PER_BYTE);
+
+		if (key_len > sizeof(cfg->ciph_key)) {
+			NL_SET_ERR_MSG_MOD(extack, "ealg: Insufficient space for offloaded key");
+			return -EINVAL;
+		}
+		for (i = 0; i < key_len / sizeof(cfg->ciph_key[0]) ; i++)
+ 			cfg->ciph_key[i] = *((u32 *)(x->ealg->alg_key +
+				sizeof(cfg->ciph_key[0]) * i));
+	}
+
+	/* IP related info */
+	switch (x->props.family) {
+	case AF_INET:
+		cfg->bits_word.ipv6 = 0;
+		cfg->src_ip[0] = ntohl(x->props.saddr.a4);
+		cfg->dst_ip[0] = ntohl(x->id.daddr.a4);
+		break;
+	case AF_INET6:
+		cfg->bits_word.ipv6 = 1;
+		for (i = 0; i < 4; i++) {
+			cfg->src_ip[i] = ntohl(x->props.saddr.a6[i]);
+			cfg->dst_ip[i] = ntohl(x->id.daddr.a6[i]);
+		}
+		break;
+	default:
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported address family");
+		return -EINVAL;
+	}
+
+	/* Maximum nic IPsec code could handle. Other limits may apply. */
+	cfg->bits_word.pmtu_limit = 0xffff;
+	cfg->ctrl_word.encap_dsbl = 1;
+
+	/* SA direction */
+#if VER_NON_RHEL_GE(5, 19) || RHEL_RELEASE_GE(9, 316, 0, 0)
+	cfg->ctrl_word.dir = x->xso.dir;
+#else
+	cfg->ctrl_word.dir = (x->xso.flags & XFRM_OFFLOAD_INBOUND) ? 1 : 0;
+#endif
+
+	/* Find unused SA data*/
+	err = xa_alloc(&nn->xa_ipsec, &saidx, x,
+		       XA_LIMIT(0, NFP_NET_IPSEC_MAX_SA_CNT - 1), GFP_KERNEL);
+	if (err < 0) {
+		NL_SET_ERR_MSG_MOD(extack, "Unable to get sa_data number for IPsec");
+		return err;
+	}
+
+	/* Allocate saidx and commit the SA */
+	msg.if_id = repr->port->eth_id;
+	msg.cmd = NFP_IPSEC_CFG_MSSG_ADD_SA;
+	msg.sa_idx = saidx;
+	err = nfp_sgw_cmsg_ipsec(nn->app, msg);
+	if (err) {
+		xa_erase(&nn->xa_ipsec, saidx);
+		NL_SET_ERR_MSG_MOD(extack, "Failed to issue IPsec command");
+		return err;
+	}
+
+	/* 0 is invalid offload_handle for kernel */
+	x->xso.offload_handle = saidx + 1;
+
+	return 0;
+}
+
+static void nfp_sgw_xfrm_del_state(struct xfrm_state *x)
+{
+	struct nfp_sgw_ipsec_cfg_msg msg = {
+		.cmd = NFP_IPSEC_CFG_MSSG_INV_SA,
+		.sa_idx = x->xso.offload_handle - 1,
+	};
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
+	struct net_device *netdev = x->xso.real_dev;
+#else
+	struct net_device *netdev = x->xso.dev;
+#endif
+	struct nfp_flower_priv *priv;
+	struct nfp_repr *repr;
+	struct nfp_net *nn;
+	int err;
+
+	repr = netdev_priv(netdev);
+	priv = (struct nfp_flower_priv *)(repr->app->priv);
+	nn = priv->nn;
+	msg.if_id = repr->port->eth_id;
+
+	err = nfp_sgw_cmsg_ipsec(nn->app, msg);
+	if (err)
+		nn_warn(nn, "Failed to invalidate SA in hardware\n");
+
+	xa_erase(&nn->xa_ipsec, x->xso.offload_handle - 1);
+}
+
+static const struct xfrmdev_ops nfp_sgw_ipsec_xfrmdev_ops = {
+	.xdo_dev_state_add    = nfp_sgw_xfrm_add_state,
+	.xdo_dev_state_delete = nfp_sgw_xfrm_del_state,
+	.xdo_dev_offload_ok   = nfp_net_ipsec_offload_ok,
 };
 
 void nfp_sgw_repr_ipsec_init(struct net_device *repr, struct nfp_net *nn)
