@@ -1041,6 +1041,10 @@ nfp_sgw_repr_fix_features(struct net_device *netdev, netdev_features_t features)
 #if VER_NON_RHEL_LT(6, 12) || (RHEL_RELEASE_LT(9, 522, 0, 0))
 	features |= NETIF_F_LLTX;
 #endif
+#ifdef CONFIG_NFP_NET_IPSEC
+	if (nn->cap_w1 & NFP_NET_CFG_CTRL_IPSEC)
+		features |= NETIF_F_HW_ESP;
+#endif
 
 	return features;
 }
@@ -1283,6 +1287,12 @@ int nfp_repr_init(struct nfp_app *app, struct net_device *netdev,
 		netdev->hw_features |= NETIF_F_TSO | NETIF_F_TSO6;
 	if (repr_cap & NFP_NET_CFG_CTRL_RSS_ANY)
 		netdev->hw_features |= NETIF_F_RXHASH;
+#ifdef CONFIG_NFP_NET_IPSEC
+	if (nfp_app_is_sgw(app) && (nn->cap_w1 & NFP_NET_CFG_CTRL_IPSEC)){
+		netdev->hw_features = NETIF_F_HW_ESP;
+		netdev->hw_enc_features = netdev->hw_features;
+	}
+#endif
 	if (repr_cap & NFP_NET_CFG_CTRL_VXLAN) {
 		if (repr_cap & NFP_NET_CFG_CTRL_LSO)
 			netdev->hw_features |= NETIF_F_GSO_UDP_TUNNEL;
