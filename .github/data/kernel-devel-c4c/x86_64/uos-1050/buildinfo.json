@@ -1,4 +1,0 @@
-{
-	"name": "uos-1050",
-	"container": "ci-docker-registry-vm:5000/drv-x86-64-rocky8"
-}
