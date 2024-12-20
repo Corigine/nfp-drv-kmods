@@ -180,7 +180,7 @@ static const char nfp_tlv_stat_names[][ETH_GSTRING_LEN] = {
 
 #define NN_ET_GLOBAL_STATS_LEN ARRAY_SIZE(nfp_net_et_stats)
 #define NN_ET_SWITCH_STATS_LEN 9
-#define NN_RVEC_GATHER_STATS	13
+#define NN_RVEC_GATHER_STATS	14
 #define NN_RVEC_PER_Q_STATS	3
 #define NN_CTRL_PATH_STATS	4
 
@@ -1132,6 +1132,7 @@ static u8 *nfp_vnic_get_sw_stats_strings(struct net_device *netdev, u8 *data)
 	ethtool_puts(&data, "hw_rx_csum_err");
 	ethtool_puts(&data, "rx_replace_buf_alloc_fail");
 	ethtool_puts(&data, "rx_tls_decrypted_packets");
+	ethtool_puts(&data, "rx_lro_packets");
 	ethtool_puts(&data, "hw_tx_csum");
 	ethtool_puts(&data, "hw_tx_inner_csum");
 	ethtool_puts(&data, "tx_gather");
@@ -1167,19 +1168,20 @@ static u64 *nfp_vnic_get_sw_stats(struct net_device *netdev, u64 *data)
 			tmp[3] = nn->r_vecs[i].hw_csum_rx_error;
 			tmp[4] = nn->r_vecs[i].rx_replace_buf_alloc_fail;
 			tmp[5] = nn->r_vecs[i].hw_tls_rx;
+			tmp[6] = nn->r_vecs[i].hw_lro_rx;
 		} while (u64_stats_fetch_retry(&nn->r_vecs[i].rx_sync, start));
 
 		do {
 			start = u64_stats_fetch_begin(&nn->r_vecs[i].tx_sync);
 			data[1] = nn->r_vecs[i].tx_pkts;
 			data[2] = nn->r_vecs[i].tx_busy;
-			tmp[6] = nn->r_vecs[i].hw_csum_tx;
-			tmp[7] = nn->r_vecs[i].hw_csum_tx_inner;
-			tmp[8] = nn->r_vecs[i].tx_gather;
-			tmp[9] = nn->r_vecs[i].tx_lso;
-			tmp[10] = nn->r_vecs[i].hw_tls_tx;
-			tmp[11] = nn->r_vecs[i].tls_tx_fallback;
-			tmp[12] = nn->r_vecs[i].tls_tx_no_fallback;
+			tmp[7] = nn->r_vecs[i].hw_csum_tx;
+			tmp[8] = nn->r_vecs[i].hw_csum_tx_inner;
+			tmp[9] = nn->r_vecs[i].tx_gather;
+			tmp[10] = nn->r_vecs[i].tx_lso;
+			tmp[11] = nn->r_vecs[i].hw_tls_tx;
+			tmp[12] = nn->r_vecs[i].tls_tx_fallback;
+			tmp[13] = nn->r_vecs[i].tls_tx_no_fallback;
 		} while (u64_stats_fetch_retry(&nn->r_vecs[i].tx_sync, start));
 
 		data += NN_RVEC_PER_Q_STATS;

@@ -41,6 +41,7 @@
 #define NFP_NET_META_FIELD_SIZE		4
 #define NFP_NET_META_HASH		1 /* next field carries hash type */
 #define NFP_NET_META_MARK		2
+#define NFP_NET_META_LRO_NUM_SEGS	3
 #define NFP_NET_META_VLAN		4 /* ctag or stag type */
 #define NFP_NET_META_PORTID		5
 #define NFP_NET_META_CSUM		6 /* checksum complete type */
@@ -283,6 +284,11 @@
 #define   NFP_NET_CFG_CTRL_RX_ALIGNMENT	  (0x1 << 15) /* Rx side dma length alignment */
 #define   NFP_NET_CFG_CTRL_USO		  (0x1 << 16) /* UDP segmentation offload */
 #define   NFP_NET_CFG_CTRL_TC_MQPRIO	  (0x1 << 17) /* TC priority */
+#define   NFP_NET_CFG_CTRL_LRO_IPV4	  (0x1 << 19) /* LRO for IPV4 */
+#define   NFP_NET_CFG_CTRL_LRO_IPV6	  (0x1 << 20) /* LRO for IPV6 */
+
+#define   NFP_NET_CFG_CTRL_LRO_ANY	(NFP_NET_CFG_CTRL_LRO_IPV4 |\
+					NFP_NET_CFG_CTRL_LRO_IPV6)
 
 #define NFP_NET_CFG_CAP_WORD1		0x00a4
 
@@ -290,9 +296,8 @@
 
 #define NFP_NET_CFG_MAX_FS_CAP		0x00b8
 
-/* 4B reserved for future use (0x00bc - 0x00bf) */
-#define NFP_NET_CFG_RESERVED		0x00bc
-#define NFP_NET_CFG_RESERVED_SZ		0x0004
+/*  Maximum LRO aggregated buffer size(0x00bc - 0x00bf) */
+#define NFP_NET_CFG_LRO_MAX_BUF_SIZE    0x00bc
 
 /* RSS configuration (0x0100 - 0x01ac):
  * Used only when NFP_NET_CFG_CTRL_RSS is enabled

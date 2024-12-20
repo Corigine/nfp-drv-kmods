@@ -1341,6 +1341,10 @@ nfp_nfdk_parse_meta(struct net_device *netdev, struct nfp_meta_parsed *meta,
 			data += 4;
 			break;
 #endif
+		case NFP_NET_META_LRO_NUM_SEGS:
+			meta->lro_seg_nums = get_unaligned_be32(data);
+			data += 4;
+			break;
 		default:
 			return true;
 		}
@@ -1826,6 +1830,12 @@ static int nfp_nfdk_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 		if (unlikely(!nfp_net_vlan_strip(skb, rxd, &meta))) {
 			nfp_nfdk_rx_drop(dp, r_vec, rx_ring, NULL, skb);
 			continue;
+		}
+
+		if (meta.lro_seg_nums) {
+			r_vec->hw_lro_rx++;
+			r_vec->rx_pkts +=  meta.lro_seg_nums - 1;
+			u64_stats_update_end(&r_vec->rx_sync);
 		}
 
 #ifdef CONFIG_NFP_NET_IPSEC

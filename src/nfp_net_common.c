@@ -1178,6 +1178,10 @@ static int nfp_net_set_config_and_enable(struct nfp_net *nn)
 		update |= NFP_NET_CFG_UPDATE_RSS;
 	}
 
+	if (nn->cap_w1 & NFP_NET_CFG_CTRL_LRO_ANY) {
+		nn_writel(nn, NFP_NET_CFG_LRO_MAX_BUF_SIZE, \
+			  NFP_NET_RX_LRO_MAX_SIZE);
+	}
 	if (!nfp_app_is_sgw(nn->app) &&
 	    nn->dp.ctrl & NFP_NET_CFG_CTRL_IRQMOD) {
 		nfp_net_coalesce_write_cfg(nn, true, true);
@@ -2479,11 +2483,13 @@ static int nfp_net_set_features(struct net_device *netdev,
 	netdev_features_t changed = netdev->features ^ features;
 	struct nfp_net *nn = netdev_priv(netdev);
 	u32 new_ctrl;
+	u32 new_ctrl_w1;
 	int err;
 
 	/* Assume this is not called with features we have not advertised */
 
 	new_ctrl = nn->dp.ctrl;
+	new_ctrl_w1 = nn->dp.ctrl_w1;
 
 	if (changed & NETIF_F_RXCSUM) {
 		if (features & NETIF_F_RXCSUM)
@@ -2505,6 +2511,13 @@ static int nfp_net_set_features(struct net_device *netdev,
 					      NFP_NET_CFG_CTRL_LSO;
 		else
 			new_ctrl &= ~NFP_NET_CFG_CTRL_LSO_ANY;
+	}
+
+	if (changed & NETIF_F_LRO) {
+		if (features & NETIF_F_LRO)
+			new_ctrl_w1 |= nn->cap_w1 & NFP_NET_CFG_CTRL_LRO_ANY;
+		else
+			new_ctrl_w1 &= ~NFP_NET_CFG_CTRL_LRO_ANY;
 	}
 
 	if (changed & NETIF_F_HW_VLAN_CTAG_RX) {
@@ -2553,16 +2566,19 @@ static int nfp_net_set_features(struct net_device *netdev,
 	nn_dbg(nn, "Feature change 0x%llx -> 0x%llx (changed=0x%llx)\n",
 	       netdev->features, features, changed);
 
-	if (new_ctrl == nn->dp.ctrl)
+	if (new_ctrl == nn->dp.ctrl && new_ctrl_w1 == nn->dp.ctrl_w1)
 		return 0;
 
 	nn_dbg(nn, "NIC ctrl: 0x%x -> 0x%x\n", nn->dp.ctrl, new_ctrl);
+	nn_dbg(nn, "NIC ctrl_w1: 0x%x -> 0x%x\n", nn->dp.ctrl_w1, new_ctrl_w1);
 	nn_writel(nn, NFP_NET_CFG_CTRL, new_ctrl);
+	nn_writel(nn, NFP_NET_CFG_CTRL_WORD1, new_ctrl_w1);
 	err = nfp_net_reconfig(nn, NFP_NET_CFG_UPDATE_GEN);
 	if (err)
 		return err;
 
 	nn->dp.ctrl = new_ctrl;
+	nn->dp.ctrl_w1 = new_ctrl_w1;
 
 	return 0;
 }
@@ -3307,7 +3323,7 @@ void nfp_net_info(struct nfp_net *nn)
 		nn->fw_ver.extend, nn->fw_ver.class,
 		nn->fw_ver.major, nn->fw_ver.minor,
 		nn->max_mtu);
-	nn_info(nn, "CAP: %#x %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
+	nn_info(nn, "CAP: %#x %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
 		nn->cap,
 		nn->cap & NFP_NET_CFG_CTRL_PROMISC  ? "PROMISC "  : "",
 		nn->cap & NFP_NET_CFG_CTRL_L2BC     ? "L2BCFILT " : "",
@@ -3337,6 +3353,7 @@ void nfp_net_info(struct nfp_net *nn)
 		nn->cap & NFP_NET_CFG_CTRL_LIVE_ADDR ? "LIVE_ADDR " : "",
 		nn->cap_w1 & NFP_NET_CFG_CTRL_MCAST_FILTER ? "MULTICAST_FILTER " : "",
 		nn->cap_w1 & NFP_NET_CFG_CTRL_USO ? "USO " : "",
+		nn->cap_w1 & NFP_NET_CFG_CTRL_LRO_ANY ? "LRO " : "",
 		nfp_app_extra_cap(nn->app, nn));
 }
 
@@ -3637,6 +3654,9 @@ static void nfp_net_netdev_init(struct nfp_net *nn)
 	if (nn->cap & NFP_NET_CFG_CTRL_RSS_ANY)
 		netdev->hw_features |= NETIF_F_RXHASH;
 
+	if (nn->cap_w1 & NFP_NET_CFG_CTRL_LRO_ANY)
+		netdev->hw_features |= NETIF_F_LRO;
+
 #ifdef CONFIG_NFP_NET_IPSEC
        if (!is_sgw && nn->cap_w1 & NFP_NET_CFG_CTRL_IPSEC)
                netdev->hw_features |= NETIF_F_HW_ESP | NETIF_F_HW_ESP_TX_CSUM;
@@ -3706,6 +3726,9 @@ static void nfp_net_netdev_init(struct nfp_net *nn)
 	netdev->features &= ~NETIF_F_HW_VLAN_STAG_RX;
 	nn->dp.ctrl &= ~NFP_NET_CFG_CTRL_RXQINQ;
 #endif
+
+	/* Advertise but disable LRO by default. */
+	netdev->features &= ~NETIF_F_LRO;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
 	if (!is_sgw) {

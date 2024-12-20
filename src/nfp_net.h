@@ -115,6 +115,7 @@
 				 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 #define NFP_NET_RX_BUF_DEFAULT_SIZE		2048
 #define NFP_NET_RX_BUF_MAX_SIZE			(16 * 1024)
+#define NFP_NET_RX_LRO_MAX_SIZE			65535
 
 #ifdef CONFIG_NFP_ROCE
 #define NFP_NET_MAX_ROCE_VECTORS        8
@@ -321,6 +322,7 @@ struct nfp_meta_parsed {
 #ifdef CONFIG_NFP_NET_IPSEC
 	u32 ipsec_saidx;
 #endif
+	u32 lro_seg_nums;
 };
 
 struct nfp_net_rx_hash {
@@ -472,6 +474,7 @@ struct nfp_net_r_vector {
 	u64 hw_csum_rx_inner_ok;
 	u64 hw_csum_rx_complete;
 	u64 hw_tls_rx;
+	u64 hw_lro_rx;
 
 	u64 hw_csum_rx_error;
 	u64 rx_replace_buf_alloc_fail;
