@@ -313,6 +313,12 @@ $(eval $(call add_compat_flag,$(srctree)/include/linux/interrupt.h,"^irq_update_
 # Check skb_mark_for_recycle for rx buffer recycle feature
 $(eval $(call add_compat_flag,$(srctree)/include/linux/skbuff.h,"skb_mark_for_recycle(struct sk_buff \*skb)",COMPAT__SKB_RECYCLE))
 
+# Check for size_add function
+$(eval $(call add_compat_flag,$(srctree)/include/linux/overflow.h,"__must_check size_add",COMPAT__HAVE_SIZE_ADD))
+
+# Check if overflow file exists
+$(eval $(call add_compat_flag,$(srctree)/include/linux/overflow.h,"__LINUX_OVERFLOW_H",COMPAT__HAVE_OVERFLOW_FILE))
+
 utsrelease_h_path :=$(srctree)/include/generated/utsrelease.h
 # Check for BC Linux
 $(eval $(call add_compat_flag,$(utsrelease_h_path),bclinux,COMPAT_BCLINUX=1))
