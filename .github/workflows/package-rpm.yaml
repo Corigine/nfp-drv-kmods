@@ -151,13 +151,13 @@ on:
           - bclinux/bclinux:8
           - bclinux/bclinux:8.1
           - bclinux/bclinux:8.2
-          - opensuse/opensuse12.4
-          - opensuse/opensuse12.5
-          - opensuse/opensuse15.1
-          - opensuse/opensuse15.2
-          - opensuse/opensuse15.3
-          - opensuse/opensuse15.4
-          - opensuse/opensuse15.5
+          - opensuse/opensuse:12.4
+          - opensuse/opensuse:12.5
+          - opensuse/opensuse:15.1
+          - opensuse/opensuse:15.2
+          - opensuse/opensuse:15.3
+          - opensuse/opensuse:15.4
+          - opensuse/opensuse:15.5
           - uos/uos:1050
           - uos/uos:1050u1
           - uos/uos:1050u2
