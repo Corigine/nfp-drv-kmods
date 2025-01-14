@@ -140,7 +140,9 @@ nfp_net_tx_ring_hw_cfg_write(struct nfp_net *nn,
 			     struct nfp_net_tx_ring *tx_ring, unsigned int idx);
 void nfp_net_vec_clear_ring_data(struct nfp_net *nn, unsigned int idx);
 
-void *nfp_net_rx_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr);
+void *nfp_net_rx_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr,
+			   struct nfp_net_rx_ring *rx_ring);
+void *nfp_net_tx_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr);
 int nfp_net_rx_rings_prepare(struct nfp_net *nn, struct nfp_net_dp *dp);
 int nfp_net_tx_rings_prepare(struct nfp_net *nn, struct nfp_net_dp *dp);
 void nfp_net_rx_rings_free(struct nfp_net_dp *dp);

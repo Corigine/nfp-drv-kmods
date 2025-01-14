@@ -20,6 +20,14 @@
 #include <linux/netdevice.h>
 #include <linux/pci.h>
 
+
+#if VER_NON_RHEL_GE(6, 6) || VER_RHEL_GE(9, 4)
+#include <net/page_pool/helpers.h>
+#elif VER_KERN_GE(4, 18)
+#include <net/page_pool.h>
+#else
+#endif
+
 #ifdef COMPAT_HAVE_DIM
 #include <linux/dim.h>
 #else
@@ -386,7 +394,9 @@ struct nfp_net_rx_ring {
 	struct nfp_net_rx_desc *rxds;
 
 	struct xdp_rxq_info xdp_rxq;
-
+#ifdef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+	struct page_pool *page_pool;
+#endif
 	dma_addr_t dma;
 	size_t size;
 } ____cacheline_aligned;
@@ -540,6 +550,7 @@ struct nfp_vnic_ring_hdl {
  * @is_vf:		Is the driver attached to a VF?
  * @chained_metadata_format:  Firemware will use new metadata format
  * @ktls_tx:		Is kTLS TX enabled?
+ * @use_rx_buf_recycle:	Use page_pool to recycle rx buffer?
  * @rx_dma_dir:		Mapping direction for RX buffers
  * @rx_dma_off:		Offset at which DMA packets (for XDP headroom)
  * @rx_offset:		Offset in the RX buffers where packet data starts
@@ -571,6 +582,7 @@ struct nfp_net_dp {
 	u8 is_vf:1;
 	u8 chained_metadata_format:1;
 	u8 ktls_tx:1;
+	u8 use_rx_buf_recycle:1;
 
 	u8 rx_dma_dir;
 	u8 rx_offset;

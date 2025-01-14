@@ -14,7 +14,52 @@
  *
  * Return: allocated page frag or NULL on failure.
  */
-void *nfp_net_rx_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr)
+void *nfp_net_rx_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr,
+			   struct nfp_net_rx_ring *rx_ring)
+{
+	void *frag = NULL;
+
+	if (dp->use_rx_buf_recycle) {
+#ifdef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+		unsigned int frag_size;
+		struct page *page;
+
+		frag_size = dp->xdp_prog ? PAGE_SIZE : dp->fl_bufsz;
+
+		page = page_pool_dev_alloc_pages(rx_ring->page_pool);
+		frag = page ? page_address(page) : NULL;
+		if (!frag)
+			goto fail_alloc;
+
+		*dma_addr = page_pool_get_dma_addr(page)  + NFP_NET_RX_BUF_HEADROOM;
+#endif
+	} else {
+		if (!dp->xdp_prog) {
+			frag = netdev_alloc_frag(dp->fl_bufsz);
+		} else {
+			struct page *page;
+
+			page = alloc_page(GFP_KERNEL);
+			frag = page ? page_address(page) : NULL;
+		}
+		if (!frag)
+			goto fail_alloc;
+
+		*dma_addr = nfp_net_dma_map_rx(dp, frag);
+		if (dma_mapping_error(dp->dev, *dma_addr)) {
+			nfp_net_free_frag(frag, dp->xdp_prog);
+			nn_dp_warn(dp, "Failed to map DMA RX buffer\n");
+			return NULL;
+		}
+	}
+
+	return frag;
+fail_alloc:
+	nn_dp_warn(dp, "Failed to alloc receive page frag\n");
+	return NULL;
+}
+
+void *nfp_net_tx_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr)
 {
 	void *frag;
 
@@ -163,10 +208,17 @@ nfp_net_rx_ring_bufs_free(struct nfp_net_dp *dp,
 		if (!rx_ring->rxbufs[i].frag)
 			continue;
 
-		nfp_net_dma_unmap_rx(dp, rx_ring->rxbufs[i].dma_addr);
-		nfp_net_free_frag(rx_ring->rxbufs[i].frag, dp->xdp_prog);
-		rx_ring->rxbufs[i].dma_addr = 0;
-		rx_ring->rxbufs[i].frag = NULL;
+		if (dp->use_rx_buf_recycle) {
+#ifdef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+			struct page *page = virt_to_head_page(rx_ring->rxbufs[i].frag);
+			page_pool_put_full_page(rx_ring->page_pool, page, false);
+#endif
+		} else {
+			nfp_net_dma_unmap_rx(dp, rx_ring->rxbufs[i].dma_addr);
+			nfp_net_free_frag(rx_ring->rxbufs[i].frag, dp->xdp_prog);
+			rx_ring->rxbufs[i].dma_addr = 0;
+			rx_ring->rxbufs[i].frag = NULL;
+		}
 	}
 
 	if (nfp_dp_is_sgw(dp) && rx_ring->sc_first_skb) {
@@ -197,7 +249,7 @@ nfp_net_rx_ring_bufs_alloc(struct nfp_net_dp *dp,
 	cnt = nfp_dp_is_sgw(dp) ? rx_ring->cnt : rx_ring->cnt - 1;
 
 	for (i = 0; i < cnt; i++) {
-		rxbufs[i].frag = nfp_net_rx_alloc_one(dp, &rxbufs[i].dma_addr);
+		rxbufs[i].frag = nfp_net_rx_alloc_one(dp, &rxbufs[i].dma_addr, rx_ring);
 		if (!rxbufs[i].frag) {
 			nfp_net_rx_ring_bufs_free(dp, rx_ring);
 			return -ENOMEM;
@@ -285,8 +337,15 @@ void nfp_net_rx_ring_free(struct nfp_net_rx_ring *rx_ring)
 
 	if (nfp_net_has_xsk_pool_slow(dp, rx_ring->idx))
 		kvfree(rx_ring->xsk_rxbufs);
-	else
-		kvfree(rx_ring->rxbufs);
+	else {
+#ifdef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+		if (rx_ring->page_pool) {
+			page_pool_destroy(rx_ring->page_pool);
+			rx_ring->page_pool = NULL;
+		} else
+#endif
+			kvfree(rx_ring->rxbufs);
+	}
 
 	if (rx_ring->rxds)
 		dma_free_coherent(dp->dev, rx_ring->size,
@@ -378,6 +437,36 @@ nfp_net_rx_ring_alloc(struct nfp_net_dp *dp, struct nfp_net_rx_ring *rx_ring)
 				   GFP_KERNEL);
 	if (!rx_ring->rxbufs)
 		goto err_alloc;
+#endif
+
+#ifdef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+	if (dp->use_rx_buf_recycle) {
+		struct page_pool_params pp_params = { 0 };
+
+		if (!dp->xdp_prog) {
+			int page_size = PAGE_SIZE << (dp->fl_bufsz >> PAGE_SHIFT);
+			int log_fl_bufsz = ilog2(roundup_pow_of_two(dp->fl_bufsz));
+			int log_pkt_num = ilog2(page_size >> log_fl_bufsz);
+
+			pp_params.order     = (dp->fl_bufsz) >> PAGE_SHIFT;
+			pp_params.pool_size = dp->rxd_cnt >> log_pkt_num;
+		} else {
+			pp_params.order     = 0;
+			pp_params.pool_size = dp->rxd_cnt;
+		}
+		pp_params.flags     = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV;
+		pp_params.nid       = dev_to_node(dp->dev);
+		pp_params.dev       = dp->dev;
+		pp_params.dma_dir   = dp->rx_dma_dir;
+		pp_params.max_len   = PAGE_SIZE << pp_params.order;
+		rx_ring->page_pool = page_pool_create(&pp_params);
+		if (IS_ERR(rx_ring->page_pool))
+		{
+			err = PTR_ERR(rx_ring->page_pool);
+			rx_ring->page_pool = NULL;
+			goto err_alloc;
+		}
+	}
 #endif
 
 	return 0;

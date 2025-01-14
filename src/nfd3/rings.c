@@ -189,7 +189,7 @@ nfp_nfd3_tx_ring_bufs_alloc(struct nfp_net_dp *dp,
 		return 0;
 
 	for (i = 0; i < tx_ring->cnt; i++) {
-		txbufs[i].frag = nfp_net_rx_alloc_one(dp, &txbufs[i].dma_addr);
+		txbufs[i].frag = nfp_net_tx_alloc_one(dp, &txbufs[i].dma_addr);
 		if (!txbufs[i].frag) {
 			nfp_nfd3_tx_ring_bufs_free(dp, tx_ring);
 			return -ENOMEM;

@@ -69,6 +69,10 @@
 #include "crypto/fw.h"
 #include "nfp_main.h"
 
+bool nfp_rx_buffer_recycle_enabled;
+module_param(nfp_rx_buffer_recycle_enabled, bool, 0444);
+MODULE_PARM_DESC(nfp_rx_buffer_recycle_enabled, "Use page_pool to recycle rx buffer (default = false)");
+
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 15, 0)
 static int nfp_net_mc_unsync(struct net_device *netdev, const unsigned char *addr);
 #endif
@@ -3468,6 +3472,14 @@ nfp_net_alloc(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
 	nn->dp.txd_cnt = NFP_NET_TX_DESCS_DEFAULT;
 	nn->dp.rxd_cnt = NFP_NET_RX_DESCS_DEFAULT;
 
+	nn->dp.use_rx_buf_recycle = false;
+#ifdef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+	if (nfp_rx_buffer_recycle_enabled
+	    && (nn->dp.ops->version == NFP_NFD_VER_NFDK)) {
+		nn->dp.use_rx_buf_recycle = true;
+		dev_info(nn->dp.dev, "RX buffer recycle is enabled\n");
+	}
+#endif
 	sema_init(&nn->bar_lock, 1);
 
 	spin_lock_init(&nn->reconfig_lock);

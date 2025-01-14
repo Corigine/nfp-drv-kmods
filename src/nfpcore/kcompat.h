@@ -292,6 +292,10 @@
 #define READ_ONCE(x)	(x)
 #endif
 
+#if defined(CONFIG_PAGE_POOL) && defined(COMPAT__SKB_RECYCLE)
+#define COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+#endif
+
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 27))
 #if defined(CONFIG_X86_PAE) || defined(CONFIG_X86_64) || \
 	defined(CONFIG_PHYS_ADDR_T_64BIT)

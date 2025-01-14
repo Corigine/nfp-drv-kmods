@@ -1080,28 +1080,46 @@ nfp_nfdk_sgw_tx_complete(struct nfp_net_tx_ring *tx_ring, int budget)
 
 /* Receive processing */
 static void *
-nfp_nfdk_napi_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr)
+nfp_nfdk_napi_alloc_one(struct nfp_net_dp *dp, dma_addr_t *dma_addr,
+			struct nfp_net_rx_ring *rx_ring)
 {
-	void *frag;
+	void *frag = NULL;
 
-	if (!dp->xdp_prog) {
-		frag = napi_alloc_frag(dp->fl_bufsz);
-		if (unlikely(!frag))
-			return NULL;
-	} else {
+	if (dp->use_rx_buf_recycle) {
+#ifdef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+		unsigned int alloc_size;
 		struct page *page;
+		alloc_size = dp->xdp_prog ? PAGE_SIZE : dp->fl_bufsz;
 
-		page = dev_alloc_page();
-		if (unlikely(!page))
+		page = page_pool_dev_alloc_pages(rx_ring->page_pool);
+		frag = page ? page_address(page) : NULL;
+		if (!frag) {
+			nn_dp_warn(dp, "Failed to alloc receive page frag\n");
 			return NULL;
-		frag = page_address(page);
-	}
+		}
 
-	*dma_addr = nfp_net_dma_map_rx(dp, frag);
-	if (dma_mapping_error(dp->dev, *dma_addr)) {
-		nfp_net_free_frag(frag, dp->xdp_prog);
-		nn_dp_warn(dp, "Failed to map DMA RX buffer\n");
-		return NULL;
+		*dma_addr = page_pool_get_dma_addr(page) + NFP_NET_RX_BUF_HEADROOM;
+#endif
+	} else {
+		if (!dp->xdp_prog) {
+			frag = napi_alloc_frag(dp->fl_bufsz);
+			if (unlikely(!frag))
+				return NULL;
+		} else {
+			struct page *page;
+
+			page = dev_alloc_page();
+			if (unlikely(!page))
+				return NULL;
+			frag = page_address(page);
+		}
+
+		*dma_addr = nfp_net_dma_map_rx(dp, frag);
+		if (dma_mapping_error(dp->dev, *dma_addr)) {
+			nfp_net_free_frag(frag, dp->xdp_prog);
+			nn_dp_warn(dp, "Failed to map DMA RX buffer\n");
+			return NULL;
+		}
 	}
 
 	return frag;
@@ -1569,7 +1587,7 @@ nfp_nfdk_rx_try_alloc(struct nfp_net_rx_ring *rx_ring,
 
 	if (unlikely((rx_ring->wr_p - rx_ring->rd_p) < NFP_NET_FL_BATCH)) {
 		for (i = 0; i < NFP_NET_FL_BATCH; i++) {
-			new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr);
+			new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr, rx_ring);
 			if (new_frag)
 				nfp_nfdk_rx_give_one(dp, rx_ring, new_frag,
 						     new_dma_addr);
@@ -1793,13 +1811,18 @@ static int nfp_nfdk_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 			nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf, NULL);
 			continue;
 		}
-		new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr);
+#ifdef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+		skb_mark_for_recycle(skb);
+#endif
+		new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr, rx_ring);
 		if (unlikely(!new_frag)) {
 			nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf, skb);
 			continue;
 		}
 
+#ifndef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
 		nfp_net_dma_unmap_rx(dp, rxbuf->dma_addr);
+#endif
 
 		nfp_nfdk_rx_give_one(dp, rx_ring, new_frag, new_dma_addr);
 
@@ -2162,7 +2185,7 @@ nfp_nfdk_rx_sc(struct nfp_net_rx_ring *rx_ring, int budget)
 			skb_to_stack = NULL;
 		}
 
-		new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr);
+		new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr, rx_ring);
 		if (unlikely(!new_frag)) {
 			nn_dp_warn(dp, "RX ring %d failed to alloc new_frag\n",
 				   rx_ring->idx);
@@ -2572,13 +2595,19 @@ nfp_ctrl_rx_one(struct nfp_net *nn, struct nfp_net_dp *dp,
 		nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf, NULL);
 		return true;
 	}
-	new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr);
+
+#ifdef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
+	skb_mark_for_recycle(skb);
+#endif
+	new_frag = nfp_nfdk_napi_alloc_one(dp, &new_dma_addr, rx_ring);
 	if (unlikely(!new_frag)) {
 		nfp_nfdk_rx_drop(dp, r_vec, rx_ring, rxbuf, skb);
 		return true;
 	}
 
+#ifndef COMPAT_SUPPORT_RX_BUFFER_RECYCLE_WITH_PP
 	nfp_net_dma_unmap_rx(dp, rxbuf->dma_addr);
+#endif
 
 	nfp_nfdk_rx_give_one(dp, rx_ring, new_frag, new_dma_addr);
 

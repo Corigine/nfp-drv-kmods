@@ -484,6 +484,7 @@ this is only presented here as a reference.
 | nfp_res_reclaim       | false   | Reclaim NFP resources during probe                                          |
 | nfp_roce_enabled      | false   | Enable RoCE interface registration                                          |
 | nfp_roce_ints_num     | 4       | Number of RoCE interrupt vectors                                            |
+| nfp_rx_buffer_recycle_enabled     | false   | Use page_pool to recycle rx buffer                              |
 
 NOTES:
 1. The vNIC net device creates a pseudo-NIC for NFP ARM Linux systems.
