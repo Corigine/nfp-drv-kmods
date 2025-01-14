@@ -476,11 +476,11 @@ static int crdma_query_device(struct ib_device *ibdev,
 }
 
 #if (VER_NON_RHEL_GE(5, 13) || RHEL_RELEASE_GE(8, 365, 0, 0))
-int crdma_modify_port(struct ib_device *ibdev, u32 port, int mask,
-                      struct ib_port_modify *props)
+static int crdma_modify_port(struct ib_device *ibdev, u32 port, int mask,
+			     struct ib_port_modify *props)
 #else
-int crdma_modify_port(struct ib_device *ibdev, u8 port, int mask,
-		       struct ib_port_modify *props)
+static int crdma_modify_port(struct ib_device *ibdev, u8 port, int mask,
+			     struct ib_port_modify *props)
 #endif
 {
 	return 0;

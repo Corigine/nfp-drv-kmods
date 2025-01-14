@@ -86,7 +86,7 @@ static int crdma_qp_modify_opcode_mod(enum ib_qp_state cur_state,
  *
  * Returns the associated string.
  */
-const char * const crdma_opcode_to_str(u8 opcode)
+const char * crdma_opcode_to_str(u8 opcode)
 {
 	static const char * const cmd_to_str[] = {
 		[0]				= CRDMA_UNDEFINED,
@@ -156,7 +156,7 @@ const char * const crdma_opcode_to_str(u8 opcode)
  *
  * Returns the associated string.
  */
-const char * const crdma_status_to_str(u8 status)
+const char * crdma_status_to_str(u8 status)
 {
 	static const char * const status_to_str[] = {
 		[CRDMA_STS_OK]			= "success",
@@ -189,7 +189,7 @@ const char * const crdma_status_to_str(u8 status)
  *
  * Returns the associated string.
  */
-const char * const crdma_event_to_str(u8 event_type)
+const char * crdma_event_to_str(u8 event_type)
 {
 	static const char * const event_to_str[] = {
 		[0]				= CRDMA_UNDEFINED,
@@ -1519,8 +1519,9 @@ static int crdma_set_qp_attr(struct crdma_ibdev *dev,
 	if (ib_attr_mask & IB_QP_MAX_QP_RD_ATOMIC)
 		attr->rdma_init_depth = ib_attr->max_rd_atomic;
 
-	if (ib_attr_mask & IB_QP_ALT_PATH)
+	if (ib_attr_mask & IB_QP_ALT_PATH) {
 		;
+	}
 
 	if (ib_attr_mask & IB_QP_MIN_RNR_TIMER)
 		attr->min_rnr_timer = ib_attr->min_rnr_timer;
@@ -1531,11 +1532,13 @@ static int crdma_set_qp_attr(struct crdma_ibdev *dev,
 	if (ib_attr_mask & IB_QP_MAX_DEST_RD_ATOMIC)
 		attr->rdma_rsp_res = ib_attr->max_dest_rd_atomic;
 
-	if (ib_attr_mask & IB_QP_PATH_MIG_STATE)
+	if (ib_attr_mask & IB_QP_PATH_MIG_STATE) {
 		;
+	}
 
-	if (ib_attr_mask & IB_QP_CAP)
+	if (ib_attr_mask & IB_QP_CAP) {
 		;
+	}
 
 	if (ib_attr_mask & IB_QP_DEST_QPN)
 		attr->dest_qpn = cpu_to_le32(ib_attr->dest_qp_num &
