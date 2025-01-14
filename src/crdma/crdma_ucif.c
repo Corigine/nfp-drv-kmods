@@ -86,9 +86,9 @@ static int crdma_qp_modify_opcode_mod(enum ib_qp_state cur_state,
  *
  * Returns the associated string.
  */
-const char * const crdma_opcode_to_str(u8 opcode)
+const char * crdma_opcode_to_str(u8 opcode)
 {
-	static const char * const cmd_to_str[] = {
+	static const char * cmd_to_str[] = {
 		[0]				= CRDMA_UNDEFINED,
 		[CRDMA_CMD_NO_OP]		= "NO-OP",
 		[CRDMA_CMD_QUERY_DEV_CAP]	= "QUERY_DEV_CAP",
@@ -156,9 +156,9 @@ const char * const crdma_opcode_to_str(u8 opcode)
  *
  * Returns the associated string.
  */
-const char * const crdma_status_to_str(u8 status)
+const char * crdma_status_to_str(u8 status)
 {
-	static const char * const status_to_str[] = {
+	static const char * status_to_str[] = {
 		[CRDMA_STS_OK]			= "success",
 		[CRDMA_STS_UCODE_CORRUPTED]	= "microcode corrupted",
 		[CRDMA_STS_UCODE_INTERNAL_ERR]	= "microcode internal error",
@@ -189,9 +189,9 @@ const char * const crdma_status_to_str(u8 status)
  *
  * Returns the associated string.
  */
-const char * const crdma_event_to_str(u8 event_type)
+const char * crdma_event_to_str(u8 event_type)
 {
-	static const char * const event_to_str[] = {
+	static const char * event_to_str[] = {
 		[0]				= CRDMA_UNDEFINED,
 		[CRDMA_EQ_CQ_COMPLETION_NOTIFY]	= "CQ completion",
 		[CRDMA_EQ_CQ_ERROR]		= "CQ error",
