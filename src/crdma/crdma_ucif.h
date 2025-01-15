@@ -1344,7 +1344,7 @@ void crdma_cleanup_cmdif(struct crdma_ibdev *dev);
  *
  * Returns the associated string, or the undefined string.
  */
-const char * const crdma_opcode_to_str(u8 opcode);
+const char * crdma_opcode_to_str(u8 opcode);
 
 /**
  * Return the string representation of a command status.
@@ -1353,7 +1353,7 @@ const char * const crdma_opcode_to_str(u8 opcode);
  *
  * Returns the associated string, or the undefined string.
  */
-const char * const crdma_status_to_str(u8 status);
+const char * crdma_status_to_str(u8 status);
 
 /**
  * Return the string representation of an interrupt event
@@ -1362,6 +1362,6 @@ const char * const crdma_status_to_str(u8 status);
  *
  * Returns the associated string, or the undefined string.
  */
-const char * const crdma_event_to_str(u8 event_type);
+const char * crdma_event_to_str(u8 event_type);
 
 #endif /* CRDMA_UCIF_H */
