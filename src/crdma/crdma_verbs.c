@@ -476,9 +476,11 @@ static int crdma_query_device(struct ib_device *ibdev,
 }
 
 #if (VER_NON_RHEL_GE(5, 13) || RHEL_RELEASE_GE(8, 365, 0, 0))
+static
 int crdma_modify_port(struct ib_device *ibdev, u32 port, int mask,
                       struct ib_port_modify *props)
 #else
+static
 int crdma_modify_port(struct ib_device *ibdev, u8 port, int mask,
 		       struct ib_port_modify *props)
 #endif
@@ -595,9 +597,11 @@ out:
 #endif
 
 #if (VER_NON_RHEL_GE(5, 13) || RHEL_RELEASE_GE(8, 365, 0, 0))
+static
 int crdma_get_port_immutable(struct ib_device *ibdev, u32 port_num,
 			     struct ib_port_immutable *immutable)
 #else
+static
 int crdma_get_port_immutable(struct ib_device *ibdev, u8 port_num,
 			     struct ib_port_immutable *immutable)
 #endif
@@ -615,6 +619,7 @@ int crdma_get_port_immutable(struct ib_device *ibdev, u8 port_num,
 	return 0;
 }
 
+static
 void crdma_get_dev_fw_str(struct ib_device *ibdev, char *str)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ibdev);
@@ -1979,6 +1984,7 @@ out:
 }
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 2) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
+static
 int crdma_create_srq(struct ib_srq *ib_srq, struct ib_srq_init_attr *attrs,
 		     struct ib_udata *udata)
 {
@@ -2096,6 +2102,7 @@ failed:
 	return err;
 }
 #else
+static
 struct ib_srq *crdma_create_srq(struct ib_pd *pd,
 				struct ib_srq_init_attr *attrs,
 				struct ib_udata *udata)
@@ -2222,6 +2229,7 @@ failed:
 }
 #endif
 
+static
 int crdma_modify_srq(struct ib_srq *ib_srq, struct ib_srq_attr *srq_attr,
 		     enum ib_srq_attr_mask srq_attr_mask,
 		     struct ib_udata *udata)
@@ -2252,6 +2260,7 @@ int crdma_modify_srq(struct ib_srq *ib_srq, struct ib_srq_attr *srq_attr,
 	return 0;
 }
 
+static
 int crdma_query_srq(struct ib_srq *ib_srq, struct ib_srq_attr *srq_attr)
 {
 	struct crdma_srq *csrq = to_crdma_srq(ib_srq);
@@ -2266,6 +2275,7 @@ int crdma_query_srq(struct ib_srq *ib_srq, struct ib_srq_attr *srq_attr)
 }
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 10) || VER_RHEL_GE(8, 5) || VER_KYL_GE(10, 4))
+static
 int crdma_destroy_srq(struct ib_srq *ib_srq, struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ib_srq->device);
@@ -2284,6 +2294,7 @@ int crdma_destroy_srq(struct ib_srq *ib_srq, struct ib_udata *udata)
 	return 0;
 }
 #elif (VER_NON_RHEL_OR_KYL_GE(5, 2) || VER_RHEL_GE(8, 2) || VER_KYL_GE(10, 3))
+static
 void crdma_destroy_srq(struct ib_srq *ib_srq, struct ib_udata *udata)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ib_srq->device);
@@ -2300,6 +2311,7 @@ void crdma_destroy_srq(struct ib_srq *ib_srq, struct ib_udata *udata)
 	crdma_free_bitmap_index(&dev->srq_map, csrq->srq_index);
 }
 #else
+static
 int crdma_destroy_srq(struct ib_srq *ib_srq)
 {
 	struct crdma_ibdev *dev = to_crdma_ibdev(ib_srq->device);
@@ -4175,6 +4187,7 @@ free_mbox:
 }
 
 #if (VER_NON_RHEL_GE(5, 13) || RHEL_RELEASE_GE(8, 365, 0, 0))
+static
 int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u32 port,
 		      const struct ib_wc *in_wc, const struct ib_grh *in_grh,
 		      const struct ib_mad *in_mad, struct ib_mad *out_mad,
@@ -4183,6 +4196,7 @@ int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u32 port,
 	return IB_MAD_RESULT_SUCCESS;
 }
 #elif (VER_NON_RHEL_OR_KYL_GE(5, 5) || VER_RHEL_GE(8, 3) || VER_KYL_GE(10, 3))
+static
 int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
 		      const struct ib_wc *in_wc, const struct ib_grh *in_grh,
 		      const struct ib_mad *in_mad, struct ib_mad *out_mad,
@@ -4191,6 +4205,7 @@ int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
 	return IB_MAD_RESULT_SUCCESS;
 }
 #else
+static
 int crdma_process_mad(struct ib_device *ibdev, int mad_flags, u8 port,
 		      const struct ib_wc *in_wc, const struct ib_grh *in_grh,
 		      const struct ib_mad_hdr *in_mad_hdr, size_t in_mad_size,

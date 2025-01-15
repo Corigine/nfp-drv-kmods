@@ -554,6 +554,7 @@ static void crdma_qp_async_event(struct crdma_ibdev *dev,
  *
  * Returns IRQ_HANDLED.
  */
+static
 irqreturn_t crdma_eq_irq_handler(int irq, void *eq_ptr)
 {
         struct crdma_eq *eq = eq_ptr;

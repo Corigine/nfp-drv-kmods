@@ -112,10 +112,12 @@ static void crdma_qp_counters_hwstat_sum(struct ib_device *ibdev,
 #endif
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 13) || VER_RHEL_GE(8, 6))
+static
 int crdma_ib_get_hw_stats(struct ib_device *ibdev,
 			struct rdma_hw_stats *stats,
 			u32 port, int index)
 #else
+static
 int crdma_ib_get_hw_stats(struct ib_device *ibdev,
 			struct rdma_hw_stats *stats,
 			u8 port, int index)
@@ -154,9 +156,11 @@ int crdma_ib_get_hw_stats(struct ib_device *ibdev,
 }
 
 #if (VER_NON_RHEL_OR_KYL_GE(5, 14) || VER_RHEL_GE(8, 6))
+static
 struct rdma_hw_stats *crdma_ib_alloc_hw_port_stats(struct ib_device *ibdev,
 					    u32 port_num)
 #elif VER_NON_RHEL_OR_KYL_GE(5, 13)
+static
 struct rdma_hw_stats *crdma_ib_alloc_hw_stats(struct ib_device *ibdev,
 					    u32 port_num)
 #else
