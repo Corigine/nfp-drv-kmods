@@ -548,6 +548,12 @@ static ssize_t show_vpd(struct device *dev, struct device_attribute *attr,
 			char *buf)
 {
 	struct nfp_pf *pf = pci_get_drvdata(to_pci_dev(dev));
+	const char *sn;
+
+	sn = nfp_hwinfo_lookup(pf->hwinfo, "sn");
+	if (sn)
+		return sprintf(buf, "PN: %s\nSN: %s\n",
+			       nfp_hwinfo_lookup(pf->hwinfo, "pn"), sn);
 
 	return sprintf(buf, "PN: %s\nSN: %s%s%s\n",
 		       nfp_hwinfo_lookup(pf->hwinfo, "pn"),

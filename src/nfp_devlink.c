@@ -334,7 +334,7 @@ nfp_devlink_info_get(struct devlink *devlink, struct devlink_info_req *req,
 		     struct netlink_ext_ack *extack)
 {
 	struct nfp_pf *pf = devlink_priv(devlink);
-	const char *sn, *vendor, *part;
+	const char *sn, *vendor, *partno, *serial;
 	struct nfp_nsp *nsp;
 	char *buf = NULL;
 	int err;
@@ -345,26 +345,43 @@ nfp_devlink_info_get(struct devlink *devlink, struct devlink_info_req *req,
 		return err;
 #endif
 
-	vendor = nfp_hwinfo_lookup(pf->hwinfo, "assembly.vendor");
-	part = nfp_hwinfo_lookup(pf->hwinfo, "assembly.partno");
-	sn = nfp_hwinfo_lookup(pf->hwinfo, "assembly.serial");
-	if (vendor && part && sn) {
+	sn = nfp_hwinfo_lookup(pf->hwinfo, "sn");
+	if (sn) {
 		char *buf;
 
-		buf = kmalloc(strlen(vendor) + strlen(part) + strlen(sn) + 1,
-			      GFP_KERNEL);
+		buf = kmalloc(strlen(sn) + 1, GFP_KERNEL);
 		if (!buf)
 			return -ENOMEM;
 
 		buf[0] = '\0';
-		strcat(buf, vendor);
-		strcat(buf, part);
 		strcat(buf, sn);
 
 		err = devlink_info_serial_number_put(req, buf);
 		kfree(buf);
 		if (err)
 			return err;
+	} else {
+		vendor = nfp_hwinfo_lookup(pf->hwinfo, "assembly.vendor");
+		partno = nfp_hwinfo_lookup(pf->hwinfo, "assembly.partno");
+		serial = nfp_hwinfo_lookup(pf->hwinfo, "assembly.serial");
+		if (vendor && partno && serial) {
+			char *buf;
+
+			buf = kmalloc(strlen(vendor) + strlen(partno) +
+				      strlen(serial) + 1, GFP_KERNEL);
+			if (!buf)
+				return -ENOMEM;
+
+			buf[0] = '\0';
+			strcat(buf, vendor);
+			strcat(buf, partno);
+			strcat(buf, serial);
+
+			err = devlink_info_serial_number_put(req, buf);
+			kfree(buf);
+			if (err)
+				return err;
+		}
 	}
 
 	nsp = nfp_nsp_open(pf->cpp);
